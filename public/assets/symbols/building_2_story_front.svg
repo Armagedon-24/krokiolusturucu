@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 220" width="100%" height="100%">
+  <!-- Ground Line -->
+  <line x1="5" y1="205" x2="195" y2="205" stroke="#000" stroke-width="2.5" stroke-linecap="round"/>
+  
+  <!-- Foundation Slab -->
+  <rect x="25" y="195" width="150" height="10" fill="none" stroke="#000" stroke-width="2"/>
+  
+  <!-- First Floor Block -->
+  <rect x="30" y="135" width="140" height="60" fill="none" stroke="#000" stroke-width="2"/>
+
+  <!-- Second Floor Block -->
+  <rect x="30" y="75" width="140" height="60" fill="none" stroke="#000" stroke-width="2"/>
+  
+  <!-- Floor Separator Line -->
+  <line x1="30" y1="135" x2="170" y2="135" stroke="#000" stroke-width="1.5"/>
+
+  <!-- Chimney Base -->
+  <rect x="45" y="25" width="14" height="25" fill="none" stroke="#000" stroke-width="2"/>
+  <!-- Chimney Cap (Stepped) -->
+  <rect x="42" y="20" width="20" height="5" fill="none" stroke="#000" stroke-width="2"/>
+  <rect x="44" y="15" width="16" height="5" fill="none" stroke="#000" stroke-width="2"/>
+
+  <!-- Roof Fascia (Overhang) -->
+  <rect x="20" y="70" width="160" height="5" fill="none" stroke="#000" stroke-width="2"/>
+  
+  <!-- Roof (Hipped) -->
+  <polygon points="20,70 65,35 135,35 180,70" fill="none" stroke="#000" stroke-width="2" stroke-linejoin="round"/>
+  
+  <!-- Roof Ridge Detail -->
+  <line x1="65" y1="35" x2="135" y2="35" stroke="#000" stroke-width="2"/>
+
+  <!-- Stairs (Architectural Step-down) -->
+  <rect x="85" y="195" width="30" height="5" fill="none" stroke="#000" stroke-width="1.5"/>
+  <rect x="80" y="200" width="40" height="5" fill="none" stroke="#000" stroke-width="1.5"/>
+
+  <!-- First Floor: Door -->
+  <rect x="85" y="140" width="30" height="55" fill="none" stroke="#000" stroke-width="2"/>
+  <!-- Door Inner Panel -->
+  <rect x="88" y="143" width="24" height="52" fill="none" stroke="#000" stroke-width="1.5"/>
+  <!-- Door Knob -->
+  <circle cx="108" cy="170" r="1.5" fill="#000"/>
+  <!-- Door Glass/Panel Details -->
+  <rect x="91" y="146" width="18" height="15" fill="none" stroke="#000" stroke-width="1.5"/>
+  <rect x="91" y="165" width="18" height="25" fill="none" stroke="#000" stroke-width="1.5"/>
+
+  <!-- First Floor: Left Window -->
+  <rect x="42" y="175" width="28" height="3" fill="none" stroke="#000" stroke-width="1.5"/>
+  <rect x="44" y="145" width="24" height="30" fill="none" stroke="#000" stroke-width="2"/>
+  <rect x="46" y="147" width="9" height="26" fill="none" stroke="#000" stroke-width="1.5"/>
+  <rect x="57" y="147" width="9" height="26" fill="none" stroke="#000" stroke-width="1.5"/>
+
+  <!-- First Floor: Right Window -->
+  <rect x="130" y="175" width="28" height="3" fill="none" stroke="#000" stroke-width="1.5"/>
+  <rect x="132" y="145" width="24" height="30" fill="none" stroke="#000" stroke-width="2"/>
+  <rect x="134" y="147" width="9" height="26" fill="none" stroke="#000" stroke-width="1.5"/>
+  <rect x="145" y="147" width="9" height="26" fill="none" stroke="#000" stroke-width="1.5"/>
+
+  <!-- Second Floor: Left Window -->
+  <rect x="42" y="115" width="28" height="3" fill="none" stroke="#000" stroke-width="1.5"/>
+  <rect x="44" y="85" width="24" height="30" fill="none" stroke="#000" stroke-width="2"/>
+  <rect x="46" y="87" width="9" height="26" fill="none" stroke="#000" stroke-width="1.5"/>
+  <rect x="57" y="87" width="9" height="26" fill="none" stroke="#000" stroke-width="1.5"/>
+
+  <!-- Second Floor: Center Window (above door) -->
+  <rect x="83" y="115" width="34" height="3" fill="none" stroke="#000" stroke-width="1.5"/>
+  <rect x="85" y="85" width="30" height="30" fill="none" stroke="#000" stroke-width="2"/>
+  <rect x="87" y="87" width="12" height="26" fill="none" stroke="#000" stroke-width="1.5"/>
+  <rect x="101" y="87" width="12" height="26" fill="none" stroke="#000" stroke-width="1.5"/>
+
+  <!-- Second Floor: Right Window -->
+  <rect x="130" y="115" width="28" height="3" fill="none" stroke="#000" stroke-width="1.5"/>
+  <rect x="132" y="85" width="24" height="30" fill="none" stroke="#000" stroke-width="2"/>
+  <rect x="134" y="87" width="9" height="26" fill="none" stroke="#000" stroke-width="1.5"/>
+  <rect x="145" y="87" width="9" height="26" fill="none" stroke="#000" stroke-width="1.5"/>
+</svg>

@@ -1,0 +1,26 @@
+<svg width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Left diagonal branch -->
+  <g transform="translate(100, 100) rotate(-45) translate(-100, -100)">
+    <rect x="70" y="0" width="60" height="120" fill="#333333" />
+    <line x1="72" y1="0" x2="72" y2="120" stroke="white" stroke-width="4" />
+    <line x1="128" y1="0" x2="128" y2="120" stroke="white" stroke-width="4" />
+    <line x1="100" y1="0" x2="100" y2="120" stroke="white" stroke-width="4" stroke-dasharray="15 15" />
+  </g>
+
+  <!-- Right diagonal branch -->
+  <g transform="translate(100, 100) rotate(45) translate(-100, -100)">
+    <rect x="70" y="0" width="60" height="120" fill="#333333" />
+    <line x1="72" y1="0" x2="72" y2="120" stroke="white" stroke-width="4" />
+    <line x1="128" y1="0" x2="128" y2="120" stroke="white" stroke-width="4" />
+    <line x1="100" y1="0" x2="100" y2="120" stroke="white" stroke-width="4" stroke-dasharray="15 15" />
+  </g>
+
+  <!-- Main vertical road (bottom) -->
+  <rect x="70" y="100" width="60" height="100" fill="#333333" />
+  <line x1="72" y1="100" x2="72" y2="200" stroke="white" stroke-width="4" />
+  <line x1="128" y1="100" x2="128" y2="200" stroke="white" stroke-width="4" />
+  <line x1="100" y1="100" x2="100" y2="200" stroke="white" stroke-width="4" stroke-dasharray="15 15" />
+
+  <!-- Central asphalt hub to cover lines -->
+  <circle cx="100" cy="110" r="30" fill="#333333" />
+</svg>

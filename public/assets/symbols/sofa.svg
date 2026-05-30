@@ -1,0 +1,12 @@
+<svg width="180" height="80" viewBox="0 0 180 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Main body -->
+  <rect x="5" y="5" width="170" height="70" rx="6" stroke="black" stroke-width="2" fill="none"/>
+  <!-- Backrest -->
+  <rect x="5" y="5" width="170" height="20" rx="4" stroke="black" stroke-width="1.5" fill="none"/>
+  <!-- Armrests -->
+  <rect x="5" y="5" width="20" height="70" rx="4" stroke="black" stroke-width="1.5" fill="none"/>
+  <rect x="155" y="5" width="20" height="70" rx="4" stroke="black" stroke-width="1.5" fill="none"/>
+  <!-- Cushions -->
+  <path d="M60 25 L60 75" stroke="black" stroke-width="1"/>
+  <path d="M120 25 L120 75" stroke="black" stroke-width="1"/>
+</svg>

@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 200" width="100%" height="100%">
+  <!-- Ground Line -->
+  <line x1="5" y1="190" x2="295" y2="190" stroke="#000" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- Main Building -->
+  <rect x="20" y="50" width="260" height="140" fill="none" stroke="#000" stroke-width="2"/>
+  <!-- Entrance -->
+  <rect x="130" y="140" width="40" height="50" fill="none" stroke="#000" stroke-width="2"/>
+  <!-- Windows -->
+  <rect x="40" y="70" width="30" height="30" fill="none" stroke="#000" stroke-width="1.5"/>
+  <rect x="80" y="70" width="30" height="30" fill="none" stroke="#000" stroke-width="1.5"/>
+  <rect x="190" y="70" width="30" height="30" fill="none" stroke="#000" stroke-width="1.5"/>
+  <rect x="230" y="70" width="30" height="30" fill="none" stroke="#000" stroke-width="1.5"/>
+  <rect x="40" y="110" width="30" height="30" fill="none" stroke="#000" stroke-width="1.5"/>
+  <rect x="230" y="110" width="30" height="30" fill="none" stroke="#000" stroke-width="1.5"/>
+  <!-- Clock -->
+  <circle cx="150" cy="85" r="15" fill="none" stroke="#000" stroke-width="2"/>
+  <line x1="150" y1="85" x2="150" y2="75" stroke="#000" stroke-width="2"/>
+  <line x1="150" y1="85" x2="160" y2="85" stroke="#000" stroke-width="2"/>
+  <!-- Label -->
+  <text x="150" y="40" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" font-weight="bold" fill="#000">OKUL</text>
+</svg>

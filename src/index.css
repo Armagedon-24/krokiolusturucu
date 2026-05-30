@@ -1,0 +1,214 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary-50:  #fffbeb;
+  --color-primary-100: #fef3c7;
+  --color-primary-200: #fde68a;
+  --color-primary-300: #fcd34d;
+  --color-primary-400: #fbbf24;
+  --color-primary-500: #F5C518;
+  --color-primary-600: #d4a017;
+  --color-primary-700: #b8860b;
+  --color-primary-800: #92660a;
+  --color-primary-900: #7a5308;
+}
+
+:root {
+  font-family: 'Inter', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: dark;
+  color: #e8e8e8;
+  background-color: #111111;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html, body {
+  height: 100%;
+  min-height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+body {
+  display: flex;
+  min-width: 320px;
+  background-color: #111111;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  -webkit-user-drag: none;
+
+  /* Default base zoom for smaller screens and laptop viewports (e.g., laptop 1366x768 or 1280x800) */
+  zoom: 0.95;
+}
+
+/* Medium height/width viewports (e.g., standard laptops, small desktop monitors) */
+@media (min-width: 1400px) and (min-height: 800px) {
+  body {
+    zoom: 1.02;
+  }
+}
+
+/* Standard Desktop Monitors (e.g., Full HD 1920x1080) */
+@media (min-width: 1600px) and (min-height: 900px) {
+  body {
+    zoom: 1.08;
+  }
+}
+
+/* High Resolution Monitors (e.g., 2K, 4K displays or large tall screens) */
+@media (min-width: 1900px) and (min-height: 1050px) {
+  body {
+    zoom: 1.16;
+  }
+}
+
+/* Adjust zoom for ultra-short heights to prevent vertical scrollbars */
+@media (max-height: 720px) {
+  body {
+    zoom: 0.90;
+  }
+}
+@media (max-height: 640px) {
+  body {
+    zoom: 0.82;
+  }
+}
+
+/* Narrow widths (e.g. tablet or small screen) to prevent topbar wrap */
+@media (max-width: 1280px) {
+  body {
+    zoom: 0.88;
+  }
+}
+@media (max-width: 1024px) {
+  body {
+    zoom: 0.80;
+  }
+}
+
+#root {
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  overflow: hidden;
+}
+
+img {
+  -webkit-user-drag: none;
+  -khtml-user-drag: none;
+  -moz-user-drag: none;
+  -o-user-drag: none;
+  user-drag: none;
+}
+
+.konvajs-content {
+  box-shadow: 0 0 60px rgba(0,0,0,0.8);
+}
+
+.yellow-icon-filter {
+  filter: brightness(0) saturate(100%) invert(84%) sepia(21%) saturate(3836%) hue-rotate(352deg) brightness(101%) contrast(93%);
+}
+
+.transparent-asset-filter {
+  filter: url(#remove-white-svg);
+}
+
+.sidebar-symbol-filter {
+  filter: url(#remove-white-svg) brightness(0) saturate(100%) invert(84%) sepia(21%) saturate(3836%) hue-rotate(352deg) brightness(101%) contrast(93%);
+}
+
+/* Custom Scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #1a1a1a;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #333333;
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #F5C518;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Print Styles */
+@media print {
+  @page {
+    margin: 0;
+    size: auto;
+  }
+  
+  body {
+    background-color: white !important;
+    color: black !important;
+    overflow: visible !important;
+  }
+
+  #root {
+    width: 100% !important;
+    height: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Hide everything except the canvas area */
+  header, 
+  nav, 
+  aside, 
+  .topbar, 
+  .sidebar, 
+  .bottom-bar,
+  button,
+  .notification-system,
+  [role="status"] {
+    display: none !important;
+  }
+
+  /* Target the canvas container */
+  .canvas-area-container {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: white !important;
+    overflow: visible !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: flex-start !important;
+  }
+
+  .konvajs-content {
+    box-shadow: none !important;
+    border: none !important;
+    margin: 0 auto !important;
+  }
+
+  canvas {
+    max-width: 100% !important;
+    height: auto !important;
+  }
+}

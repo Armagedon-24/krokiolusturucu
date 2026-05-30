@@ -1,0 +1,25 @@
+<svg width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Grass / Background to make it stand out? No, keep it transparent. -->
+  
+  <!-- Horizontal Road -->
+  <rect x="0" y="40" width="200" height="60" fill="#333333" />
+  <!-- Horizontal edge lines -->
+  <line x1="0" y1="42" x2="200" y2="42" stroke="white" stroke-width="4" />
+  <!-- The bottom edge line is broken where the vertical road joins -->
+  <line x1="0" y1="98" x2="60" y2="98" stroke="white" stroke-width="4" />
+  <line x1="140" y1="98" x2="200" y2="98" stroke="white" stroke-width="4" />
+  <!-- Horizontal dashed line -->
+  <line x1="0" y1="70" x2="200" y2="70" stroke="white" stroke-width="4" stroke-dasharray="15 15" />
+
+  <!-- Vertical Road joining from bottom -->
+  <rect x="60" y="100" width="80" height="100" fill="#333333" />
+  <!-- Vertical edge lines -->
+  <line x1="62" y1="100" x2="62" y2="200" stroke="white" stroke-width="4" />
+  <line x1="138" y1="100" x2="138" y2="200" stroke="white" stroke-width="4" />
+  <!-- Vertical dashed line -->
+  <line x1="100" y1="100" x2="100" y2="200" stroke="white" stroke-width="4" stroke-dasharray="15 15" />
+
+  <!-- Smooth arcs at the junction (optional but nice) -->
+  <path d="M 60 98 Q 60 100 62 100" stroke="white" stroke-width="4" fill="none" />
+  <path d="M 140 98 Q 140 100 138 100" stroke="white" stroke-width="4" fill="none" />
+</svg>

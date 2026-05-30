@@ -1,0 +1,14 @@
+<svg width="80" height="150" viewBox="0 0 80 150" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Central Pole -->
+  <rect x="38" y="0" width="4" height="150" fill="#000000" />
+  <!-- Steps spiraling (represented as horizontal bars at different heights) -->
+  <rect x="10" y="20" width="30" height="3" fill="#000000" />
+  <rect x="40" y="35" width="30" height="3" fill="#000000" />
+  <rect x="10" y="50" width="30" height="3" fill="#000000" />
+  <rect x="40" y="65" width="30" height="3" fill="#000000" />
+  <rect x="10" y="80" width="30" height="3" fill="#000000" />
+  <rect x="40" y="95" width="30" height="3" fill="#000000" />
+  <rect x="10" y="110" width="30" height="3" fill="#000000" />
+  <rect x="40" y="125" width="30" height="3" fill="#000000" />
+  <rect x="10" y="140" width="30" height="3" fill="#000000" />
+</svg>
