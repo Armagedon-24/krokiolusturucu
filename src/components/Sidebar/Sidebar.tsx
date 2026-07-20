@@ -18,6 +18,7 @@ import { Lock, Calculator } from 'lucide-react';
 import { CalculatorIndex } from './Calculators/CalculatorIndex';
 import { AnimationIndex } from './Animations/AnimationIndex';
 import { compressAndResizeImage } from '../../utils/canvasUtils';
+import { getOptimizedCloudinaryUrl } from '../../lib/cloudinary';
 
 export const Sidebar: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'symbols' | 'uploads' | 'animations' | 'calculators'>('symbols');
@@ -494,8 +495,11 @@ export const Sidebar: React.FC = () => {
                                     >
                                       <div className="absolute inset-0 bg-white/5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                                       <img
-                                        src={item.thumbnail || item.src}
+                                        src={getOptimizedCloudinaryUrl(item.thumbnail || item.src, 250)}
                                         alt={item.name}
+                                        loading="lazy"
+                                        width={48}
+                                        height={48}
                                         onError={(e) => {
                                           if (item.isUpload) {
                                             removeUploadedImage(item.id);
@@ -627,7 +631,7 @@ export const Sidebar: React.FC = () => {
                             onDragEnd={handleDragEnd}
                             className="w-12 h-12 bg-white/10 rounded border border-[#333] flex-shrink-0 cursor-move overflow-hidden group/thumb"
                           >
-                            <img src={img.src} alt={img.name} className="w-full h-full object-contain group-hover/thumb:scale-110 transition-transform sidebar-symbol-filter" />
+                            <img src={getOptimizedCloudinaryUrl(img.src, 250)} alt={img.name} loading="lazy" width={48} height={48} className="w-full h-full object-contain group-hover/thumb:scale-110 transition-transform sidebar-symbol-filter" />
                           </div>
                           <div className="flex-1 min-w-0 space-y-1">
                             {editingImageId === img.id ? (

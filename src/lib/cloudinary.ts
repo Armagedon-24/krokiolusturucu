@@ -1,6 +1,13 @@
 const CLOUD_NAME = 'dzen3qvgp';
 const UPLOAD_PRESET = 'kroki-olusturucu';
 
+export const getOptimizedCloudinaryUrl = (url: string, width = 300): string => {
+  if (!url || typeof url !== 'string') return url;
+  if (!url.includes('res.cloudinary.com')) return url;
+  if (url.includes('/f_auto,q_auto')) return url;
+  return url.replace('/image/upload/', `/image/upload/f_auto,q_auto,w_${width},c_limit/`);
+};
+
 export const cloudinary = {
   upload: async (file: Blob | string, fileName: string, category?: string): Promise<string> => {
     const formData = new FormData();

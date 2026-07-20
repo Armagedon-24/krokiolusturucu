@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { X, Camera, Plus, Trash2, Image as ImageIcon, Loader2 } from 'lucide-react';
 import type { CanvasObject } from '../../types';
-import { cloudinary } from '../../lib/cloudinary';
+import { cloudinary, getOptimizedCloudinaryUrl } from '../../lib/cloudinary';
 import { useStore } from '../../store/useStore';
 
 import { compressAndResizeImage } from '../../utils/canvasUtils';
@@ -111,7 +111,7 @@ export const EvidencePhotoModal: React.FC<EvidencePhotoModalProps> = ({
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
               {photos.map((url, index) => (
                 <div key={index} className="group relative aspect-square bg-[#111] border border-[#333] rounded-lg overflow-hidden shadow-lg">
-                  <img src={url} alt={`Evidence ${index}`} className="w-full h-full object-contain bg-black/40 transition-transform group-hover:scale-105" />
+                  <img src={getOptimizedCloudinaryUrl(url, 400)} alt={`Kanıt Fotoğrafı ${index + 1}`} loading="lazy" width={200} height={200} className="w-full h-full object-contain bg-black/40 transition-transform group-hover:scale-105" />
                   <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                     <button 
                       onClick={() => window.open(url, '_blank')}
