@@ -91,7 +91,7 @@ export const BodyMapModal: React.FC<BodyMapModalProps> = ({
           <div className="flex-1 relative bg-white/5 p-8 flex items-center justify-center overflow-auto custom-scrollbar">
             <div 
               className="relative w-[300px] aspect-[1/2] bg-contain bg-no-repeat bg-center cursor-crosshair select-none"
-              style={{ backgroundImage: 'url(https://img.icons8.com/ios/500/F5C518/human-skeleton.png)', opacity: 0.8 }}
+              style={{ backgroundImage: `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 200" fill="none" stroke="%23F5C518" stroke-width="2" stroke-linecap="round"><circle cx="50" cy="22" r="14"/><path d="M50 36 v64 M50 50 L20 90 M50 50 L80 90 M50 100 L28 185 M50 100 L72 185"/><path d="M42 60 h16 M44 75 h12"/></svg>')`, opacity: 0.85 }}
               onClick={handleCanvasClick}
             >
               {/* Injury Markers */}
