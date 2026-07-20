@@ -74,13 +74,13 @@ export const SYMBOL_CATEGORIES = [
     id: 'weapons',
     name: 'Silahlar ve Parçaları',
     symbols: [
-      { id: 'w-1', name: 'Tabanca', src: '/assets/symbols/pistol.png', type: 'symbol' },
-      { id: 'w-2', name: 'Bıçak', src: '/assets/symbols/knife.png', type: 'symbol' },
-      { id: 'w-3', name: 'Av Tüfeği (Pompalı)', src: '/assets/symbols/shotgun.png', type: 'symbol' },
-      { id: 'w-4', name: 'Uzun Namlulu', src: '/assets/symbols/rifle.png', type: 'symbol' },
-      { id: 'w-5', name: 'Sopa', src: '/assets/symbols/bat.png', type: 'symbol' },
-      { id: 'w-6', name: 'AK-47 (Kalaşnikof)', src: '/assets/symbols/ak47.png', type: 'symbol' },
-      { id: 'w-7', name: 'Av Tüfeği Fişeği', src: '/assets/symbols/shotgun_shell.png', type: 'symbol' },
+      { id: 'w-1', name: 'Tabanca', src: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><path d="M15 35 h55 v15 h-35 v35 h-15 z" fill="%23222" stroke="black" stroke-width="2"/><rect x="65" y="38" width="20" height="8" fill="%23555"/></svg>', type: 'symbol' },
+      { id: 'w-2', name: 'Bıçak', src: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><path d="M15 55 h30 l45-20 c-10 25-35 25-45 20 z" fill="%23cbd5e1" stroke="black" stroke-width="2"/><rect x="10" y="48" width="25" height="14" rx="3" fill="%2378350f"/></svg>', type: 'symbol' },
+      { id: 'w-3', name: 'Av Tüfeği (Pompalı)', src: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect x="5" y="45" width="25" height="15" fill="%2378350f"/><rect x="30" y="43" width="60" height="8" fill="%23333"/><rect x="35" y="52" width="25" height="6" fill="%23555"/></svg>', type: 'symbol' },
+      { id: 'w-4', name: 'Uzun Namlulu', src: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><path d="M5 52 L25 45 L35 45 L95 45 L95 50 L35 50 L25 60 z" fill="%231e293b" stroke="black" stroke-width="1.5"/><rect x="45" y="50" width="8" height="18" fill="%23334155" transform="rotate(15 45 50)"/></svg>', type: 'symbol' },
+      { id: 'w-5', name: 'Sopa', src: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><path d="M10 85 L20 80 L85 15 C90 10 95 15 90 20 L25 85 z" fill="%23d97706" stroke="black" stroke-width="2"/></svg>', type: 'symbol' },
+      { id: 'w-6', name: 'AK-47 (Kalaşnikof)', src: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><path d="M5 55 L25 45 H95 V50 H35 L20 62 z" fill="%2378350f" stroke="black" stroke-width="1.5"/><path d="M45 50 Q40 70 30 75 L35 77 Q48 70 50 50 z" fill="%23dc2626"/></svg>', type: 'symbol' },
+      { id: 'w-7', name: 'Av Tüfeği Fişeği', src: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect x="30" y="20" width="40" height="20" fill="%23eab308" stroke="black" stroke-width="2"/><rect x="30" y="40" width="40" height="45" rx="2" fill="%23dc2626" stroke="black" stroke-width="2"/></svg>', type: 'symbol' },
     ]
   },
   {
