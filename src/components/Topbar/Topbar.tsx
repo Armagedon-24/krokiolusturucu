@@ -17,15 +17,15 @@ import {
   Info
 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
-import { CaseManagerModal } from '../UI/CaseManagerModal';
-import { DistanceMatrixModal } from '../UI/DistanceMatrixModal';
-import { AdminLoginModal } from '../UI/AdminLoginModal';
-import { PreviewModal } from '../UI/PreviewModal';
-import { ScaleCalibrationModal } from '../UI/ScaleCalibrationModal';
-import { MapPickerModal } from '../UI/MapPickerModal';
-import { AboutModal } from '../UI/AboutModal';
-
-import { ThreeDPreview } from '../UI/ThreeDPreview';
+import { Suspense, lazy } from 'react';
+const CaseManagerModal = lazy(() => import('../UI/CaseManagerModal').then(m => ({ default: m.CaseManagerModal })));
+const DistanceMatrixModal = lazy(() => import('../UI/DistanceMatrixModal').then(m => ({ default: m.DistanceMatrixModal })));
+const AdminLoginModal = lazy(() => import('../UI/AdminLoginModal').then(m => ({ default: m.AdminLoginModal })));
+const PreviewModal = lazy(() => import('../UI/PreviewModal').then(m => ({ default: m.PreviewModal })));
+const ScaleCalibrationModal = lazy(() => import('../UI/ScaleCalibrationModal').then(m => ({ default: m.ScaleCalibrationModal })));
+const MapPickerModal = lazy(() => import('../UI/MapPickerModal').then(m => ({ default: m.MapPickerModal })));
+const AboutModal = lazy(() => import('../UI/AboutModal').then(m => ({ default: m.AboutModal })));
+const ThreeDPreview = lazy(() => import('../UI/ThreeDPreview').then(m => ({ default: m.ThreeDPreview })));
 import { compressAndResizeImage } from '../../utils/canvasUtils';
 
 export const Topbar: React.FC = () => {
@@ -224,36 +224,38 @@ export const Topbar: React.FC = () => {
         )}
       </div>
 
-      {/* Modals */}
-      <CaseManagerModal isOpen={isCaseManagerOpen} onClose={() => setIsCaseManagerOpen(false)} />
-      <DistanceMatrixModal isOpen={isDistanceMatrixOpen} onClose={() => setIsDistanceMatrixOpen(false)} objects={objects} />
-      <ThreeDPreview isOpen={isThreeDOpen} onClose={() => setIsThreeDOpen(false)} />
-      <AdminLoginModal isOpen={isAdminModalOpen} onClose={() => setIsAdminModalOpen(false)} onLogin={(pwd) => setIsAdmin(true, pwd)} />
-      <AboutModal isOpen={isAboutOpen} onClose={() => setIsAboutOpen(false)} />
-      <MapPickerModal
-        isOpen={isMapModalOpen}
-        onClose={() => setIsMapModalOpen(false)}
-        initialAddress={projectInfo.address}
-        onConfirm={(data) => {
-          setBackgroundImage(data.staticMapUrl);
-          setBackgroundOpacity(0.7);
-          addNotification({
-            type: 'success',
-            message: 'Uydu Haritası Güncellendi',
-            description: `Yeni konum (${data.address}) başarıyla sisteme işlendi ve uydu görüntüsü arka plana alındı.`
-          });
-          setIsMapModalOpen(false);
-        }}
-      />
-      <ScaleCalibrationModal isOpen={isScaleCalibrationOpen} onClose={() => setIsScaleCalibrationOpen(false)} />
-      <PreviewModal 
-        isOpen={isPreviewModalOpen} 
-        onClose={() => {
-          setIsPreviewModalOpen(false);
-          window.dispatchEvent(new CustomEvent('close-preview'));
-        }} 
-        image={previewImage} 
-      />
+      {/* Modals – loaded lazily to reduce initial JS parse time */}
+      <Suspense fallback={null}>
+        <CaseManagerModal isOpen={isCaseManagerOpen} onClose={() => setIsCaseManagerOpen(false)} />
+        <DistanceMatrixModal isOpen={isDistanceMatrixOpen} onClose={() => setIsDistanceMatrixOpen(false)} objects={objects} />
+        <ThreeDPreview isOpen={isThreeDOpen} onClose={() => setIsThreeDOpen(false)} />
+        <AdminLoginModal isOpen={isAdminModalOpen} onClose={() => setIsAdminModalOpen(false)} onLogin={(pwd) => setIsAdmin(true, pwd)} />
+        <AboutModal isOpen={isAboutOpen} onClose={() => setIsAboutOpen(false)} />
+        <MapPickerModal
+          isOpen={isMapModalOpen}
+          onClose={() => setIsMapModalOpen(false)}
+          initialAddress={projectInfo.address}
+          onConfirm={(data) => {
+            setBackgroundImage(data.staticMapUrl);
+            setBackgroundOpacity(0.7);
+            addNotification({
+              type: 'success',
+              message: 'Uydu Haritası Güncellendi',
+              description: `Yeni konum (${data.address}) başarıyla sisteme işlendi ve uydu görüntüsü arka plana alındı.`
+            });
+            setIsMapModalOpen(false);
+          }}
+        />
+        <ScaleCalibrationModal isOpen={isScaleCalibrationOpen} onClose={() => setIsScaleCalibrationOpen(false)} />
+        <PreviewModal 
+          isOpen={isPreviewModalOpen} 
+          onClose={() => {
+            setIsPreviewModalOpen(false);
+            window.dispatchEvent(new CustomEvent('close-preview'));
+          }} 
+          image={previewImage} 
+        />
+      </Suspense>
     </div>
   );
 };

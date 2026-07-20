@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, lazy, Suspense } from 'react';
 import { Stage, Layer, Image as KonvaImage, Text, Transformer, Rect, Arrow, Group, Line, Path, Circle, Ellipse, Arc, Label, Tag } from 'react-konva';
 import { useStore } from '../../store/useStore';
 import useImage from 'use-image';
@@ -14,11 +14,12 @@ import {
   Activity
 } from 'lucide-react';
 import Konva from 'konva';
-import { DistanceModal } from '../UI/DistanceModal';
-import { EvidencePhotoModal } from '../UI/EvidencePhotoModal';
-import { BodyMapModal } from '../UI/BodyMapModal';
-import { FindingModal, PromptModal } from '../UI/Modal';
-import { DistanceMatrixModal } from '../UI/DistanceMatrixModal';
+const DistanceModal = lazy(() => import('../UI/DistanceModal').then(m => ({ default: m.DistanceModal })));
+const EvidencePhotoModal = lazy(() => import('../UI/EvidencePhotoModal').then(m => ({ default: m.EvidencePhotoModal })));
+const BodyMapModal = lazy(() => import('../UI/BodyMapModal').then(m => ({ default: m.BodyMapModal })));
+const FindingModal = lazy(() => import('../UI/Modal').then(m => ({ default: m.FindingModal })));
+const PromptModal = lazy(() => import('../UI/Modal').then(m => ({ default: m.PromptModal })));
+const DistanceMatrixModal = lazy(() => import('../UI/DistanceMatrixModal').then(m => ({ default: m.DistanceMatrixModal })));
 import { AccidentAnimation } from './AccidentAnimation';
 import { FallAnimationCanvas } from './FallAnimationCanvas';
 import { PedestrianLaunchCanvas } from './PedestrianLaunchCanvas';
@@ -5385,14 +5386,15 @@ export const CanvasArea: React.FC = () => {
         </div>
       )}
 
-      <FindingModal
-        isOpen={findingModalState.isOpen}
-        onClose={() => setFindingModalState(s => ({ ...s, isOpen: false }))}
-        title={
-          objects.some(o => o.id === findingModalState.symbol?.id) 
-            ? (findingModalState.symbol?.id === 'out-fixed-point' ? "SABİT NOKTAYI DÜZENLE" : "BULGUYU DÜZENLE")
-            : (findingModalState.symbol?.id === 'out-fixed-point' ? "YENİ NİRENGİ / SABİT NOKTA EKLE" : "YENİ BULGU EKLE")
-        }
+      <Suspense fallback={null}>
+        <FindingModal
+          isOpen={findingModalState.isOpen}
+          onClose={() => setFindingModalState(s => ({ ...s, isOpen: false }))}
+          title={
+            objects.some(o => o.id === findingModalState.symbol?.id) 
+              ? (findingModalState.symbol?.id === 'out-fixed-point' ? "SABİT NOKTAYI DÜZENLE" : "BULGUYU DÜZENLE")
+              : (findingModalState.symbol?.id === 'out-fixed-point' ? "YENİ NİRENGİ / SABİT NOKTA EKLE" : "YENİ BULGU EKLE")
+          }
         defaultNo={findingModalState.symbol?.findingNo || ''}
         defaultDesc={findingModalState.symbol?.findingDesc || ''}
         onConfirm={(no, desc) => {
@@ -5432,55 +5434,65 @@ export const CanvasArea: React.FC = () => {
             }
           }
         }}
-      />
+        />
 
-      <PromptModal
-        isOpen={promptState.isOpen}
-        onClose={() => setPromptState(s => ({ ...s, isOpen: false }))}
-        title={promptState.title}
-        label={promptState.label}
-        defaultValue={promptState.value}
-        onConfirm={promptState.onConfirm}
-        multiline={promptState.multiline}
-      />
+        <PromptModal
+          isOpen={promptState.isOpen}
+          onClose={() => setPromptState(s => ({ ...s, isOpen: false }))}
+          title={promptState.title}
+          label={promptState.label}
+          defaultValue={promptState.value}
+          onConfirm={promptState.onConfirm}
+          multiline={promptState.multiline}
+        />
+      </Suspense>
 
-      <DistanceModal
-        isOpen={isDistanceModalOpen}
-        onClose={() => setIsDistanceModalOpen(false)}
-        onConfirm={(value) => {
-          if (distanceModalTarget) {
-            updateObject(distanceModalTarget, { distance: value });
-            saveHistory();
-          }
-          setIsDistanceModalOpen(false);
-        }}
-        initialValue={initialDistance}
-        title="ATIŞ MESAFESİ"
-      />
+      <Suspense fallback={null}>
+        <DistanceModal
+          isOpen={isDistanceModalOpen}
+          onClose={() => setIsDistanceModalOpen(false)}
+          onConfirm={(value) => {
+            if (distanceModalTarget) {
+              updateObject(distanceModalTarget, { distance: value });
+              saveHistory();
+            }
+            setIsDistanceModalOpen(false);
+          }}
+          initialValue={initialDistance}
+          title="ATIŞ MESAFESİ"
+        />
 
-      <EvidencePhotoModal
-        isOpen={isEvidencePhotoModalOpen}
-        onClose={() => setIsEvidencePhotoModalOpen(false)}
-        object={objects.find(o => o.id === evidencePhotoTarget) || null}
-        onUpdatePhotos={(newPhotos: string[]) => {
-          if (evidencePhotoTarget) {
-            updateObject(evidencePhotoTarget, { photos: newPhotos });
-            saveHistory();
-          }
-        }}
-      />
+        <EvidencePhotoModal
+          isOpen={isEvidencePhotoModalOpen}
+          onClose={() => setIsEvidencePhotoModalOpen(false)}
+          object={objects.find(o => o.id === evidencePhotoTarget) || null}
+          onUpdatePhotos={(newPhotos: string[]) => {
+            if (evidencePhotoTarget) {
+              updateObject(evidencePhotoTarget, { photos: newPhotos });
+              saveHistory();
+            }
+          }}
+        />
 
-      <BodyMapModal
-        isOpen={isBodyMapModalOpen}
-        onClose={() => setIsBodyMapModalOpen(false)}
-        object={objects.find(o => o.id === bodyMapTarget) || null}
-        onUpdateInjuries={(newInjuries: any[]) => {
-          if (bodyMapTarget) {
-            updateObject(bodyMapTarget, { injuries: newInjuries });
-            saveHistory();
-          }
-        }}
-      />
+        <BodyMapModal
+          isOpen={isBodyMapModalOpen}
+          onClose={() => setIsBodyMapModalOpen(false)}
+          object={objects.find(o => o.id === bodyMapTarget) || null}
+          onUpdateInjuries={(newInjuries: any[]) => {
+            if (bodyMapTarget) {
+              updateObject(bodyMapTarget, { injuries: newInjuries });
+              saveHistory();
+            }
+          }}
+        />
+
+        <DistanceMatrixModal
+          isOpen={isDistanceMatrixOpen}
+          onClose={() => setIsDistanceMatrixOpen(false)}
+          objects={objects}
+          onDrawMeasurement={handleDrawMeasurement}
+        />
+      </Suspense>
 
       {/* Fixed Bottom status bar (merged with pages) */}
       <div className="h-12 bg-[#1a1a1a] border-t border-[#2a2a2a] flex items-center px-4 gap-1 z-10 flex-shrink-0 bottom-bar">
@@ -5602,12 +5614,6 @@ export const CanvasArea: React.FC = () => {
           })()}
         </div>
       )}
-      <DistanceMatrixModal
-        isOpen={isDistanceMatrixOpen}
-        onClose={() => setIsDistanceMatrixOpen(false)}
-        objects={objects}
-        onDrawMeasurement={handleDrawMeasurement}
-      />
     </div>
   );
 };

@@ -102,7 +102,7 @@ export default defineConfig({
   ],
 
   build: {
-    target: 'esnext',
+    target: ['es2020', 'chrome89', 'safari14', 'firefox89'],
     minify: 'esbuild',
     sourcemap: false,
     cssCodeSplit: true,
@@ -111,30 +111,25 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
-          if (id.includes('node_modules')) {
-            if (id.includes('react') || id.includes('react-dom')) {
-              return 'vendor-react';
-            }
-            if (id.includes('three')) {
-              return 'vendor-three';
-            }
-            if (id.includes('@react-three') || id.includes('@react-three/fiber') || id.includes('@react-three/drei')) {
-              return 'vendor-r3f';
-            }
-            if (id.includes('konva') || id.includes('react-konva')) {
-              return 'vendor-konva';
-            }
-            if (id.includes('leaflet') || id.includes('react-leaflet')) {
-              return 'vendor-map';
-            }
-            if (id.includes('zustand')) {
-              return 'vendor-state';
-            }
-            if (id.includes('jspdf') || id.includes('html2canvas')) {
-              return 'vendor-export';
-            }
-            return 'vendor';
-          }
+          if (!id.includes('node_modules')) return undefined;
+          // React core
+          if (id.includes('/react/') || id.includes('/react-dom/') || id.includes('/react-is/')) return 'vendor-react';
+          // Three.js ecosystem (heavy, only used in 3D preview modal)
+          if (id.includes('/three/') || id.includes('@react-three') || id.includes('@react-spring') || id.includes('/troika-') || id.includes('/maath/') || id.includes('/detect-gpu/') || id.includes('/utility-types/')) return 'vendor-three';
+          // Konva canvas
+          if (id.includes('/konva/') || id.includes('/react-konva/')) return 'vendor-konva';
+          // Map
+          if (id.includes('/leaflet/') || id.includes('/react-leaflet/') || id.includes('/@react-leaflet/')) return 'vendor-map';
+          // PDF export
+          if (id.includes('/jspdf/') || id.includes('/html2canvas/')) return 'vendor-export';
+          // State management
+          if (id.includes('/zustand/')) return 'vendor-state';
+          // UI utilities
+          if (id.includes('/lucide-react/') || id.includes('/clsx/') || id.includes('/class-variance-authority/')) return 'vendor-ui';
+          // Cloudinary / media
+          if (id.includes('/cloudinary') || id.includes('/axios/')) return 'vendor-media';
+          // Catch-all
+          return 'vendor';
         }
       }
     }
