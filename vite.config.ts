@@ -29,8 +29,27 @@ export default defineConfig({
         skipWaiting: true,
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024
       },
-      devOptions: { enabled: false }
+      devOptions: { enabled: false },
     }),
+    {
+      name: 'defer-register-sw',
+      enforce: 'post' as const,
+      transformIndexHtml: {
+        order: 'post' as const,
+        handler(html: string) {
+          // Make the PWA registerSW.js non-render-blocking by adding defer
+          return html
+            .replace(
+              /(<script\s+id="vite-plugin-pwa:register-sw"\s+src="\/registerSW\.js">)/g,
+              '<script defer id="vite-plugin-pwa:register-sw" src="/registerSW.js">'
+            )
+            .replace(
+              /<script src="\/registerSW\.js"><\/script>/g,
+              '<script defer src="/registerSW.js"></script>'
+            );
+        }
+      }
+    },
     {
       name: 'vercel-api-dev-server',
       configureServer(server) {
@@ -86,6 +105,8 @@ export default defineConfig({
     target: 'esnext',
     minify: 'esbuild',
     sourcemap: false,
+    cssCodeSplit: true,
+    cssMinify: true,
     chunkSizeWarningLimit: 2000,
     rollupOptions: {
       output: {

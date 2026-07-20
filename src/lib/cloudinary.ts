@@ -1,11 +1,17 @@
 const CLOUD_NAME = 'dzen3qvgp';
 const UPLOAD_PRESET = 'kroki-olusturucu';
 
-export const getOptimizedCloudinaryUrl = (url: string, width = 300): string => {
+export const getOptimizedCloudinaryUrl = (url: string, width = 80, height?: number): string => {
   if (!url || typeof url !== 'string') return url;
   if (!url.includes('res.cloudinary.com')) return url;
-  if (url.includes('/f_auto,q_auto')) return url;
-  return url.replace('/image/upload/', `/image/upload/f_auto,q_auto,w_${width},c_limit/`);
+  if (url.includes('/f_auto,q_auto')) {
+    // already optimized – update width if different
+    return url.replace(/w_\d+/, `w_${width}`);
+  }
+  const transforms = height
+    ? `f_auto,q_auto:low,w_${width},h_${height},c_fill`
+    : `f_auto,q_auto:low,w_${width},c_limit`;
+  return url.replace('/image/upload/', `/image/upload/${transforms}/`);
 };
 
 export const cloudinary = {
