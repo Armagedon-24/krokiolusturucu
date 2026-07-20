@@ -427,7 +427,7 @@ export const Sidebar: React.FC = () => {
                                   {groupName || 'DİĞER'}
                                 </span>
                                 <div className="ml-auto flex items-center gap-1.5">
-                                  <span className="text-[8px] text-gray-500 font-bold px-1.5 py-0.5 bg-black/30 rounded-full">
+                                  <span className="text-[8px] text-gray-300 font-bold px-1.5 py-0.5 bg-black/50 rounded-full">
                                     {groupItems.length}
                                   </span>
                                 </div>

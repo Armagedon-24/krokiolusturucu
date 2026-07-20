@@ -37,7 +37,9 @@ export const NotificationSystem: React.FC = () => {
           </div>
           <button
             onClick={() => removeNotification(n.id)}
-            className="mt-0.5 text-gray-500 hover:text-white hover:bg-white/5 rounded p-1 transition-all flex-shrink-0"
+            className="mt-0.5 text-gray-400 hover:text-white hover:bg-white/5 rounded p-1 transition-all flex-shrink-0"
+            title="Bildirimi Kapat"
+            aria-label="Bildirimi Kapat"
           >
             <X size={16} />
           </button>

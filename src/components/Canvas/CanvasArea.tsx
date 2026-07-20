@@ -5542,7 +5542,7 @@ export const CanvasArea: React.FC = () => {
           <div className="w-px h-3 bg-[#333]" />
           <button 
             onClick={() => setCanvasOrientation(canvasOrientation === 'landscape' ? 'portrait' : 'landscape')}
-            className="px-3 py-1 text-[10px] font-bold rounded bg-[#242424] text-gray-400 border border-[#333] hover:border-[#F5C518] hover:text-[#F5C518] transition-all uppercase"
+            className="px-3 py-1 text-[10px] font-bold rounded bg-[#242424] text-gray-200 border border-[#333] hover:border-[#F5C518] hover:text-[#F5C518] transition-all uppercase"
           >
             TUVAL: A4 ({canvasOrientation === 'landscape' ? 'YATAY' : 'DİKEY'})
           </button>
@@ -5553,7 +5553,7 @@ export const CanvasArea: React.FC = () => {
 
         <div className="h-4 w-px bg-[#333] mx-2" />
 
-        <span className="text-[9px] text-gray-700 italic whitespace-nowrap">
+        <span className="text-[9px] text-gray-300 font-semibold italic whitespace-nowrap">
           Resmi Makamlar İçin Olay Yeri Dokümantasyonu
         </span>
       </div>

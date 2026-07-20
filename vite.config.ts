@@ -85,7 +85,7 @@ export default defineConfig({
   build: {
     target: 'esnext',
     minify: 'esbuild',
-    sourcemap: true,
+    sourcemap: false,
     chunkSizeWarningLimit: 2000,
     rollupOptions: {
       output: {
