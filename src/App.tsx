@@ -151,10 +151,10 @@ function App() {
       )}
 
       <Topbar />
-      <div className="flex flex-1 overflow-hidden relative">
+      <main className="flex flex-1 overflow-hidden relative" id="main-content">
         <Sidebar />
         <CanvasArea />
-      </div>
+      </main>
       <NotificationSystem />
       <ConfirmModal />
       

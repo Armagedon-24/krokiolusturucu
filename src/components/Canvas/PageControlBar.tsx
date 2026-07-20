@@ -130,10 +130,11 @@ export const PageControlBar: React.FC<PageControlBarProps> = ({ variant = 'full'
               className={`group flex items-center gap-2 h-8 px-3.5 rounded-lg border transition-all duration-200 cursor-pointer ${
                 isActive
                   ? 'bg-[#1e1e1e] border-[#F5C518]/50 text-white shadow-lg shadow-[#F5C518]/5 font-black border-t-2 border-t-[#F5C518]'
-                  : 'bg-black/40 border-[#222] text-gray-500 hover:text-gray-300 hover:border-gray-800'
+                  : 'bg-black/60 border-[#333] text-gray-200 hover:text-white hover:border-gray-600'
               }`}
+              aria-label={`Sayfa: ${scene.name}`}
             >
-              <FileText size={11} className={isActive ? 'text-[#F5C518]' : 'text-gray-600 group-hover:text-gray-400'} />
+              <FileText size={11} className={isActive ? 'text-[#F5C518]' : 'text-gray-300 group-hover:text-gray-100'} />
               
               {isEditing ? (
                 <input
@@ -145,6 +146,7 @@ export const PageControlBar: React.FC<PageControlBarProps> = ({ variant = 'full'
                   onKeyDown={(e) => e.key === 'Enter' && handleSaveRename(scene.id)}
                   className="bg-[#111] border border-[#F5C518]/50 text-[10px] font-black text-white px-2 py-0.5 rounded outline-none w-24 h-5 focus:ring-1 focus:ring-[#F5C518]"
                   onClick={(e) => e.stopPropagation()}
+                  aria-label="Sayfa İsmi"
                 />
               ) : (
                 <span className="text-[10px] uppercase tracking-wider select-none truncate max-w-[90px]">
@@ -156,8 +158,9 @@ export const PageControlBar: React.FC<PageControlBarProps> = ({ variant = 'full'
               {!isEditing && isActive && (
                 <button
                   onClick={(e) => handleStartRename(scene.id, scene.name, e)}
-                  className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-[#333] text-gray-400 hover:text-[#F5C518] rounded transition-all"
+                  className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-[#333] text-gray-300 hover:text-[#F5C518] rounded transition-all"
                   title="Yeniden Adlandır"
+                  aria-label="Sayfayı Yeniden Adlandır"
                 >
                   <Edit2 size={10} />
                 </button>
@@ -169,10 +172,11 @@ export const PageControlBar: React.FC<PageControlBarProps> = ({ variant = 'full'
                   onClick={(e) => handleDeletePage(scene.id, scene.name, e)}
                   className={`p-0.5 rounded transition-all ${
                     isActive
-                      ? 'text-gray-600 hover:text-red-500 hover:bg-red-500/10'
-                      : 'text-gray-700 hover:text-red-500 hover:bg-red-500/10 group-hover:opacity-100'
+                      ? 'text-gray-400 hover:text-red-400 hover:bg-red-500/10'
+                      : 'text-gray-400 hover:text-red-400 hover:bg-red-500/10 group-hover:opacity-100'
                   }`}
                   title="Sayfayı Sil"
+                  aria-label="Sayfayı Sil"
                 >
                   <X size={10} />
                 </button>
@@ -184,8 +188,9 @@ export const PageControlBar: React.FC<PageControlBarProps> = ({ variant = 'full'
         {/* Add Page Button inside scroll area */}
         <button
           onClick={handleAddPage}
-          className="flex items-center justify-center gap-1.5 h-8 px-3 rounded-lg border border-dashed border-[#F5C518]/30 bg-[#F5C518]/5 text-[#F5C518] hover:bg-[#F5C518]/15 hover:border-[#F5C518]/50 transition-all font-black text-[10px] uppercase tracking-wider shrink-0"
+          className="flex items-center justify-center gap-1.5 h-8 px-3 rounded-lg border border-dashed border-[#F5C518]/50 bg-[#F5C518]/10 text-[#F5C518] hover:bg-[#F5C518]/20 hover:border-[#F5C518] transition-all font-black text-[10px] uppercase tracking-wider shrink-0"
           title="Yeni Boş Sayfa Ekle"
+          aria-label="Yeni Boş Sayfa Ekle"
         >
           <Plus size={12} />
           SAYFA EKLE
@@ -216,13 +221,14 @@ export const PageControlBar: React.FC<PageControlBarProps> = ({ variant = 'full'
                   <button
                     onClick={() => createPageWithType('kroki')}
                     className="group flex flex-col items-center gap-3 p-5 bg-white/5 border border-white/10 hover:border-[#F5C518] hover:bg-[#F5C518]/5 rounded-2xl transition-all duration-300 text-center shadow-lg hover:shadow-[#F5C518]/5"
+                    aria-label="Olay Yeri Krokisi Ekle"
                   >
-                    <div className="w-12 h-12 rounded-xl bg-white/5 group-hover:bg-[#F5C518] text-gray-400 group-hover:text-black flex items-center justify-center transition-all duration-300">
+                    <div className="w-12 h-12 rounded-xl bg-white/5 group-hover:bg-[#F5C518] text-gray-300 group-hover:text-black flex items-center justify-center transition-all duration-300">
                       <FileText size={22} />
                     </div>
                     <div>
                       <span className="text-xs font-black uppercase tracking-wider text-white group-hover:text-[#F5C518] transition-colors">OLAY YERİ KROKİSİ</span>
-                      <p className="text-[9px] text-gray-500 font-semibold mt-1">Ölçümler ve yerleşim planı çizim alanı</p>
+                      <p className="text-[9px] text-gray-400 font-semibold mt-1">Ölçümler ve yerleşim planı çizim alanı</p>
                     </div>
                   </button>
 
@@ -230,13 +236,14 @@ export const PageControlBar: React.FC<PageControlBarProps> = ({ variant = 'full'
                   <button
                     onClick={() => createPageWithType('diagram')}
                     className="group flex flex-col items-center gap-3 p-5 bg-white/5 border border-white/10 hover:border-[#F5C518] hover:bg-[#F5C518]/5 rounded-2xl transition-all duration-300 text-center shadow-lg hover:shadow-[#F5C518]/5"
+                    aria-label="Diyagram Ekle"
                   >
-                    <div className="w-12 h-12 rounded-xl bg-white/5 group-hover:bg-[#F5C518] text-gray-400 group-hover:text-black flex items-center justify-center transition-all duration-300">
+                    <div className="w-12 h-12 rounded-xl bg-white/5 group-hover:bg-[#F5C518] text-gray-300 group-hover:text-black flex items-center justify-center transition-all duration-300">
                       <Edit2 size={22} />
                     </div>
                     <div>
                       <span className="text-xs font-black uppercase tracking-wider text-white group-hover:text-[#F5C518] transition-colors">DİYAGRAM</span>
-                      <p className="text-[9px] text-gray-500 font-semibold mt-1">Hasar tespiti ve kaza analiz şablonu</p>
+                      <p className="text-[9px] text-gray-400 font-semibold mt-1">Hasar tespiti ve kaza analiz şablonu</p>
                     </div>
                   </button>
                 </div>
@@ -245,6 +252,7 @@ export const PageControlBar: React.FC<PageControlBarProps> = ({ variant = 'full'
                   <button
                     onClick={() => setIsTypeModalOpen(false)}
                     className="w-full py-3.5 bg-white/5 hover:bg-white/10 text-white font-black text-xs uppercase tracking-[0.2em] rounded-xl border border-white/5 transition-all"
+                    aria-label="İptal Et"
                   >
                     İPTAL
                   </button>
@@ -253,7 +261,8 @@ export const PageControlBar: React.FC<PageControlBarProps> = ({ variant = 'full'
 
               <button 
                 onClick={() => setIsTypeModalOpen(false)}
-                className="absolute top-6 right-6 p-2 text-gray-600 hover:text-white transition-colors"
+                className="absolute top-6 right-6 p-2 text-gray-400 hover:text-white transition-colors"
+                aria-label="Pencereyi Kapat"
               >
                 <X size={20} />
               </button>

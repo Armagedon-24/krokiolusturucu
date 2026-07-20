@@ -123,8 +123,8 @@ export const Topbar: React.FC = () => {
 
         <div className="h-5 w-px bg-[#333]" />
         <div className="flex items-center bg-[#242424] rounded-md border border-[#333] p-0.5">
-          <button onClick={undo} className="p-1.5 hover:bg-[#333] rounded transition-colors" title="Geri Al"><Undo size={16} className="text-gray-300" /></button>
-          <button onClick={redo} className="p-1.5 hover:bg-[#333] rounded transition-colors" title="İleri Al"><Redo size={16} className="text-gray-300" /></button>
+          <button onClick={undo} className="p-1.5 hover:bg-[#333] rounded transition-colors" title="Geri Al" aria-label="Geri Al"><Undo size={16} className="text-gray-200" /></button>
+          <button onClick={redo} className="p-1.5 hover:bg-[#333] rounded transition-colors" title="İleri Al" aria-label="İleri Al"><Redo size={16} className="text-gray-200" /></button>
         </div>
 
         {isAdmin && (
@@ -136,8 +136,8 @@ export const Topbar: React.FC = () => {
                   return;
                 }
                 syncToCloud();
-              }} className="flex items-center gap-1.5 px-2 py-1 bg-[#F5C518]/10 text-[#F5C518] rounded hover:bg-[#F5C518]/20 transition-all text-[9px] font-bold border border-[#F5C518]/30" title="Buluta Yükle"><CloudUpload size={12} /> YÜKLE</button>
-            <button onClick={() => restoreFromCloud()} className="flex items-center gap-1.5 px-2 py-1 bg-blue-500/10 text-blue-400 rounded hover:bg-blue-500/20 transition-all text-[9px] font-bold border border-blue-500/30" title="Buluttan İndir"><CloudDownload size={12} /> İNDİR</button>
+              }} className="flex items-center gap-1.5 px-2 py-1 bg-[#F5C518]/10 text-[#F5C518] rounded hover:bg-[#F5C518]/20 transition-all text-[9px] font-bold border border-[#F5C518]/30" title="Buluta Yükle" aria-label="Buluta Yükle"><CloudUpload size={12} /> YÜKLE</button>
+            <button onClick={() => restoreFromCloud()} className="flex items-center gap-1.5 px-2 py-1 bg-blue-500/10 text-blue-400 rounded hover:bg-blue-500/20 transition-all text-[9px] font-bold border border-blue-500/30" title="Buluttan İndir" aria-label="Buluttan İndir"><CloudDownload size={12} /> İNDİR</button>
           </div>
         )}
       </div>
@@ -148,28 +148,29 @@ export const Topbar: React.FC = () => {
           onClick={() => setIsMapModalOpen(true)}
           className="flex items-center gap-2 px-3 py-1.5 bg-[#F5C518] hover:bg-[#E2B616] text-black text-[10px] font-black rounded-md transition-all shadow-lg active:scale-95"
           title="Google Maps Uydu Görüntüsü Getir"
+          aria-label="Uydu Haritası Aç"
         >
           <MapIcon size={14} />
           <span className="text-xs font-bold">UYDU HARİTASI</span>
         </button>
 
-        <label className="flex items-center gap-1.5 px-3 py-1.5 bg-[#F5C518] text-black rounded-md hover:bg-[#d4a017] cursor-pointer transition-all text-xs font-bold shadow-lg shadow-yellow-500/10">
+        <label className="flex items-center gap-1.5 px-3 py-1.5 bg-[#F5C518] text-black rounded-md hover:bg-[#d4a017] cursor-pointer transition-all text-xs font-bold shadow-lg shadow-yellow-500/10" aria-label="Arka Plan Görseli Yükle">
           <Upload size={14} />
           <span>ARKA PLAN</span>
-          <input type="file" className="hidden" accept="image/*" onChange={handleBackgroundUpload} />
+          <input type="file" className="hidden" accept="image/*" onChange={handleBackgroundUpload} aria-label="Arka Plan Dosyası" />
         </label>
 
         <div className={`flex items-center gap-2 bg-[#1e1e1e] border border-[#333] rounded-md px-2 py-1 ${!backgroundImage ? 'opacity-30 pointer-events-none' : ''}`}>
-          <span className="text-gray-500">{backgroundOpacity > 0.5 ? <Eye size={14} /> : <EyeOff size={14} />}</span>
-          <input type="range" min="0" max="1" step="0.1" value={backgroundOpacity} onChange={(e) => setBackgroundOpacity(parseFloat(e.target.value))} className="w-16 h-1 bg-[#333] cursor-pointer accent-[#F5C518]" />
-          <button onClick={() => setBackgroundGrayscale(!backgroundGrayscale)} className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${backgroundGrayscale ? 'bg-[#F5C518] text-black' : 'bg-[#333] text-gray-400'}`}><Contrast size={12} /></button>
+          <span className="text-gray-300">{backgroundOpacity > 0.5 ? <Eye size={14} /> : <EyeOff size={14} />}</span>
+          <input type="range" min="0" max="1" step="0.1" value={backgroundOpacity} onChange={(e) => setBackgroundOpacity(parseFloat(e.target.value))} className="w-16 h-1 bg-[#333] cursor-pointer accent-[#F5C518]" aria-label="Arka Plan Şeffaflığı Ayarı" title="Arka Plan Şeffaflığı" />
+          <button onClick={() => setBackgroundGrayscale(!backgroundGrayscale)} className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${backgroundGrayscale ? 'bg-[#F5C518] text-black' : 'bg-[#333] text-gray-200'}`} aria-label="Siyah Beyaz Filtre" title="Siyah Beyaz Filtre"><Contrast size={12} /></button>
         </div>
       </div>
 
       {/* RIGHT: Actions */}
       <div className="flex items-center gap-2">
         {isAdmin && (
-          <button onClick={() => setIsThreeDOpen(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-[#242424] border border-blue-500/30 rounded-md hover:bg-blue-500/10 transition-all text-xs font-black text-blue-400 shadow-lg shadow-blue-600/5">
+          <button onClick={() => setIsThreeDOpen(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-[#242424] border border-blue-500/40 rounded-md hover:bg-blue-500/10 transition-all text-xs font-black text-blue-300 shadow-lg shadow-blue-600/5" aria-label="3D Görünüm">
             <Rotate3D size={14} />
             <span>3D GÖRÜNÜM</span>
           </button>
@@ -177,19 +178,20 @@ export const Topbar: React.FC = () => {
 
         <button 
           onClick={() => setIsCaseManagerOpen(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-[#242424] border border-[#F5C518]/30 rounded-md hover:bg-[#F5C518]/10 transition-all text-xs font-black text-[#F5C518] shadow-lg shadow-[#F5C518]/5"
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-[#242424] border border-[#F5C518]/50 rounded-md hover:bg-[#F5C518]/10 transition-all text-xs font-black text-[#F5C518] shadow-lg shadow-[#F5C518]/5"
+          aria-label="Olay Yönetimi Paneli"
         >
           <FolderOpen size={14} />
           <span>OLAY YÖNETİMİ</span>
         </button>
 
-        <button onClick={handlePreview} className="flex items-center gap-1.5 px-3 py-1.5 bg-[#242424] border border-[#333] rounded-md hover:bg-[#2a2a2a] transition-all text-xs font-semibold text-gray-300"><Eye size={14} /><span>ÖNİZLE</span></button>
-        <button onClick={() => setIsScaleCalibrationOpen(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-[#242424] border border-[#333] rounded-md hover:bg-[#2a2a2a] transition-all text-xs font-semibold text-gray-300"><Ruler size={14} /><span>ÖLÇEK</span></button>
-        <button onClick={() => setIsAboutOpen(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-[#242424] border border-[#333] rounded-md hover:bg-[#2a2a2a] transition-all text-xs font-semibold text-gray-300">
+        <button onClick={handlePreview} className="flex items-center gap-1.5 px-3 py-1.5 bg-[#242424] border border-[#444] rounded-md hover:bg-[#2a2a2a] transition-all text-xs font-bold text-white" aria-label="Önizle"><Eye size={14} /><span>ÖNİZLE</span></button>
+        <button onClick={() => setIsScaleCalibrationOpen(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-[#242424] border border-[#444] rounded-md hover:bg-[#2a2a2a] transition-all text-xs font-bold text-white" aria-label="Ölçek Ayarı"><Ruler size={14} /><span>ÖLÇEK</span></button>
+        <button onClick={() => setIsAboutOpen(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-[#242424] border border-[#444] rounded-md hover:bg-[#2a2a2a] transition-all text-xs font-bold text-white" aria-label="Hakkında Bilgisi">
           <Info size={14} />
           <span>HAKKINDA</span>
         </button>
-        <button onClick={() => window.print()} className="px-4 py-1.5 bg-[#16a34a] text-white rounded-md hover:bg-[#15803d] transition-all text-xs font-bold"><span>YAZDIR</span></button>
+        <button onClick={() => window.print()} className="px-4 py-1.5 bg-[#15803d] text-white rounded-md hover:bg-[#166534] transition-all text-xs font-black tracking-wide" aria-label="Yazdır"><span>YAZDIR</span></button>
         
         <button 
           onClick={() => {
@@ -202,8 +204,9 @@ export const Topbar: React.FC = () => {
               }
             });
           }} 
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 text-red-500 border border-red-500/20 rounded-md hover:bg-red-500/20 transition-all text-xs font-bold" 
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600/20 text-red-300 border border-red-500/40 rounded-md hover:bg-red-600/30 transition-all text-xs font-bold" 
           title="Tüm Sayfayı Sıfırla"
+          aria-label="Yeni Çizim Aç"
         >
           <Trash2 size={14} />
           <span>YENİ ÇİZİM</span>
@@ -212,8 +215,9 @@ export const Topbar: React.FC = () => {
         {isAdmin && (
           <button 
             onClick={() => { setIsAdmin(false); addNotification({ type: 'info', message: 'Çıkış Yapıldı', description: 'Yönetici panelinden güvenli bir şekilde çıkış yapıldı.' }); }}
-            className="p-1.5 text-orange-400 hover:bg-orange-400/10 rounded-md transition-colors border border-orange-400/20"
+            className="p-1.5 text-orange-400 hover:bg-orange-400/10 rounded-md transition-colors border border-orange-400/30"
             title="Yönetici Çıkışı"
+            aria-label="Yönetici Çıkışı Yap"
           >
             <LogOut size={16} />
           </button>

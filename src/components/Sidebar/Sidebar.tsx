@@ -265,6 +265,7 @@ export const Sidebar: React.FC = () => {
         onClick={toggleSidebar}
         className="absolute left-full top-1/2 -translate-y-1/2 w-6 h-12 bg-[#2a2a2a] border border-[#333] border-l-0 rounded-r-md flex items-center justify-center text-[#F5C518] hover:bg-[#333] transition-colors z-50 shadow-xl"
         title={isSidebarOpen ? "Paneli Kapat" : "Paneli Aç"}
+        aria-label={isSidebarOpen ? "Paneli Kapat" : "Paneli Aç"}
       >
         {isSidebarOpen ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
       </button>
@@ -282,8 +283,9 @@ export const Sidebar: React.FC = () => {
               className={`flex-1 py-3 flex flex-col items-center gap-1 text-[11px] font-black tracking-wide transition-all border-b-2 ${
                 activeTab === tab.id
                   ? 'border-[#F5C518] text-[#F5C518]'
-                  : 'border-transparent text-gray-500 hover:text-gray-300'
+                  : 'border-transparent text-gray-300 hover:text-white'
               }`}
+              aria-label={tab.label}
             >
               {tab.icon}
               {tab.label}
@@ -298,13 +300,14 @@ export const Sidebar: React.FC = () => {
               {/* Search */}
               <div className="px-3 pt-3 flex-shrink-0">
                 <div className="flex items-center bg-[#111] border border-[#333] rounded-md px-3 py-1.5 gap-2">
-                  <Search size={14} className="text-gray-500 flex-shrink-0" />
+                  <Search size={14} className="text-gray-400 flex-shrink-0" />
                   <input
                     type="text"
                     placeholder="Ara..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="bg-transparent border-none focus:ring-0 text-xs text-gray-300 placeholder-gray-600 w-full outline-none"
+                    className="bg-transparent border-none focus:ring-0 text-xs text-gray-200 placeholder-gray-400 w-full outline-none"
+                    aria-label="Sembol veya Görsel Ara"
                   />
                 </div>
               </div>
@@ -317,8 +320,9 @@ export const Sidebar: React.FC = () => {
                     className={`px-1 py-1.5 rounded transition-all text-[8px] font-black border ${
                       selectedCategory === 'all'
                         ? 'bg-[#F5C518] text-black border-[#F5C518]'
-                        : 'bg-[#1e1e1e] text-gray-500 hover:text-gray-300 border-[#2a2a2a] hover:border-[#333]'
+                        : 'bg-[#242424] text-gray-200 hover:text-white border-[#333] hover:border-[#F5C518]/40'
                     }`}
+                    aria-label="Tüm Kategoriler"
                   >
                     TÜMÜ
                   </button>
@@ -329,9 +333,10 @@ export const Sidebar: React.FC = () => {
                       className={`px-1 py-1.5 rounded transition-all text-[8px] font-black border truncate ${
                         selectedCategory === cat.id
                           ? 'bg-[#F5C518] text-black border-[#F5C518]'
-                          : 'bg-[#1e1e1e] text-gray-500 hover:text-gray-300 border-[#2a2a2a] hover:border-[#333]'
+                          : 'bg-[#242424] text-gray-200 hover:text-white border-[#333] hover:border-[#F5C518]/40'
                       }`}
                       title={cat.name.toUpperCase()}
+                      aria-label={`${cat.name} Kategorisi`}
                     >
                       {cat.name.toUpperCase()}
                     </button>
@@ -345,7 +350,8 @@ export const Sidebar: React.FC = () => {
                   onClick={() =>
                     addObject({ type: 'text', text: 'Yeni Metin', width: 200, fontSize: 12, fill: '#000000', fontFamily: 'Inter' })
                   }
-                  className="w-full flex items-center justify-center gap-2 py-2 bg-[#1e1e1e] border border-[#333] rounded-md hover:border-[#F5C518]/50 hover:bg-[#242424] transition-all text-xs font-bold text-gray-300"
+                  className="w-full flex items-center justify-center gap-2 py-2 bg-[#242424] border border-[#333] rounded-md hover:border-[#F5C518]/50 hover:bg-[#2a2a2a] transition-all text-xs font-bold text-white"
+                  aria-label="Metin Kutusu Ekle"
                 >
                   <Type size={14} className="text-[#F5C518]" />
                   METİN KUTUSU EKLE

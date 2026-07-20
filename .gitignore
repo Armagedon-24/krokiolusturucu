@@ -70,3 +70,5 @@ node_modules
 # Agent temp files
 .omo/
 .playwright-mcp/
+
+.env*
