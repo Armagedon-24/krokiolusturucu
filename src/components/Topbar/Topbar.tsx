@@ -13,7 +13,8 @@ import {
   EyeOff, 
   Contrast,
   Ruler,
-  Map as MapIcon
+  Map as MapIcon,
+  Info
 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { CaseManagerModal } from '../UI/CaseManagerModal';
@@ -22,8 +23,10 @@ import { AdminLoginModal } from '../UI/AdminLoginModal';
 import { PreviewModal } from '../UI/PreviewModal';
 import { ScaleCalibrationModal } from '../UI/ScaleCalibrationModal';
 import { MapPickerModal } from '../UI/MapPickerModal';
+import { AboutModal } from '../UI/AboutModal';
 
 import { ThreeDPreview } from '../UI/ThreeDPreview';
+import { compressAndResizeImage } from '../../utils/canvasUtils';
 
 export const Topbar: React.FC = () => {
   const {
@@ -50,25 +53,27 @@ export const Topbar: React.FC = () => {
   const [isThreeDOpen, setIsThreeDOpen] = React.useState(false);
   const [isAdminModalOpen, setIsAdminModalOpen] = React.useState(false);
   const [isPreviewModalOpen, setIsPreviewModalOpen] = React.useState(false);
+  const [isAboutOpen, setIsAboutOpen] = React.useState(false);
 
   const [isCaseManagerOpen, setIsCaseManagerOpen] = React.useState(false);
   const [isScaleCalibrationOpen, setIsScaleCalibrationOpen] = React.useState(false);
   const [isMapModalOpen, setIsMapModalOpen] = React.useState(false);
   const [previewImage, setPreviewImage] = React.useState<string>('');
 
-  const handleBackgroundUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleBackgroundUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        setBackgroundImage(event.target?.result as string);
+      try {
+        const compressedSrc = await compressAndResizeImage(file, 800, 800, 0.45);
+        setBackgroundImage(compressedSrc);
         addNotification({
           type: 'success',
           message: 'Arka Plan Yüklendi',
-          description: 'Seçilen görsel tuvale arka plan olarak yerleştirildi.'
+          description: 'Seçilen görsel performans için optimize edilerek arka plana yerleştirildi.'
         });
-      };
-      reader.readAsDataURL(file);
+      } catch (err) {
+        console.error('Background image error:', err);
+      }
     }
   };
 
@@ -180,6 +185,10 @@ export const Topbar: React.FC = () => {
 
         <button onClick={handlePreview} className="flex items-center gap-1.5 px-3 py-1.5 bg-[#242424] border border-[#333] rounded-md hover:bg-[#2a2a2a] transition-all text-xs font-semibold text-gray-300"><Eye size={14} /><span>ÖNİZLE</span></button>
         <button onClick={() => setIsScaleCalibrationOpen(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-[#242424] border border-[#333] rounded-md hover:bg-[#2a2a2a] transition-all text-xs font-semibold text-gray-300"><Ruler size={14} /><span>ÖLÇEK</span></button>
+        <button onClick={() => setIsAboutOpen(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-[#242424] border border-[#333] rounded-md hover:bg-[#2a2a2a] transition-all text-xs font-semibold text-gray-300">
+          <Info size={14} />
+          <span>HAKKINDA</span>
+        </button>
         <button onClick={() => window.print()} className="px-4 py-1.5 bg-[#16a34a] text-white rounded-md hover:bg-[#15803d] transition-all text-xs font-bold"><span>YAZDIR</span></button>
         
         <button 
@@ -216,6 +225,7 @@ export const Topbar: React.FC = () => {
       <DistanceMatrixModal isOpen={isDistanceMatrixOpen} onClose={() => setIsDistanceMatrixOpen(false)} objects={objects} />
       <ThreeDPreview isOpen={isThreeDOpen} onClose={() => setIsThreeDOpen(false)} />
       <AdminLoginModal isOpen={isAdminModalOpen} onClose={() => setIsAdminModalOpen(false)} onLogin={(pwd) => setIsAdmin(true, pwd)} />
+      <AboutModal isOpen={isAboutOpen} onClose={() => setIsAboutOpen(false)} />
       <MapPickerModal
         isOpen={isMapModalOpen}
         onClose={() => setIsMapModalOpen(false)}

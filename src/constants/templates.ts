@@ -306,43 +306,42 @@ export const createDiagramTemplate = (canvasWidth: number, canvasHeight: number,
 
   // --- HEADER ROW 3 (Info) ---
   infoY = line2Y + 8;
-  const colWidth = contentWidth / 3;
 
   objects.push({
-    id: uuidv4(),
+    id: 'diag-hdr3-date',
     type: 'text',
-    x: padding + 15,
+    x: padding + 5,
     y: infoY,
     text: `Tarih: ${formatDate(info.date)}`,
     fontSize: 11,
     fill: 'black',
-    width: colWidth,
+    width: 250,
     height: 20,
     align: 'left',
     rotation: 0, scaleX: 1, scaleY: 1, zIndex: 2, isTemplate: true
   });
   objects.push({
-    id: uuidv4(),
+    id: 'diag-hdr3-team',
     type: 'text',
-    x: padding + colWidth,
+    x: padding,
     y: infoY,
     text: `Görevli Ekip Kodu: ${info.eventName || ''}`,
     fontSize: 11,
     fill: 'black',
-    width: colWidth,
+    width: contentWidth,
     height: 20,
     align: 'center',
     rotation: 0, scaleX: 1, scaleY: 1, zIndex: 2, isTemplate: true
   });
   objects.push({
-    id: uuidv4(),
+    id: 'diag-hdr3-reportno',
     type: 'text',
-    x: padding + colWidth * 2 - 15,
+    x: padding + contentWidth - 300,
     y: infoY,
     text: `Rapor No: ${info.reportNo || ''}`,
     fontSize: 11,
     fill: 'black',
-    width: colWidth,
+    width: 295,
     height: 20,
     align: 'right',
     rotation: 0, scaleX: 1, scaleY: 1, zIndex: 2, isTemplate: true
@@ -380,14 +379,14 @@ export const createDiagramTemplate = (canvasWidth: number, canvasHeight: number,
   const area1H = area2Y - area1Y - spacing;
 
   const sections = [
-    { y: area1Y, h: area1H, label: '1', sideText: 'BULGU VEYA HASARLARIN TESPİT EDİLDİĞİ BÖLGELER' },
-    { y: area2Y, h: area2H, label: '2', sideText: 'AÇIKLAMA' },
-    { y: area3Y, h: area3H, label: '3', sideText: 'İMZA' }
+    { id: '1', y: area1Y, h: area1H, label: '1', sideText: 'BULGU VEYA HASARLARIN TESPİT EDİLDİĞİ BÖLGELER' },
+    { id: '2', y: area2Y, h: area2H, label: '2', sideText: 'AÇIKLAMA' },
+    { id: '3', y: area3Y, h: area3H, label: '3', sideText: 'İMZA' }
   ];
 
   sections.forEach(s => {
     objects.push({
-      id: uuidv4(),
+      id: `diag-rect-${s.id}`,
       type: 'rect',
       x: startX,
       y: s.y,
@@ -398,7 +397,7 @@ export const createDiagramTemplate = (canvasWidth: number, canvasHeight: number,
       rotation: 0, scaleX: 1, scaleY: 1, zIndex: 3, isTemplate: true
     });
     objects.push({
-      id: uuidv4(),
+      id: `diag-line1-${s.id}`,
       type: 'line',
       x: line1X,
       y: s.y,
@@ -409,7 +408,7 @@ export const createDiagramTemplate = (canvasWidth: number, canvasHeight: number,
       rotation: 0, scaleX: 1, scaleY: 1, zIndex: 4, isTemplate: true
     });
     objects.push({
-      id: uuidv4(),
+      id: `diag-line2-${s.id}`,
       type: 'line',
       x: line2X,
       y: s.y,
@@ -420,7 +419,7 @@ export const createDiagramTemplate = (canvasWidth: number, canvasHeight: number,
       rotation: 0, scaleX: 1, scaleY: 1, zIndex: 4, isTemplate: true
     });
     objects.push({
-      id: uuidv4(),
+      id: `diag-num-${s.id}`,
       type: 'text',
       x: startX,
       y: s.y + s.h / 2 - 10,
@@ -435,17 +434,21 @@ export const createDiagramTemplate = (canvasWidth: number, canvasHeight: number,
     });
 
     const isMainLabel = s.label === '1';
+    const fontSz = isMainLabel ? 12 : 11;
+    const txtH = 16;
+    const colX = line1X + (sidebarWidth2 - txtH) / 2;
+
     objects.push({
-      id: uuidv4(),
+      id: `diag-sidetxt-${s.id}`,
       type: 'text',
-      x: line1X + (isMainLabel ? 4 : 8),
+      x: colX,
       y: s.y + s.h, 
       text: s.sideText,
-      fontSize: isMainLabel ? 17 : 12,
+      fontSize: fontSz,
       fontStyle: 'bold',
       fill: 'black',
       width: s.h, 
-      height: 20,
+      height: txtH,
       align: 'center',
       rotation: -90,
       scaleX: 1, scaleY: 1, zIndex: 5, isTemplate: true

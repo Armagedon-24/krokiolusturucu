@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Ruler, Activity, Info, PlusCircle, Weight, Zap, Play, TrendingUp } from 'lucide-react';
+import { Ruler, Activity, Info, Weight, Zap, TrendingUp, Eye } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { HelpTooltip } from '../UI/HelpTooltip';
 import { FallAnimationPlayer } from '../UI/FallAnimationPlayer';
@@ -13,9 +13,9 @@ export const FallCalculator: React.FC = () => {
   const [time, setTime] = useState<number>(0);
   const [impactVelocity, setImpactVelocity] = useState<number>(0);
   const [impactEnergy, setImpactEnergy] = useState<number>(0);
-  const [isAnimationOpen, setIsAnimationOpen] = useState<boolean>(false);
   
-  const { addObject, setFallAnimation } = useStore();
+  const [isAnimationOpen, setIsAnimationOpen] = useState<boolean>(false);
+  const { addObject, setFallAnimation, fallAnimation } = useStore();
 
   const presets = [
     { label: 'Adım Atma', value: 0.8, description: 'Yavaşça kenardan adım atma' },
@@ -178,6 +178,8 @@ export const FallCalculator: React.FC = () => {
       fontFamily: 'Inter',
       fontStyle: 'bold',
     });
+
+    setFallAnimation({ canvasData: undefined, isPlaying: false, currentTime: 0 });
   };
 
   return (
@@ -311,13 +313,6 @@ export const FallCalculator: React.FC = () => {
               </div>
             </div>
 
-            <button
-              onClick={handleAddToCanvas}
-              className="w-full flex items-center justify-center gap-2 py-4 bg-[#F5C518] text-black rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-[#ffcf24] transition-all shadow-lg active:scale-95"
-            >
-              <PlusCircle size={14} />
-              ANALİZİ TUVALE AKTAR
-            </button>
             <div className="p-4 bg-blue-500/5 border border-blue-500/10 rounded-2xl flex gap-3 items-start">
               <Info size={16} className="text-blue-900 mt-0.5 flex-shrink-0" />
               <div className="space-y-1">
@@ -330,23 +325,62 @@ export const FallCalculator: React.FC = () => {
               </div>
             </div>
             
-            <div className="mt-4 space-x-2">
-              <button
-                onClick={() => setIsAnimationOpen(true)}
-                className="flex items-center gap-2 px-3 py-2 bg-[#F5C518] text-black rounded-lg font-[10px] font-black uppercase tracking-widest hover:bg-[#ffcf24] transition-all"
-              >
-                <Play size={14} />
-                ANİMASYONU İZLE
-              </button>
+            {/* Animation Controls - matches accident reconstruction pattern */}
+            <div className="border-t border-white/5 pt-4">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <label className="text-[9px] font-bold text-gray-500 uppercase block mb-1">Oynatma Hızı</label>
+                  <select className="bg-[#111] border border-[#333] rounded-xl px-3 py-2 text-[10px] text-white outline-none focus:border-[#F5C518]/50"
+                    value={fallAnimation.speed}
+                    onChange={e => setFallAnimation({ speed: Number(e.target.value) })}>
+                    <option value="0.25">0.25x</option>
+                    <option value="0.5">0.5x</option>
+                    <option value="1">1x (Normal)</option>
+                    <option value="2">2x</option>
+                    <option value="4">4x</option>
+                  </select>
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={fallAnimation.loop}
+                    onChange={e => setFallAnimation({ loop: e.target.checked })}
+                    className="accent-[#F5C518]" />
+                  <span className="text-[10px] text-gray-400">Döngü</span>
+                </label>
+              </div>
             </div>
-            
-            <FallAnimationPlayer 
-              isOpen={isAnimationOpen} 
-              onClose={() => setIsAnimationOpen(false)} 
-            />
           </div>
         </div>
       </div>
+      
+      {/* Controls Bar — always at top */}
+      <div className="sticky top-0 px-4 py-3 bg-[#1a1a1a] border-b border-[#2a2a2a] flex items-center justify-between z-20">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => { setHeight(10); setVelocity(1.5); setWeight(75); setUseDrag(true); }}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-gray-600 hover:text-red-400 transition-colors"
+          >
+            TEMİZLE
+          </button>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleAddToCanvas}
+            className="flex items-center gap-1.5 px-3 py-2 text-[10px] font-bold text-gray-400 hover:text-[#F5C518] border border-[#333] hover:border-[#F5C518]/50 rounded-lg transition-all"
+          >
+            TUVALE AKTAR
+          </button>
+          <button
+            onClick={() => setIsAnimationOpen(true)}
+            className="flex items-center gap-2 px-5 py-2 bg-[#F5C518] hover:bg-[#E2B616] text-black text-xs font-black rounded-md transition-all shadow-lg active:scale-95"
+          >
+            <Eye size={14} />
+            ANİMASYONU İZLE
+          </button>
+        </div>
+      </div>
+      
+      <FallAnimationPlayer isOpen={isAnimationOpen} onClose={() => setIsAnimationOpen(false)}
+        fallData={{ height, distance, velocity, impactVelocity, impactEnergy, time, weight, useDrag }} />
     </div>
   );
 };

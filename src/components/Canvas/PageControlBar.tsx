@@ -2,7 +2,11 @@ import React, { useState, useRef, useEffect } from 'react';
 import { FileText, Plus, X, Edit2 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 
-export const PageControlBar: React.FC = () => {
+interface PageControlBarProps {
+  variant?: 'full' | 'inline';
+}
+
+export const PageControlBar: React.FC<PageControlBarProps> = ({ variant = 'full' }) => {
   const {
     scenes,
     activeSceneId,
@@ -107,18 +111,12 @@ export const PageControlBar: React.FC = () => {
     });
   };
 
-  return (
-    <div className="h-12 bg-[#141414] border-t border-[#222] flex items-center px-4 gap-2 z-10 flex-shrink-0 select-none page-control-bar relative">
-      {/* Title / Helper info */}
-      <div className="flex items-center gap-1.5 border-r border-[#222] pr-3 mr-1">
-        <FileText size={14} className="text-[#F5C518] animate-pulse" />
-        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest italic">SAYFALAR:</span>
-      </div>
-
+  const tabsContent = (
+    <>
       {/* Tabs Container */}
       <div
         ref={scrollContainerRef}
-        className="flex-1 flex items-center gap-1.5 overflow-x-auto overflow-y-hidden h-full scroll-smooth custom-scrollbar pr-4 py-1"
+        className="flex items-center gap-1.5 overflow-x-auto overflow-y-hidden h-full scroll-smooth custom-scrollbar py-1"
       >
         {scenes.map((scene) => {
           const isActive = scene.id === activeSceneId;
@@ -149,7 +147,7 @@ export const PageControlBar: React.FC = () => {
                   onClick={(e) => e.stopPropagation()}
                 />
               ) : (
-                <span className="text-[10px] uppercase tracking-wider select-none truncate max-w-[120px]">
+                <span className="text-[10px] uppercase tracking-wider select-none truncate max-w-[90px]">
                   {scene.name}
                 </span>
               )}
@@ -192,10 +190,6 @@ export const PageControlBar: React.FC = () => {
           <Plus size={12} />
           SAYFA EKLE
         </button>
-      </div>
-
-      <div className="text-[9px] text-gray-600 italic tracking-tighter uppercase pr-1 select-none pointer-events-none">
-        Çift tıklayarak sayfayı yeniden adlandırın
       </div>
 
       {/* Page Type Selection Modal */}
@@ -267,6 +261,26 @@ export const PageControlBar: React.FC = () => {
           </div>
         </div>
       )}
+    </>
+  );
+
+  if (variant === 'inline') {
+    return tabsContent;
+  }
+
+  return (
+    <div className="h-12 bg-[#141414] border-t border-[#222] flex items-center px-4 gap-2 z-10 flex-shrink-0 select-none page-control-bar relative">
+      {/* Title / Helper info */}
+      <div className="flex items-center gap-1.5 border-r border-[#222] pr-3 mr-1">
+        <FileText size={14} className="text-[#F5C518] animate-pulse" />
+        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest italic">SAYFALAR:</span>
+      </div>
+
+      {tabsContent}
+
+      <div className="text-[9px] text-gray-600 italic tracking-tighter uppercase pr-1 select-none pointer-events-none">
+        Çift tıklayarak sayfayı yeniden adlandırın
+      </div>
     </div>
   );
 };

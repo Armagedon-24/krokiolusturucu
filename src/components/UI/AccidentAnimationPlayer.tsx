@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Stage, Layer, Rect, Line, Circle, Group, Text, Star } from 'react-konva';
-import { X, Play, Square, RotateCcw, Save } from 'lucide-react';
+import { X, Play, Square, RotateCcw } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import type { VehicleData } from '../../types';
 
@@ -23,10 +23,22 @@ function getVehicleState(vehicle: VehicleData, progress: number) {
   let showBrake: boolean;
   let opacity: number;
 
+  const evasiveOffsetX = (vehicle.evasiveAction === 'swerve_left' ? -vehicle.evasiveOffset : vehicle.evasiveAction === 'swerve_right' ? vehicle.evasiveOffset : 0);
+  const evasiveOn = evasiveOffsetX !== 0 && progress >= vehicle.evasiveStartProgress && progress < collisionProgress;
+
   if (progress < brakeProgress) {
     const t = progress / brakeProgress;
-    x = vehicle.startX + (vehicle.collisionX - vehicle.startX) * t * 0.3;
-    y = vehicle.startY + (vehicle.collisionY - vehicle.startY) * t * 0.3;
+    const baseX = vehicle.startX + (vehicle.collisionX - vehicle.startX) * t * 0.3;
+    const baseY = vehicle.startY + (vehicle.collisionY - vehicle.startY) * t * 0.3;
+    if (evasiveOn) {
+      const evT = (progress - vehicle.evasiveStartProgress) / (collisionProgress - vehicle.evasiveStartProgress);
+      const ease = Math.min(1, evT * 3);
+      x = baseX + evasiveOffsetX * ease;
+      y = baseY;
+    } else {
+      x = baseX;
+      y = baseY;
+    }
     rotation = vehicle.startRotation;
     showBrake = false;
     opacity = 1;
@@ -34,20 +46,28 @@ function getVehicleState(vehicle: VehicleData, progress: number) {
     const t = (progress - brakeProgress) / (collisionProgress - brakeProgress);
     const brakeStartX = vehicle.startX + (vehicle.collisionX - vehicle.startX) * 0.3;
     const brakeStartY = vehicle.startY + (vehicle.collisionY - vehicle.startY) * 0.3;
-    x = brakeStartX + (vehicle.collisionX - brakeStartX) * t;
-    y = brakeStartY + (vehicle.collisionY - brakeStartY) * t;
+    let baseX = brakeStartX + (vehicle.collisionX - brakeStartX) * t;
+    let baseY = brakeStartY + (vehicle.collisionY - brakeStartY) * t;
+    if (evasiveOn) {
+      const evT = (progress - vehicle.evasiveStartProgress) / (collisionProgress - vehicle.evasiveStartProgress);
+      const ease = Math.min(1, evT * 3);
+      baseX += evasiveOffsetX * ease;
+    }
+    x = baseX;
+    y = baseY;
     rotation = vehicle.startRotation + (vehicle.impactAngle - vehicle.startRotation) * t * 0.3;
     showBrake = true;
     opacity = 1;
   } else if (progress < 0.7) {
-    x = vehicle.collisionX;
+    x = vehicle.collisionX + (vehicle.evasiveAction === 'swerve_left' ? -vehicle.evasiveOffset : vehicle.evasiveAction === 'swerve_right' ? vehicle.evasiveOffset : 0);
     y = vehicle.collisionY;
     rotation = vehicle.impactAngle;
     showBrake = true;
     opacity = 1;
   } else {
     const t = (progress - 0.7) / 0.3;
-    x = vehicle.collisionX + (vehicle.finalX - vehicle.collisionX) * t;
+    const evasiveResidual = (vehicle.evasiveAction === 'swerve_left' ? -vehicle.evasiveOffset : vehicle.evasiveAction === 'swerve_right' ? vehicle.evasiveOffset : 0);
+    x = (vehicle.collisionX + evasiveResidual) + (vehicle.finalX - vehicle.collisionX) * t;
     y = vehicle.collisionY + (vehicle.finalY - vehicle.collisionY) * t;
     rotation = vehicle.impactAngle + (vehicle.finalRotation - vehicle.impactAngle) * t;
     showBrake = true;
@@ -83,14 +103,13 @@ function getBrakeMarkPoints(vehicle: VehicleData) {
 }
 
 export const AccidentAnimationPlayer: React.FC<AccidentAnimationPlayerProps> = ({ isOpen, onClose }) => {
-  const { accidentReconstruction, accidentAnimation, setAccidentAnimation, setAccidentData, saveAnimation } = useStore();
+  const { accidentReconstruction, accidentAnimation, setAccidentAnimation, setAccidentData } = useStore();
 
   const animFrameRef = useRef<number>(0);
   const lastTimeRef = useRef<number>(0);
   const timeRef = useRef<number>(0);
   const [impactFlash, setImpactFlash] = useState(false);
-  const [saveName, setSaveName] = useState('');
-  const [showSaveInput, setShowSaveInput] = useState(false);
+  const stageRef = useRef<any>(null);
 
   const { enabled, vehicles } = accidentReconstruction;
   const activeVehicles = vehicles.filter((v): v is VehicleData => !!v);
@@ -117,13 +136,70 @@ export const AccidentAnimationPlayer: React.FC<AccidentAnimationPlayerProps> = (
     setAccidentAnimation({ loop: !accidentAnimation.loop });
   }, [setAccidentAnimation, accidentAnimation.loop]);
 
-  const handleSave = useCallback(() => {
-    if (saveName.trim()) {
-      saveAnimation(saveName.trim());
-      setShowSaveInput(false);
-      setSaveName('');
+  const handleSaveVideo = useCallback(async () => {
+    if (!stageRef.current) return;
+    const stageContainer = stageRef.current.getContent();
+    const canvasEl = stageContainer.querySelector('canvas') as HTMLCanvasElement | null;
+    if (!canvasEl || typeof MediaRecorder === 'undefined') return;
+    
+    setAccidentData({ enabled: true });
+    setAccidentAnimation({ currentTime: 0, isPlaying: true, speed: 1, loop: false });
+    await new Promise(r => setTimeout(r, 100));
+    
+    const stream = canvasEl.captureStream(30);
+    const mp4Types = ['video/mp4;codecs=h264,aac', 'video/mp4;codecs=avc1', 'video/mp4'];
+    const mimeType = mp4Types.find(t => MediaRecorder.isTypeSupported(t))
+      || (MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : 'video/webm');
+    const isMp4 = mimeType.startsWith('video/mp4');
+    const ext = isMp4 ? 'mp4' : 'webm';
+    const baseMimeType = isMp4 ? 'video/mp4' : 'video/webm';
+    const mediaRecorder = new MediaRecorder(stream, { mimeType });
+    const chunks: Blob[] = [];
+    
+    mediaRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) chunks.push(e.data);
+    };
+    
+    mediaRecorder.start(1000 / 30);
+    
+    const duration = accidentReconstruction.animationDuration;
+    await new Promise<void>((resolve) => {
+      const checkInterval = setInterval(() => {
+        const animState = useStore.getState().accidentAnimation;
+        if (!animState.isPlaying && animState.currentTime >= (duration - 0.01)) {
+          clearInterval(checkInterval);
+          resolve();
+        }
+      }, 50);
+      setTimeout(() => { clearInterval(checkInterval); resolve(); }, (duration * 1000) + 3000);
+    });
+    
+    mediaRecorder.stop();
+    await new Promise<void>((resolve) => {
+      mediaRecorder.onstop = () => resolve();
+    });
+    
+    const blob = new Blob(chunks, { type: baseMimeType });
+    
+    try {
+      const handle = await (window as any).showSaveFilePicker({
+        suggestedName: `kaza-animasyonu.${ext}`,
+        types: [{ description: isMp4 ? 'MP4 Video' : 'WebM Video', accept: { [baseMimeType]: [`.${ext}`] } }],
+      });
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+    } catch {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.download = `kaza-animasyonu.${ext}`;
+      link.href = url;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
     }
-  }, [saveName, saveAnimation]);
+  }, [accidentReconstruction.animationDuration, setAccidentAnimation, setAccidentData]);
 
   // Animation loop — uses internal timeRef to avoid infinite re-subscribe
   useEffect(() => {
@@ -222,31 +298,12 @@ export const AccidentAnimationPlayer: React.FC<AccidentAnimationPlayerProps> = (
         <div className="flex items-center justify-between px-5 py-3 border-b border-[#2a2a2a] bg-[#1f1f1f] shrink-0">
           <h3 className="text-sm font-bold text-gray-100 tracking-wide uppercase">Kaza Yeniden Canlandırma — Animasyon</h3>
           <div className="flex items-center gap-2">
-            {showSaveInput ? (
-              <div className="flex items-center gap-2 bg-[#111] border border-[#333] rounded-lg px-3 py-1.5">
-                <input
-                  type="text"
-                  value={saveName}
-                  onChange={e => setSaveName(e.target.value)}
-                  placeholder="Animasyon adı..."
-                  className="bg-transparent border-none text-xs text-white outline-none w-36"
-                  autoFocus
-                  onKeyDown={e => { if (e.key === 'Enter') handleSave(); }}
-                />
-                <button onClick={handleSave} className="text-[10px] font-bold text-[#F5C518] hover:text-white transition-colors">KAYDET</button>
-                <button onClick={() => { setShowSaveInput(false); setSaveName(''); }} className="text-gray-500 hover:text-white">
-                  <X size={12} />
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => setShowSaveInput(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold text-gray-400 hover:text-[#F5C518] border border-[#333] hover:border-[#F5C518]/50 rounded-lg transition-all"
-              >
-                <Save size={12} />
-                ANİMASYONU KAYDET
-              </button>
-            )}
+            <button
+              onClick={handleSaveVideo}
+              className="flex items-center gap-1 px-3 py-1.5 text-[10px] font-bold text-gray-400 hover:text-white border border-[#333] hover:border-gray-500 rounded-lg transition-all"
+            >
+              KAYDET
+            </button>
 
             {/* Play/Pause in header */}
             {isPlaying ? (
@@ -275,7 +332,7 @@ export const AccidentAnimationPlayer: React.FC<AccidentAnimationPlayerProps> = (
 
         {/* Konva Stage */}
         <div className="relative bg-[#111] flex items-center justify-center p-3">
-          <Stage width={STAGE_W} height={STAGE_H} className="rounded-lg border border-[#333]">
+          <Stage ref={stageRef} width={STAGE_W} height={STAGE_H} className="rounded-lg border border-[#333]">
             <Layer>
               {/* Background */}
               <Rect x={0} y={0} width={STAGE_W} height={STAGE_H} fill="#f0f0f0" />
@@ -431,6 +488,62 @@ export const AccidentAnimationPlayer: React.FC<AccidentAnimationPlayerProps> = (
                     </Group>
                   );
                 })}
+              </Group>
+
+              {/* Top-left legend */}
+              <Group>
+                <Rect x={10} y={8} width={180} height={90}
+                  fill="#1a1a1a" cornerRadius={6} opacity={0.88} stroke="#444" strokeWidth={1} />
+                <Text x={16} y={12} text="GÖSTERGE" fontSize={11} fontFamily="Inter" fontStyle="bold" fill="#F5C518" />
+
+                <Rect x={16} y={30} width={10} height={2} fill={activeVehicles[0]?.color || '#E53935'} />
+                <Text x={30} y={26} text="Araç yolu / Fren izi" fontSize={11} fontFamily="Inter" fill="#ccc" />
+
+                <Rect x={16} y={46} width={10} height={2} fill="#FF5722" />
+                <Text x={30} y={42} text="Çarpışma noktası" fontSize={11} fontFamily="Inter" fill="#ccc" />
+
+                <Rect x={16} y={62} width={10} height={2} fill="#FFD600" />
+                <Text x={30} y={58} text="Çarpışma anı (flaş)" fontSize={11} fontFamily="Inter" fill="#ccc" />
+
+                <Text x={16} y={76} text="Kırmızı: Çarpışma hızı" fontSize={11} fontFamily="Inter" fill="#ccc" />
+              </Group>
+
+              {/* Değerlendirme */}
+              <Group>
+                <Rect x={10} y={104} width={180} height={52}
+                  fill="#1a1a1a" cornerRadius={6} opacity={0.88} stroke="#444" strokeWidth={1} />
+                <Text x={16} y={108} text="DEĞERLENDİRME" fontSize={10} fontFamily="Inter" fontStyle="bold" fill="#F5C518" />
+                <Text x={16} y={122} text={`${activeVehicles[0]?.initialSpeed ?? '?'} km/h → ${activeVehicles[0]?.impactSpeed ?? '?'} km/h`}
+                  fontSize={13} fontFamily="Inter" fontStyle="bold" fill="#fff" />
+                <Text x={16} y={138} text={`Fren: ${activeVehicles[0]?.brakeMarkLength ?? '?'}m · μ=${accidentReconstruction.frictionCoefficient}`}
+                  fontSize={10} fontFamily="Inter" fill="#ccc" />
+              </Group>
+
+              {/* Top-right data panel */}
+              <Group>
+                <Rect x={STAGE_W - 260} y={8} width={250} height={168}
+                  fill="#1a1a1a" cornerRadius={8} opacity={0.92} stroke="#444" strokeWidth={1.5} />
+                <Text x={STAGE_W - 252} y={14} text="VERİLER" fontSize={12} fontFamily="Inter" fontStyle="bold" fill="#F5C518" />
+
+                <Rect x={STAGE_W - 255} y={32} width={240} height={24} fill="#2a2a2a" cornerRadius={3} />
+                <Text x={STAGE_W - 250} y={35} text={`Araç Hızı: ${activeVehicles[0]?.initialSpeed ?? '—'} km/h`}
+                  fontSize={14} fontFamily="Inter" fontStyle="bold" fill="#fff" />
+
+                <Rect x={STAGE_W - 255} y={58} width={240} height={24} fill="#2a2a2a" cornerRadius={3} />
+                <Text x={STAGE_W - 250} y={61} text={`Çarpışma: ${activeVehicles[0]?.impactSpeed ?? '—'} km/h, ${activeVehicles[0]?.impactAngle ?? '—'}°`}
+                  fontSize={14} fontFamily="Inter" fontStyle="bold" fill="#E53935" />
+
+                <Rect x={STAGE_W - 255} y={84} width={240} height={24} fill="#2a2a2a" cornerRadius={3} />
+                <Text x={STAGE_W - 250} y={87} text={`Fren İzi: ${activeVehicles[0]?.brakeMarkLength ?? '—'}m`}
+                  fontSize={14} fontFamily="Inter" fontStyle="bold" fill="#fff" />
+
+                <Rect x={STAGE_W - 255} y={110} width={240} height={24} fill="#2a2a2a" cornerRadius={3} />
+                <Text x={STAGE_W - 250} y={113} text={`Yol: ${surfaceLabels[accidentReconstruction.roadSurface] || accidentReconstruction.roadSurface}`}
+                  fontSize={13} fontFamily="Inter" fontStyle="bold" fill="#e0e0e0" />
+
+                <Rect x={STAGE_W - 255} y={136} width={240} height={24} fill="#2a2a2a" cornerRadius={3} />
+                <Text x={STAGE_W - 250} y={139} text={`Sürtünme: μ=${accidentReconstruction.frictionCoefficient} · Limit: ${accidentReconstruction.speedLimit} km/h`}
+                  fontSize={13} fontFamily="Inter" fontStyle="bold" fill="#e0e0e0" />
               </Group>
             </Layer>
           </Stage>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Car, RotateCcw, Settings, ChevronDown, ChevronUp, AlertTriangle, Eye } from 'lucide-react';
+import { Car, RotateCcw, Settings, ChevronDown, ChevronUp, AlertTriangle, Eye, User, Plus, Trash2 } from 'lucide-react';
 import { useStore } from '../../../store/useStore';
 import type { VehicleType, VehicleData } from '../../../types';
 import { AccidentAnimationPlayer } from '../../UI/AccidentAnimationPlayer';
@@ -60,7 +60,8 @@ export const AccidentReconstructionCalculator: React.FC = () => {
     accidentReconstruction, setAccidentData,
     setAccidentVehicle, setAccidentAnimation,
     accidentAnimation, resetAccidentReconstruction,
-    addObject,
+    addPedestrian, updatePedestrian, removePedestrian,
+    addObject, showConfirm,
   } = useStore();
 
   const [activeVehicleTab, setActiveVehicleTab] = useState<0 | 1>(0);
@@ -111,6 +112,9 @@ export const AccidentReconstructionCalculator: React.FC = () => {
         showPath: true,
         showBrakeMarks: true,
         showVehicle: true,
+        evasiveAction: 'none',
+        evasiveOffset: 0,
+        evasiveStartProgress: 0.3,
       };
       setAccidentData({ vehicles: [accidentReconstruction.vehicles[0], v2] as [VehicleData, VehicleData?] });
       setHasSecondVehicle(true);
@@ -229,6 +233,55 @@ export const AccidentReconstructionCalculator: React.FC = () => {
       fill: '#000',
       fontFamily: 'Inter',
       fontStyle: 'bold',
+    });
+
+    // Draw pedestrians
+    (accidentReconstruction.pedestrians || []).filter(p => p.show).forEach((p) => {
+      const px = baseX + p.startX;
+      const py = baseY + p.startY;
+      const pSize = p.size === 'child' ? 10 : 16;
+
+      addObject({
+        type: 'image',
+        symbolId: 'pedestrian',
+        x: px - pSize,
+        y: py - pSize * 2.5,
+        width: pSize * 2,
+        height: pSize * 2.5,
+        rotation: 0,
+        scaleX: 1,
+        scaleY: 1,
+        fill: p.color,
+        stroke: '#000',
+        strokeWidth: 1,
+      });
+
+      addObject({
+        type: 'line',
+        x: baseX,
+        y: baseY,
+        width: Math.abs(p.endX - p.startX) + 20,
+        height: Math.abs(p.endY - p.startY) + 20,
+        points: [
+          p.startX, p.startY,
+          p.endX, p.endY,
+        ],
+        dash: [4, 4],
+        stroke: p.color,
+        strokeWidth: 1.5,
+      });
+
+      addObject({
+        type: 'text',
+        text: `${p.name} (${p.speed} km/h)`,
+        x: px - 30,
+        y: py - pSize * 2.5 - 20,
+        width: 100,
+        fontSize: 9,
+        fill: '#333',
+        fontFamily: 'Inter',
+        fontStyle: 'bold',
+      });
     });
   };
 
@@ -449,6 +502,116 @@ export const AccidentReconstructionCalculator: React.FC = () => {
             )}
           </div>
 
+          {/* Pedestrians */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Yayalar</span>
+              <button
+                onClick={() => addPedestrian()}
+                className="flex items-center gap-1 px-3 py-1 text-[10px] font-bold text-blue-400 bg-blue-500/10 border border-blue-500/30 rounded-md hover:bg-blue-500/20 transition-all"
+              >
+                <Plus size={12} />
+                YAYA EKLE
+              </button>
+            </div>
+            {(!accidentReconstruction.pedestrians || accidentReconstruction.pedestrians.length === 0) ? (
+              <div className="bg-[#111] border border-[#333] rounded-lg p-4">
+                <p className="text-[10px] text-gray-500 text-center italic">Henüz yaya eklenmedi. "YAYA EKLE" butonuna tıklayarak yaya ekleyebilirsiniz.</p>
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-[400px] overflow-y-auto custom-scrollbar">
+                {accidentReconstruction.pedestrians.map((pedestrian) => (
+                  <div key={pedestrian.id} className="bg-[#111] border border-[#333] rounded-lg p-3 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="p-1 bg-green-500/10 rounded border border-green-500/20">
+                          <User size={12} className="text-green-400" />
+                        </div>
+                        <input className="w-28 bg-transparent border-b border-[#333] text-xs font-bold text-white focus:border-[#F5C518] outline-none pb-0.5"
+                          value={pedestrian.name}
+                          onChange={e => updatePedestrian(pedestrian.id, { name: e.target.value })} />
+                      </div>
+                      <button
+                        onClick={() => {
+                          showConfirm({
+                            title: 'YAYAYI KALDIR',
+                            message: `"${pedestrian.name}" silinecektir. Devam etmek istiyor musunuz?`,
+                            onConfirm: () => removePedestrian(pedestrian.id)
+                          });
+                        }}
+                        className="p-1 text-gray-600 hover:text-red-500 hover:bg-red-500/10 rounded transition-all"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className={LABEL_CLASS}>Başlangıç X</label>
+                        <input type="number" className={INPUT_CLASS} value={pedestrian.startX}
+                          onChange={e => updatePedestrian(pedestrian.id, { startX: Number(e.target.value) })} />
+                      </div>
+                      <div>
+                        <label className={LABEL_CLASS}>Başlangıç Y</label>
+                        <input type="number" className={INPUT_CLASS} value={pedestrian.startY}
+                          onChange={e => updatePedestrian(pedestrian.id, { startY: Number(e.target.value) })} />
+                      </div>
+                      <div>
+                        <label className={LABEL_CLASS}>Hız (km/h)</label>
+                        <input type="number" step="0.5" className={INPUT_CLASS} value={pedestrian.speed}
+                          onChange={e => updatePedestrian(pedestrian.id, { speed: Number(e.target.value) })} />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className={LABEL_CLASS}>Bitiş X</label>
+                        <input type="number" className={INPUT_CLASS} value={pedestrian.endX}
+                          onChange={e => updatePedestrian(pedestrian.id, { endX: Number(e.target.value) })} />
+                      </div>
+                      <div>
+                        <label className={LABEL_CLASS}>Bitiş Y</label>
+                        <input type="number" className={INPUT_CLASS} value={pedestrian.endY}
+                          onChange={e => updatePedestrian(pedestrian.id, { endY: Number(e.target.value) })} />
+                      </div>
+                      <div>
+                        <label className={LABEL_CLASS}>Boyut</label>
+                        <select className={SELECT_CLASS} value={pedestrian.size}
+                          onChange={e => updatePedestrian(pedestrian.id, { size: e.target.value as 'adult' | 'child' })}>
+                          <option value="adult">Yetişkin</option>
+                          <option value="child">Çocuk</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-1">
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
+                          <input type="color" className="w-7 h-7 rounded border border-[#333] cursor-pointer bg-transparent"
+                            value={pedestrian.color}
+                            onChange={e => updatePedestrian(pedestrian.id, { color: e.target.value })} />
+                          <span className="text-[9px] text-gray-500 font-mono">{pedestrian.color}</span>
+                        </div>
+                        <label className="flex items-center gap-1.5 cursor-pointer">
+                          <input type="checkbox" checked={pedestrian.show}
+                            onChange={e => updatePedestrian(pedestrian.id, { show: e.target.checked })}
+                            className="accent-[#F5C518]" />
+                          <span className="text-[9px] text-gray-400">Göster</span>
+                        </label>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <label className="text-[9px] text-gray-500">Görünme:</label>
+                        <input type="number" min="0" max="1" step="0.05" className="w-16 bg-[#0a0a0a] border border-[#333] rounded px-2 py-1 text-[10px] font-bold text-white text-center"
+                          value={pedestrian.appearProgress}
+                          onChange={e => updatePedestrian(pedestrian.id, { appearProgress: Number(e.target.value) })} />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Road & Environmental */}
           <div className="space-y-2">
             <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Yol & Çevre Bilgileri</span>
@@ -545,17 +708,9 @@ export const AccidentReconstructionCalculator: React.FC = () => {
           </div>
         </div>
 
-        {/* Controls Footer */}
-        <div className="sticky bottom-0 px-4 py-3 bg-[#1a1a1a] border-t border-[#2a2a2a] flex items-center justify-between">
+        {/* Controls Bar — always at top */}
+        <div className="sticky top-0 px-4 py-3 bg-[#1a1a1a] border-b border-[#2a2a2a] flex items-center justify-between z-20">
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => { resetAccidentReconstruction(); setHasSecondVehicle(false); }}
-              className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-gray-500 hover:text-gray-300 transition-colors"
-              title="Sıfırla"
-            >
-              <RotateCcw size={14} />
-              SIFIRLA
-            </button>
             <button
               onClick={() => { resetAccidentReconstruction(); setHasSecondVehicle(false); }}
               className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-gray-600 hover:text-red-400 transition-colors"

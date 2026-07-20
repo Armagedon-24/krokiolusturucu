@@ -10,7 +10,6 @@ import {
   Grid, 
   Camera, 
   User, 
-  Ruler, 
   Info,
   Activity
 } from 'lucide-react';
@@ -21,6 +20,8 @@ import { BodyMapModal } from '../UI/BodyMapModal';
 import { FindingModal, PromptModal } from '../UI/Modal';
 import { DistanceMatrixModal } from '../UI/DistanceMatrixModal';
 import { AccidentAnimation } from './AccidentAnimation';
+import { FallAnimationCanvas } from './FallAnimationCanvas';
+import { PedestrianLaunchCanvas } from './PedestrianLaunchCanvas';
 import { PageControlBar } from './PageControlBar';
 import type { CanvasObject } from '../../types';
 
@@ -40,9 +41,14 @@ const RemoveWhiteFilter = (imageData: any) => {
 import { v4 as uuidv4 } from 'uuid';
 import { jsPDF } from 'jspdf';
 
-import { calculateCalloutSize, getEffectiveZIndex } from '../../utils/canvasUtils';
+import { calculateCalloutSize, getEffectiveZIndex, compressAndResizeImage } from '../../utils/canvasUtils';
 
-
+const useSmartImage = (src: string | undefined) => {
+  // Load without crossOrigin - works for data:, blob:, and most external URLs.
+  // crossOrigin='anonymous' can cause issues when the image is cached without CORS headers.
+  const [image] = useImage(src || '');
+  return image;
+};
 
 const IndividualObject = ({ 
   shapeProps, 
@@ -59,20 +65,12 @@ const IndividualObject = ({
   onMouseLeave,
   onTrajectoryUpdate,
 }: any) => {
+  // ─── ALL HOOKS MUST BE CALLED BEFORE ANY EARLY RETURNS (Rules of Hooks) ───
   const [showTooltip, setShowTooltip] = useState(false);
-  if (!shapeProps) return null;
-
-  // Bulgu Listesi için özel durum: Eğer hiç bulgu yoksa tabloyu gizle
-  if (shapeProps.type === 'finding-list' && !allObjects?.some((o: CanvasObject) => o.findingNo)) {
-    return null;
-  }
-
   const groupRef = useRef<any>(null);
   const imgRef = useRef<any>(null);
   const trRef = useRef<any>(null);
-  const [image] = useImage(shapeProps.src || '', 'anonymous');
-
-
+  const image = useSmartImage(shapeProps?.src);
 
   useEffect(() => {
     if (isSelected && trRef.current && groupRef.current) {
@@ -83,11 +81,16 @@ const IndividualObject = ({
 
   useEffect(() => {
     if (imgRef.current && image) {
-      // Re-cache when visual properties or identity change
-      imgRef.current.cache();
-      imgRef.current.getLayer()?.batchDraw();
+      try {
+        imgRef.current.cache();
+        imgRef.current.getLayer()?.batchDraw();
+      } catch {
+        // cache() failed (e.g. CORS). Image still renders without filters.
+        try { imgRef.current.clearCache(); } catch { /* ignore */ }
+        imgRef.current.getLayer()?.batchDraw();
+      }
     }
-  }, [image, shapeProps.fill, shapeProps.scaleX, shapeProps.scaleY, shapeProps.width, shapeProps.height, shapeProps.categoryId, shapeProps.symbolId]);
+  }, [image, shapeProps?.fill, shapeProps?.scaleX, shapeProps?.scaleY, shapeProps?.width, shapeProps?.height, shapeProps?.categoryId, shapeProps?.symbolId]);
 
   // Force redraw when visual properties change to ensure instant visual updates
   useEffect(() => {
@@ -253,6 +256,13 @@ const IndividualObject = ({
       shapeProps.categoryId === 'explosion' ||
       shapeProps.categoryId === 'traces'
     );
+
+  // Guard conditions checked after all hooks are called
+  if (!shapeProps) return null;
+  // Bulgu Listesi için özel durum: Eğer hiç bulgu yoksa tabloyu gizle
+  if (shapeProps.type === 'finding-list' && !allObjects?.some((o: CanvasObject) => o.findingNo)) {
+    return null;
+  }
 
   return (
     <React.Fragment>
@@ -2230,29 +2240,18 @@ const IndividualObject = ({
             }}
           />
         ) : (
-          <KonvaImage
+           <KonvaImage
             ref={imgRef}
             image={image}
             width={shapeProps.width}
             height={shapeProps.height}
             globalCompositeOperation="source-over"
             draggable={false}
-            imageSmoothingEnabled={false}
+            imageSmoothingEnabled={true}
             scaleX={shapeProps.scaleX || 1}
             scaleY={shapeProps.scaleY || 1}
             offsetX={(shapeProps.scaleX === -1) ? shapeProps.width : 0}
             offsetY={(shapeProps.scaleY === -1) ? shapeProps.height : 0}
-            filters={
-              (shapeProps.symbolId?.startsWith('p-10') || 
-               shapeProps.symbolId?.startsWith('p-11') || 
-               shapeProps.symbolId?.startsWith('p-12') ||
-               shapeProps.symbolId?.startsWith('in-blood-') ||
-               shapeProps.categoryId === 'injuries' ||
-               shapeProps.categoryId === 'explosion') 
-              ? [RemoveWhiteFilter] 
-              : [Konva.Filters.Grayscale, RemoveWhiteFilter]
-            }
-            brightness={(shapeProps.name?.toLowerCase().includes('kuzey') || shapeProps.symbolId === 'a-1') ? -1 : 0}
           />
         )}
 
@@ -2533,12 +2532,13 @@ export const CanvasArea: React.FC = () => {
   const [isBodyMapModalOpen, setIsBodyMapModalOpen] = useState(false);
   const [bodyMapTarget, setBodyMapTarget] = useState<string | null>(null);
 
-  const [bgImage] = useImage(backgroundImage || '', 'anonymous');
+  const bgImage = useSmartImage(backgroundImage || undefined);
   const stageRef = useRef<any>(null);
   const bgImageRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
-  const [previousScale, setPreviousScale] = useState(1);
+  const [previousScale] = useState(1);
+  const [gridVisible, setGridVisible] = useState(true);
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
@@ -2943,26 +2943,183 @@ export const CanvasArea: React.FC = () => {
         let pageWidth = 1000;
         let pageHeight = 1400;
 
-        // Loop through all scenes, switch to each, wait for Konva render, capture and add to PDF
+        // Helper: load an image to HTMLImageElement, resolves null on error
+        const loadImg = (src: string): Promise<HTMLImageElement | null> => new Promise(resolve => {
+          if (!src) return resolve(null);
+          // data: and blob: URLs don't need crossOrigin
+          const isDataOrBlob = src.startsWith('data:') || src.startsWith('blob:');
+          const img = new Image();
+          if (!isDataOrBlob) img.crossOrigin = 'Anonymous';
+          img.onload = () => resolve(img);
+          img.onerror = () => {
+            if (!isDataOrBlob) {
+              // Retry without crossOrigin as fallback
+              const img2 = new Image();
+              img2.onload = () => resolve(img2);
+              img2.onerror = () => resolve(null);
+              img2.src = src;
+            } else {
+              resolve(null);
+            }
+          };
+          img.src = src;
+        });
+
+        // Helper: draw a single scene to an off-screen canvas and return dataURL
+        const renderSceneToDataURL = async (scene: any, bgColorVal: string): Promise<string> => {
+          const sceneObjects: any[] = scene.objects || [];
+          const W = canvasOrientation === 'landscape' ? 1400 : 1000;
+          const H = canvasOrientation === 'landscape' ? 1000 : 1400;
+          const PIXEL_RATIO = 2;
+
+          const offCanvas = document.createElement('canvas');
+          offCanvas.width = W * PIXEL_RATIO;
+          offCanvas.height = H * PIXEL_RATIO;
+          const ctx = offCanvas.getContext('2d')!;
+          ctx.scale(PIXEL_RATIO, PIXEL_RATIO);
+
+          // Background
+          ctx.fillStyle = bgColorVal || '#ffffff';
+          ctx.fillRect(0, 0, W, H);
+
+          // Background image
+          if (scene.backgroundImage) {
+            const bgImg = await loadImg(scene.backgroundImage);
+            if (bgImg) {
+              const da = scene.drawingArea || { x: 0, y: 0, width: W, height: H };
+              ctx.save();
+              ctx.beginPath();
+              ctx.rect(da.x, da.y, da.width, da.height);
+              ctx.clip();
+              ctx.globalAlpha = 1;
+              ctx.drawImage(bgImg, da.x, da.y, da.width, da.height);
+              ctx.restore();
+            }
+          }
+
+          // Preload all object images in parallel
+          const srcList = sceneObjects.map((o: any) => o.src || '').filter(Boolean);
+          const imgMap = new Map<string, HTMLImageElement | null>();
+          await Promise.all(srcList.map(async (src: string) => {
+            if (!imgMap.has(src)) {
+              imgMap.set(src, await loadImg(src));
+            }
+          }));
+
+          // Sort objects by z-index (template first, then user objects)
+          const sorted = [...sceneObjects].sort((a, b) => {
+            const az = a.zIndex ?? (a.isTemplate ? -1 : 0);
+            const bz = b.zIndex ?? (b.isTemplate ? -1 : 0);
+            return az - bz;
+          });
+
+          for (const obj of sorted) {
+            if (!obj || obj.hidden) continue;
+            ctx.save();
+
+            const x = obj.x ?? 0;
+            const y = obj.y ?? 0;
+            const w = obj.width ?? 50;
+            const h = obj.height ?? 50;
+            const rot = ((obj.rotation ?? 0) * Math.PI) / 180;
+            const ox = (obj as any).offsetX ?? 0;
+            const oy = (obj as any).offsetY ?? 0;
+
+            // Apply transform matching Konva node origin
+            if (rot !== 0 || ox !== 0 || oy !== 0) {
+              ctx.translate(x + ox, y + oy);
+              ctx.rotate(rot);
+              ctx.scale(obj.scaleX ?? 1, obj.scaleY ?? 1);
+              ctx.translate(-ox, -oy);
+            } else {
+              ctx.translate(x, y);
+              ctx.scale(obj.scaleX ?? 1, obj.scaleY ?? 1);
+            }
+
+            if (obj.src) {
+              // Image-based symbol / uploaded image / photo
+              const img = imgMap.get(obj.src);
+              if (img) {
+                ctx.drawImage(img, 0, 0, w, h);
+              }
+            } else if (obj.type === 'rect') {
+              ctx.fillStyle = obj.fill || 'transparent';
+              ctx.strokeStyle = obj.stroke || 'black';
+              ctx.lineWidth = obj.strokeWidth || 1;
+              if (obj.fill && obj.fill !== 'transparent') ctx.fillRect(0, 0, w, h);
+              ctx.strokeRect(0, 0, w, h);
+            } else if (obj.type === 'line') {
+              ctx.strokeStyle = obj.fill || 'black';
+              ctx.lineWidth = obj.strokeWidth || Math.min(w, h) || 1;
+              if (obj.dash) ctx.setLineDash(obj.dash);
+              ctx.beginPath();
+              ctx.moveTo(0, 0);
+              ctx.lineTo(w > h ? w : 0, w > h ? 0 : h);
+              ctx.stroke();
+            } else if (obj.type === 'text' || obj.type === 'template-text') {
+              ctx.font = `${obj.fontStyle || 'normal'} ${obj.fontSize || 12}px ${obj.fontFamily || 'Arial'}`;
+              ctx.fillStyle = obj.fill || '#000';
+              ctx.textAlign = (obj.align as CanvasTextAlign) || 'left';
+              const text = obj.text || '';
+              const lines = text.split('\n');
+              const textX = obj.align === 'right' ? w : (obj.align === 'center' ? w / 2 : 0);
+              lines.forEach((line: string, idx: number) => {
+                ctx.fillText(line, textX, (obj.fontSize || 12) * (idx + 1));
+              });
+            } else if (obj.symbolId === 'ev-circle') {
+              ctx.beginPath();
+              ctx.arc(w / 2, h / 2, Math.min(w, h) / 2, 0, Math.PI * 2);
+              ctx.fillStyle = '#F5C518';
+              ctx.fill();
+              ctx.strokeStyle = '#000';
+              ctx.lineWidth = 2;
+              ctx.stroke();
+              if (obj.findingNo) {
+                ctx.font = `bold ${w * 0.4}px Arial`;
+                ctx.fillStyle = '#000';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(String(obj.findingNo), w / 2, h / 2);
+              }
+            } else if (obj.symbolId === 'ev-square') {
+              ctx.fillStyle = '#F5C518';
+              ctx.fillRect(0, 0, w, h);
+              ctx.strokeStyle = '#000';
+              ctx.lineWidth = 2;
+              ctx.strokeRect(0, 0, w, h);
+              if (obj.findingNo) {
+                ctx.font = `bold ${w * 0.4}px Arial`;
+                ctx.fillStyle = '#000';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(String(obj.findingNo), w / 2, h / 2);
+              }
+            }
+
+            ctx.restore();
+          }
+
+          try {
+            return offCanvas.toDataURL('image/jpeg', 0.92);
+          } catch (err) {
+            console.warn('offCanvas toDataURL failed, using stage fallback if active scene:', err);
+            if (scene.id === currentActiveId && stageRef.current) {
+              const fallbackUrl = stageRef.current.toDataURL({ pixelRatio: 2 });
+              if (fallbackUrl) return fallbackUrl;
+            }
+            return offCanvas.toDataURL('image/png');
+          }
+        };
+
+        // Loop through all scenes, render each to off-screen canvas (no React dependency)
         for (let i = 0; i < scenesToExport.length; i++) {
           const scene = scenesToExport[i];
-          
-          // Switch to the target scene programmatically
-          useStore.getState().switchScene(scene.id);
-          
-          // Wait for React-Konva render cycle to flush
-          await new Promise(resolve => setTimeout(resolve, 200));
 
-          const stage = stageRef.current;
-          if (!stage) continue;
-          
-          const dataURL = stage.toDataURL({ 
-            mimeType: 'image/jpeg', 
-            quality: 0.85, 
-            pixelRatio: 1.5 
-          });
-          pageWidth = stage.width();
-          pageHeight = stage.height();
+          const dataURL = await renderSceneToDataURL(scene, canvasBgColor);
+          const W = canvasOrientation === 'landscape' ? 1400 : 1000;
+          const H = canvasOrientation === 'landscape' ? 1000 : 1400;
+          pageWidth = W;
+          pageHeight = H;
 
           if (i === 0) {
             pdf = new jsPDF({
@@ -2999,11 +3156,17 @@ export const CanvasArea: React.FC = () => {
 
         if (allFindingsWithPhotos.length > 0) {
           const loadImage = (url: string): Promise<HTMLImageElement> => {
-            return new Promise((resolve, reject) => {
+            return new Promise((resolve) => {
+              const isDataOrBlob = url.startsWith('data:') || url.startsWith('blob:');
               const img = new Image();
-              img.crossOrigin = 'Anonymous';
+              if (!isDataOrBlob) img.crossOrigin = 'Anonymous';
               img.onload = () => resolve(img);
-              img.onerror = (e) => reject(e);
+              img.onerror = () => {
+                const img2 = new Image();
+                img2.onload = () => resolve(img2);
+                img2.onerror = () => resolve(img);
+                img2.src = url;
+              };
               img.src = url;
             });
           };
@@ -3099,8 +3262,17 @@ export const CanvasArea: React.FC = () => {
           ? `Olay Yeri Diyagramı${reportSuffix}`
           : `Olay Yeri Krokisi${reportSuffix}`;
           
-        // Save PDF with native highly robust jsPDF file naming mechanism
+        // 1. Save PDF directly to Downloads folder (İndirilenler)
         pdf.save(`${baseName}.pdf`);
+
+        // 2. Open PDF in a new tab simultaneously for instant preview
+        try {
+          const pdfBlob = pdf.output('blob');
+          const pdfUrl = URL.createObjectURL(pdfBlob);
+          window.open(pdfUrl, '_blank');
+        } catch (openErr) {
+          console.error('Error opening PDF in new tab:', openErr);
+        }
 
         // Restore the original active scene
         if (originalSceneId) {
@@ -3110,8 +3282,8 @@ export const CanvasArea: React.FC = () => {
         setGridVisible(true);
         addNotification({
           type: 'success',
-          message: 'PDF Kaydedildi',
-          description: `"${baseName}.pdf" başarıyla indirildi. Tüm sayfalar (${scenesToExport.length} adet) ve bulgu fotoğrafları tek bir PDF dosyasında birleştirildi.`
+          message: 'PDF Kaydedildi ve Açıldı',
+          description: `"${baseName}.pdf" İndirilenler klasörüne kaydedildi ve yeni sekmede görüntülendi.`
         });
       } catch (error: any) {
         console.error('PDF Export Error:', error);
@@ -3134,22 +3306,237 @@ export const CanvasArea: React.FC = () => {
     useStore.setState({ exportPDFRef: handleExportPDF });
     window.addEventListener('export-pdf', handleExportPDF);
 
-    const handleGeneratePreview = () => {
+    // Register fall animation canvas export handler
+    const handleFallExport = async () => {
+      if (!stageRef.current) return;
+
+      const state = useStore.getState();
+      const { duration } = state.fallAnimation;
+      if (!duration || duration <= 0) {
+        addNotification({ type: 'warning', message: 'Animasyon verisi bulunamadı', description: 'Lütfen önce bir düşme analizi yapın.' });
+        return;
+      }
+
+      useStore.getState().setFallAnimation({ currentTime: 0, isPlaying: true, speed: 1, loop: false });
+
+      const stageContainer = stageRef.current.getContent();
+      const canvasEl = stageContainer.querySelector('canvas');
+      if (!canvasEl || typeof MediaRecorder === 'undefined') {
+        const dataURL = stageRef.current.toDataURL({ pixelRatio: 2 });
+        try {
+          const handle = await (window as any).showSaveFilePicker({
+            suggestedName: `dusme-animasyonu-${Date.now()}.png`,
+            types: [{ description: 'PNG Resim', accept: { 'image/png': ['.png'] } }],
+          });
+          const blob = await (await fetch(dataURL)).blob();
+          const writable = await handle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+        } catch {
+          const link = document.createElement('a');
+          link.download = `dusme-animasyonu-${Date.now()}.png`;
+          link.href = dataURL;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        }
+        return;
+      }
+
+      await new Promise(r => setTimeout(r, 100));
+
+      const stream = canvasEl.captureStream(30);
+      const mp4Types = ['video/mp4;codecs=h264,aac', 'video/mp4;codecs=avc1', 'video/mp4'];
+      const mimeType = mp4Types.find(t => MediaRecorder.isTypeSupported(t))
+        || (MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : 'video/webm');
+      const isMp4 = mimeType.startsWith('video/mp4');
+      const ext = isMp4 ? 'mp4' : 'webm';
+      const baseMimeType = isMp4 ? 'video/mp4' : 'video/webm';
+      const mediaRecorder = new MediaRecorder(stream, { mimeType });
+      const chunks: Blob[] = [];
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunks.push(e.data);
+      };
+
+      mediaRecorder.start(1000 / 30);
+
+      await new Promise<void>((resolve) => {
+        const checkInterval = setInterval(() => {
+          const animState = useStore.getState().fallAnimation;
+          if (!animState.isPlaying && animState.currentTime >= (duration - 0.01)) {
+            clearInterval(checkInterval);
+            resolve();
+          }
+        }, 50);
+        setTimeout(() => { clearInterval(checkInterval); resolve(); }, (duration * 1000) + 3000);
+      });
+
+      mediaRecorder.stop();
+      await new Promise<void>((resolve) => {
+        mediaRecorder.onstop = () => resolve();
+      });
+
+      const blob = new Blob(chunks, { type: baseMimeType });
+
+      try {
+        const handle = await (window as any).showSaveFilePicker({
+          suggestedName: `dusme-animasyonu-${state.fallAnimation.canvasData?.height || ''}m.${ext}`,
+          types: [{ description: isMp4 ? 'MP4 Video' : 'WebM Video', accept: { [baseMimeType]: [`.${ext}`] } }],
+        });
+        const writable = await handle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        addNotification({ type: 'success', message: 'Animasyon Kaydedildi', description: 'Düşme animasyonu video olarak kaydedildi.' });
+      } catch {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.download = `dusme-animasyonu-${state.fallAnimation.canvasData?.height || ''}m.${ext}`;
+        link.href = url;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      }
+    };
+    useStore.setState({ fallAnimationExportRef: handleFallExport });
+
+    const handleGeneratePreview = async () => {
       if (!stageRef.current) return;
       setSelectedId(null);
-
-      // Save current scale and zoom to 55% for preview
-      setPreviousScale(scale);
-      setScale(0.55);
-      setStagePos({ x: 0, y: 0 });
-
-      // Grid'i gizle, önizleme oluştur, geri aç
       setGridVisible(false);
-      setTimeout(() => {
-        const dataURL = stageRef.current.toDataURL({ pixelRatio: 2 });
+
+      try {
+        const state = useStore.getState();
+        const W = canvasOrientation === 'landscape' ? 1400 : 1000;
+        const H = canvasOrientation === 'landscape' ? 1000 : 1400;
+        const PIXEL_RATIO = 2;
+
+        // Build a list of all scenes to render (current active canvas state)
+        const currentObjects = state.objects || [];
+        const currentBg = state.backgroundImage;
+
+        // Helper: load image to HTMLImageElement
+        const loadImg = (src: string): Promise<HTMLImageElement | null> => new Promise(resolve => {
+          if (!src) return resolve(null);
+          const isLocal = src.startsWith('data:') || src.startsWith('blob:');
+          const img = new Image();
+          if (!isLocal) img.crossOrigin = 'Anonymous';
+          img.onload = () => resolve(img);
+          img.onerror = () => {
+            if (!isLocal) {
+              const img2 = new Image();
+              img2.onload = () => resolve(img2);
+              img2.onerror = () => resolve(null);
+              img2.src = src;
+            } else resolve(null);
+          };
+          img.src = src;
+        });
+
+        const offCanvas = document.createElement('canvas');
+        offCanvas.width = W * PIXEL_RATIO;
+        offCanvas.height = H * PIXEL_RATIO;
+        const ctx = offCanvas.getContext('2d')!;
+        ctx.scale(PIXEL_RATIO, PIXEL_RATIO);
+
+        // Background color
+        ctx.fillStyle = canvasBgColor || '#ffffff';
+        ctx.fillRect(0, 0, W, H);
+
+        // Background image
+        if (currentBg) {
+          const bgImg = await loadImg(currentBg);
+          if (bgImg) {
+            const da = state.drawingArea || { x: 0, y: 0, width: W, height: H };
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(da.x, da.y, da.width, da.height);
+            ctx.clip();
+            ctx.drawImage(bgImg, da.x, da.y, da.width, da.height);
+            ctx.restore();
+          }
+        }
+
+        // Preload all symbol images in parallel
+        const srcList = [...new Set(currentObjects.map((o: any) => o.src).filter(Boolean))] as string[];
+        const imgMap = new Map<string, HTMLImageElement | null>();
+        await Promise.all(srcList.map(async (src: string) => {
+          imgMap.set(src, await loadImg(src));
+        }));
+
+        // Sort and draw all objects
+        const sorted = [...currentObjects].sort((a: any, b: any) => {
+          const az = a.zIndex ?? (a.isTemplate ? -1 : 0);
+          const bz = b.zIndex ?? (b.isTemplate ? -1 : 0);
+          return az - bz;
+        });
+
+        for (const obj of sorted) {
+          if (!obj || (obj as any).hidden || (obj as any).hidden2D) continue;
+          ctx.save();
+          const x = obj.x ?? 0;
+          const y = obj.y ?? 0;
+          const w = obj.width ?? 50;
+          const h = obj.height ?? 50;
+          const rot = ((obj.rotation ?? 0) * Math.PI) / 180;
+          const ox = (obj as any).offsetX ?? 0;
+          const oy = (obj as any).offsetY ?? 0;
+
+          if (rot !== 0 || ox !== 0 || oy !== 0) {
+            ctx.translate(x + ox, y + oy);
+            ctx.rotate(rot);
+            ctx.scale(obj.scaleX ?? 1, obj.scaleY ?? 1);
+            ctx.translate(-ox, -oy);
+          } else {
+            ctx.translate(x, y);
+            ctx.scale(obj.scaleX ?? 1, obj.scaleY ?? 1);
+          }
+
+          if (obj.src) {
+            const img = imgMap.get(obj.src);
+            if (img) ctx.drawImage(img, 0, 0, w, h);
+          } else if (obj.type === 'rect') {
+            if (obj.fill && obj.fill !== 'transparent') { ctx.fillStyle = obj.fill; ctx.fillRect(0, 0, w, h); }
+            ctx.strokeStyle = obj.stroke || '#000'; ctx.lineWidth = obj.strokeWidth || 1; ctx.strokeRect(0, 0, w, h);
+          } else if (obj.type === 'line') {
+            ctx.strokeStyle = obj.fill || '#000';
+            ctx.lineWidth = obj.strokeWidth || Math.min(w, h) || 1;
+            if (obj.dash) ctx.setLineDash(obj.dash);
+            ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(w > h ? w : 0, w > h ? 0 : h); ctx.stroke();
+          } else if (obj.type === 'text' || (obj.type as any) === 'template-text') {
+            ctx.font = `${obj.fontStyle || 'normal'} ${obj.fontSize || 12}px ${obj.fontFamily || 'Arial'}`;
+            ctx.fillStyle = obj.fill || '#000';
+            ctx.textAlign = (obj.align as CanvasTextAlign) || 'left';
+            const lines = (obj.text || '').split('\n');
+            const textX = obj.align === 'right' ? w : (obj.align === 'center' ? w / 2 : 0);
+            lines.forEach((line: string, idx: number) => {
+              ctx.fillText(line, textX, (obj.fontSize || 12) * (idx + 1));
+            });
+          } else if (obj.symbolId === 'ev-circle') {
+            ctx.beginPath(); ctx.arc(w/2, h/2, Math.min(w,h)/2, 0, Math.PI*2);
+            ctx.fillStyle = '#F5C518'; ctx.fill();
+            ctx.strokeStyle = '#000'; ctx.lineWidth = 2; ctx.stroke();
+            if (obj.findingNo) { ctx.font = `bold ${w*0.4}px Arial`; ctx.fillStyle = '#000'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(obj.findingNo), w/2, h/2); }
+          } else if (obj.symbolId === 'ev-square') {
+            ctx.fillStyle = '#F5C518'; ctx.fillRect(0, 0, w, h);
+            ctx.strokeStyle = '#000'; ctx.lineWidth = 2; ctx.strokeRect(0, 0, w, h);
+            if (obj.findingNo) { ctx.font = `bold ${w*0.4}px Arial`; ctx.fillStyle = '#000'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(obj.findingNo), w/2, h/2); }
+          }
+          ctx.restore();
+        }
+
+        const dataURL = offCanvas.toDataURL('image/png');
         window.dispatchEvent(new CustomEvent('preview-ready', { detail: dataURL }));
+      } catch (err) {
+        console.error('Preview generation failed, falling back to stage capture:', err);
+        // Fallback: use stage directly
+        await new Promise(resolve => setTimeout(resolve, 150));
+        const dataURL = stageRef.current?.toDataURL({ pixelRatio: 2 });
+        if (dataURL) window.dispatchEvent(new CustomEvent('preview-ready', { detail: dataURL }));
+      } finally {
         setGridVisible(true);
-      }, 100);
+      }
     };
 
     const handleClosePreview = () => {
@@ -3160,7 +3547,7 @@ export const CanvasArea: React.FC = () => {
     window.addEventListener('close-preview', handleClosePreview);
 
     return () => {
-      useStore.setState({ exportPDFRef: null });
+      useStore.setState({ exportPDFRef: null, fallAnimationExportRef: null });
       window.removeEventListener('export-pdf', handleExportPDF);
       window.removeEventListener('generate-preview', handleGeneratePreview);
       window.removeEventListener('close-preview', handleClosePreview);
@@ -3169,16 +3556,36 @@ export const CanvasArea: React.FC = () => {
 
 
 
+  const stagePosRef = useRef(stagePos);
+  stagePosRef.current = stagePos;
+  const scaleRef = useRef(scale);
+  scaleRef.current = scale;
+  const savedPosRef = useRef({ x: 0, y: 0 });
+  const savedScaleRef = useRef(1);
+
   useEffect(() => {
-    const handleBeforePrint = () => setGridVisible(false);
-    const handleAfterPrint = () => setGridVisible(true);
+    const handleBeforePrint = () => {
+      setGridVisible(false);
+      setSelectedId(null);
+      savedPosRef.current = stagePosRef.current;
+      savedScaleRef.current = scaleRef.current;
+      setStagePos({ x: 0, y: 0 });
+      setScale(1);
+    };
+
+    const handleAfterPrint = () => {
+      setGridVisible(true);
+      setStagePos(savedPosRef.current);
+      setScale(savedScaleRef.current);
+    };
+
     window.addEventListener('beforeprint', handleBeforePrint);
     window.addEventListener('afterprint', handleAfterPrint);
     return () => {
       window.removeEventListener('beforeprint', handleBeforePrint);
       window.removeEventListener('afterprint', handleAfterPrint);
     };
-  }, []);
+  }, [setGridVisible, setSelectedId]);
 
   useEffect(() => {
     const handleGlobalMouseUp = () => {
@@ -3207,18 +3614,14 @@ export const CanvasArea: React.FC = () => {
       stageRef.current.setPointersPositions(e);
     }
     const symbolData = e.dataTransfer.getData('symbol');
-    if (symbolData) {
+    if (symbolData && stageRef.current) {
       const symbol = JSON.parse(symbolData);
-      const rawPos = stageRef.current.getPointerPosition();
-      const pos = { ...rawPos };
       
-      if (drawingArea) {
-        const w = symbol.width || 100;
-        const h = symbol.height || 100;
-        // Strict universal clamping for all drops
-        pos.x = Math.max(drawingArea.x, Math.min(rawPos.x - w / 2, drawingArea.x + drawingArea.width - w));
-        pos.y = Math.max(drawingArea.y, Math.min(rawPos.y - h / 2, drawingArea.y + drawingArea.height - h));
-      }
+      // Compute exact canvas coordinate using inverse transform (accounts for pan & zoom)
+      const pointer = stageRef.current.getPointerPosition();
+      if (!pointer) return;
+      const transform = stageRef.current.getAbsoluteTransform().copy().invert();
+      const pos = transform.point(pointer);
 
       const isDistanceObject = symbol.isDistanceArrow || 
                                symbol.name?.toLowerCase().includes('mesafe') ||
@@ -3243,17 +3646,22 @@ export const CanvasArea: React.FC = () => {
           value: '',
           onConfirm: (input) => {
             if (input) {
+              const w = symbol.width || 100;
+              const h = symbol.height || 100;
               addObject({
                 ...symbol,
                 symbolId: symbol.id,
                 categoryId: symbol.categoryId,
                 id: uuidv4(),
-                x: pos.x - 50,
-                y: pos.y - 50,
+                x: pos.x - w / 2,
+                y: pos.y - h / 2,
                 distance: input,
                 distanceColor: '#000000',
-                width: symbol.width || 100,
-                height: symbol.height || 100,
+                width: w,
+                height: h,
+                rotation: 0,
+                scaleX: 1,
+                scaleY: 1
               });
               addNotification({
                 type: 'success',
@@ -3265,15 +3673,14 @@ export const CanvasArea: React.FC = () => {
           }
         });
       } else if (isArchitecture || symbol.categoryId === 'shapes' || symbol.categoryId === 'outdoor' || symbol.categoryId === 'arrows' || symbol.id?.startsWith('ev-rect-') || symbol.id?.startsWith('ev-square-')) {
-        const offX = (symbol.id === 'arch-1v' ? 5 : 50);
-        const offY = (symbol.id === 'arch-1v' ? 200 : 5);
-        
-        let finalX = pos.x - offX;
-        let finalY = pos.y - offY;
+        const w = symbol.width || 100;
+        const h = symbol.height || 100;
+        let finalX = pos.x - w / 2;
+        let finalY = pos.y - h / 2;
 
         if (drawingArea) {
-          finalX = Math.max(drawingArea.x, Math.min(finalX, drawingArea.x + drawingArea.width - (symbol.width || 100)));
-          finalY = Math.max(drawingArea.y, Math.min(finalY, drawingArea.y + drawingArea.height - (symbol.height || 100)));
+          finalX = Math.max(drawingArea.x, Math.min(finalX, drawingArea.x + drawingArea.width - w));
+          finalY = Math.max(drawingArea.y, Math.min(finalY, drawingArea.y + drawingArea.height - h));
         }
 
         addObject({
@@ -3284,6 +3691,11 @@ export const CanvasArea: React.FC = () => {
           fill: '#000000',
           x: finalX,
           y: finalY,
+          width: w,
+          height: h,
+          rotation: 0,
+          scaleX: 1,
+          scaleY: 1
         });
         addNotification({
           type: 'info',
@@ -3302,6 +3714,9 @@ export const CanvasArea: React.FC = () => {
           y: pos.y - h / 2,
           width: w,
           height: h,
+          rotation: 0,
+          scaleX: 1,
+          scaleY: 1,
           joints: [
             { id: 'head', x: w/2, y: h*0.1 },
             { id: 'neck', x: w/2, y: h*0.2 },
@@ -3343,6 +3758,9 @@ export const CanvasArea: React.FC = () => {
                 distance: input,
                 width: size.w,
                 height: size.h,
+                rotation: 0,
+                scaleX: 1,
+                scaleY: 1,
                 fill: 'transparent',
                 distanceColor: '#000000',
               });
@@ -3373,6 +3791,9 @@ export const CanvasArea: React.FC = () => {
                 distance: input,
                 width: 150,
                 height: 30,
+                rotation: 0,
+                scaleX: 1,
+                scaleY: 1,
                 fill: '#000000',
                 distanceColor: '#000000',
                 distanceFontSize: 12,
@@ -3394,8 +3815,8 @@ export const CanvasArea: React.FC = () => {
           value: '',
           onConfirm: (input) => {
             if (input) {
-              let finalX = pos.x;
-              let finalY = pos.y;
+              let finalX = pos.x - 100;
+              let finalY = pos.y - 20;
               if (drawingArea) {
                 finalX = Math.max(drawingArea.x, Math.min(finalX, drawingArea.x + drawingArea.width - 200));
                 finalY = Math.max(drawingArea.y, Math.min(finalY, drawingArea.y + drawingArea.height - 40));
@@ -3414,6 +3835,9 @@ export const CanvasArea: React.FC = () => {
                 distance: input,
                 width: 200,
                 height: 40,
+                rotation: 0,
+                scaleX: 1,
+                scaleY: 1,
                 distanceColor: '#000000',
                 distanceFontSize: 12,
               });
@@ -3439,11 +3863,14 @@ export const CanvasArea: React.FC = () => {
             categoryId: 'streets',
             x: finalX,
             y: finalY,
-          width: 400,
-          height: 80,
-          curvature: 0,
-          ratioFixed: false,
-          zIndex: objects.length,
+            width: 400,
+            height: 80,
+            rotation: 0,
+            scaleX: 1,
+            scaleY: 1,
+            curvature: 0,
+            ratioFixed: false,
+            zIndex: objects.length,
         });
         addNotification({
           type: 'info',
@@ -3460,6 +3887,9 @@ export const CanvasArea: React.FC = () => {
           y: pos.y - 20,
           width: 200,
           height: 40,
+          rotation: 0,
+          scaleX: 1,
+          scaleY: 1,
           curvature: 0,
           zIndex: objects.length,
         });
@@ -3478,6 +3908,9 @@ export const CanvasArea: React.FC = () => {
           y: pos.y - 60,
           width: 80,
           height: 120,
+          rotation: 0,
+          scaleX: 1,
+          scaleY: 1,
           zIndex: objects.length,
         });
         addNotification({
@@ -3504,14 +3937,10 @@ export const CanvasArea: React.FC = () => {
           else if (symbol.id === 'arch-w1vi') { finalWidth = 8; finalHeight = 200; }
         }
 
-        let finalX = pos.x;
-        let finalY = pos.y;
+        let finalX = pos.x - finalWidth / 2;
+        let finalY = pos.y - finalHeight / 2;
 
         if (drawingArea) {
-          const gridSize = 20;
-          finalX = Math.round((pos.x - (finalWidth / 2) - drawingArea.x) / gridSize) * gridSize + drawingArea.x;
-          finalY = Math.round((pos.y - (finalHeight / 2) - drawingArea.y) / gridSize) * gridSize + drawingArea.y;
-
           finalX = Math.max(drawingArea.x, Math.min(finalX, drawingArea.x + drawingArea.width - finalWidth));
           finalY = Math.max(drawingArea.y, Math.min(finalY, drawingArea.y + drawingArea.height - finalHeight));
         }
@@ -3525,6 +3954,9 @@ export const CanvasArea: React.FC = () => {
           y: finalY,
           width: finalWidth,
           height: finalHeight,
+          rotation: 0,
+          scaleX: 1,
+          scaleY: 1,
           distanceColor: '#000000',
           zIndex: objects.length,
         });
@@ -3581,8 +4013,6 @@ export const CanvasArea: React.FC = () => {
   }, [selectedId, objects, updateObject, saveHistory]);
 
 
-
-  const [gridVisible, setGridVisible] = useState(true);
 
   const renderGrid = () => {
     if (!gridVisible || projectInfo.type === 'diagram') return null;
@@ -3739,141 +4169,26 @@ export const CanvasArea: React.FC = () => {
 
     const allSyms = useStore.getState().allSymbols;
     const allFlatSymbols = allSyms ? allSyms.flatMap(c => c.symbols) : [];
-    const inDef = allFlatSymbols.find(s => s.id === 'in-bullet-in');
-    const outDef = allFlatSymbols.find(s => s.id === 'in-bullet-out');
-    const winDef = allFlatSymbols.find(s => s.id === 'tr-bullet-glass');
-    const wallDef = allFlatSymbols.find(s => s.id === 'tr-bullet-wall');
+    const wallDef = allFlatSymbols.find(s => s?.id === 'tr-bullet-wall');
+    const glassDef = allFlatSymbols.find(s => s?.id === 'tr-bullet-glass');
+    const woundInDef = allFlatSymbols.find(s => s?.id === 'in-bullet-in');
+    const woundOutDef = allFlatSymbols.find(s => s?.id === 'in-bullet-out');
 
     const zH = traj.zHeight || 120;
     const tilt = traj.tilt || 0;
     const dz = trajLen > 0 ? (trajLen * Math.tan(tilt * Math.PI / 180)) : 0;
 
-    let addedMannequin = false;
-    let addedGlass = false;
-    let addedWall = false;
-
-    // A. Mannequins
-    mannequins.forEach(m => {
-      const w = m.width * (m.scaleX || 1);
-      const h = m.height * (m.scaleY || 1);
-      const rotRad = (m.rotation || 0) * Math.PI / 180;
+    // A. Mannequins (Entrance / Exit wounds)
+    mannequins.forEach(mObj => {
+      const w = mObj.width * (mObj.scaleX || 1);
+      const h = mObj.height * (mObj.scaleY || 1);
+      const rotRad = (mObj.rotation || 0) * Math.PI / 180;
       const cosR = Math.cos(-rotRad);
       const sinR = Math.sin(-rotRad);
 
       const toLocal = (px: number, py: number) => {
-        const dx = px - m.x;
-        const dy = py - m.y;
-        return {
-          x: dx * cosR - dy * sinR,
-          y: dx * sinR + dy * cosR
-        };
-      };
-
-      const lStart = toLocal(tsx, tsy);
-      const lEnd = toLocal(tex, tey);
-
-      const lx0 = lStart.x;
-      const ly0 = lStart.y;
-      const ldx = lEnd.x - lStart.x;
-      const ldy = lEnd.y - lStart.y;
-
-      const bodyRatio = 0.55;
-      const effW = w * bodyRatio;
-      const effH = h * bodyRatio;
-      const offX = (w - effW) / 2;
-      const offY = (h - effH) / 2;
-
-      const p = [-ldx, ldx, -ldy, ldy];
-      const q = [lx0 - offX, (w - offX) - lx0, ly0 - offY, (h - offY) - ly0];
-
-      let tNear = -Infinity;
-      let tFar = Infinity;
-
-      for (let i = 0; i < 4; i++) {
-        if (p[i] === 0) {
-          if (q[i] < 0) return;
-        } else {
-          let t = q[i] / p[i];
-          if (p[i] < 0) {
-            if (t > tNear) tNear = t;
-          } else {
-            if (t < tFar) tFar = t;
-          }
-        }
-      }
-
-      if (tNear > tFar || tFar < 0 || tNear > 1) return;
-
-      const angle = Math.atan2(trajDy, trajDx) * 180 / Math.PI;
-      const rotEntry = Math.round(angle + 90);
-      const rotExit = Math.round(angle - 90);
-
-      if (tNear >= 0 && tNear <= 1) {
-        const pEntryX = tsx + tNear * trajDx;
-        const pEntryY = tsy + tNear * trajDy;
-        const key = `in-${Math.round(pEntryX)}-${Math.round(pEntryY)}`;
-        if (!addedPoints.has(key)) {
-          addedPoints.add(key);
-          newObjects.push({
-            ...(inDef || {}),
-            type: 'symbol',
-            symbolId: 'in-bullet-in',
-            categoryId: 'injuries',
-            id: uuidv4(),
-            parentId: trajId,
-            x: pEntryX - 15,
-            y: pEntryY - 15,
-            width: 30,
-            height: 30,
-            rotation: rotEntry,
-            scaleX: 1, scaleY: 1,
-            zHeight: Math.max(0, (zH + tNear * dz) - 15),
-            isVertical: true,
-            zIndex: objects.length + newObjects.length + 1
-          });
-          addedMannequin = true;
-        }
-      }
-
-      if (tFar >= 0 && tFar <= 1) {
-        const pExitX = tsx + tFar * trajDx;
-        const pExitY = tsy + tFar * trajDy;
-        const key = `out-${Math.round(pExitX)}-${Math.round(pExitY)}`;
-        if (!addedPoints.has(key)) {
-          addedPoints.add(key);
-          newObjects.push({
-            ...(outDef || {}),
-            type: 'symbol',
-            symbolId: 'in-bullet-out',
-            categoryId: 'injuries',
-            id: uuidv4(),
-            parentId: trajId,
-            x: pExitX - 22.5,
-            y: pExitY - 22.5,
-            width: 45,
-            height: 45,
-            rotation: rotExit,
-            scaleX: 1, scaleY: 1,
-            zHeight: Math.max(0, (zH + tFar * dz) - 22.5),
-            isVertical: true,
-            zIndex: objects.length + newObjects.length + 1
-          });
-          addedMannequin = true;
-        }
-      }
-    });
-
-    // B. Windows
-    windows.forEach(wObj => {
-      const w = wObj.width * (wObj.scaleX || 1);
-      const h = wObj.height * (wObj.scaleY || 1);
-      const rotRad = (wObj.rotation || 0) * Math.PI / 180;
-      const cosR = Math.cos(-rotRad);
-      const sinR = Math.sin(-rotRad);
-
-      const toLocal = (px: number, py: number) => {
-        const dx = px - wObj.x;
-        const dy = py - wObj.y;
+        const dx = px - mObj.x;
+        const dy = py - mObj.y;
         return {
           x: dx * cosR - dy * sinR,
           y: dx * sinR + dy * cosR
@@ -3912,29 +4227,131 @@ export const CanvasArea: React.FC = () => {
       if (tNear >= 0 && tNear <= 1) {
         const pHitX = tsx + tNear * trajDx;
         const pHitY = tsy + tNear * trajDy;
-        const key = `glass-${Math.round(pHitX)}-${Math.round(pHitY)}`;
+        const key = `mank-in-${Math.round(pHitX)}-${Math.round(pHitY)}`;
         if (!addedPoints.has(key)) {
           addedPoints.add(key);
           newObjects.push({
-            ...(winDef || {}),
+            ...(woundInDef || {}),
             type: 'symbol',
-            symbolId: 'tr-bullet-glass',
-            categoryId: 'traces',
-            src: '/assets/symbols/bullet_hole_1.png',
+            symbolId: 'in-bullet-in',
+            categoryId: 'injuries',
+            src: woundInDef?.src || '',
             id: uuidv4(),
             parentId: trajId,
-            x: pHitX - 15,
-            y: pHitY - 15,
-            width: 30,
-            height: 30,
-            rotation: wObj.rotation || 0,
+            x: pHitX - 10,
+            y: pHitY - 10,
+            width: 20,
+            height: 20,
+            rotation: mObj.rotation || 0,
             scaleX: 1, scaleY: 1,
             zHeight: Math.max(0, zH + tNear * dz),
             isVertical: true,
             hidden2D: true,
             zIndex: objects.length + newObjects.length + 1
           });
-          addedGlass = true;
+        }
+      }
+
+      if (tFar >= 0 && tFar <= 1 && Math.abs(tFar - tNear) > 0.01) {
+        const pHitX = tsx + tFar * trajDx;
+        const pHitY = tsy + tFar * trajDy;
+        const key = `mank-out-${Math.round(pHitX)}-${Math.round(pHitY)}`;
+        if (!addedPoints.has(key)) {
+          addedPoints.add(key);
+          newObjects.push({
+            ...(woundOutDef || {}),
+            type: 'symbol',
+            symbolId: 'in-bullet-out',
+            categoryId: 'injuries',
+            src: woundOutDef?.src || '',
+            id: uuidv4(),
+            parentId: trajId,
+            x: pHitX - 10,
+            y: pHitY - 10,
+            width: 20,
+            height: 20,
+            rotation: mObj.rotation || 0,
+            scaleX: 1, scaleY: 1,
+            zHeight: Math.max(0, zH + tFar * dz),
+            isVertical: true,
+            hidden2D: true,
+            zIndex: objects.length + newObjects.length + 1
+          });
+        }
+      }
+    });
+
+    // B. Windows (Glass impact)
+    windows.forEach(winObj => {
+      const w = winObj.width * (winObj.scaleX || 1);
+      const h = winObj.height * (winObj.scaleY || 1);
+      const rotRad = (winObj.rotation || 0) * Math.PI / 180;
+      const cosR = Math.cos(-rotRad);
+      const sinR = Math.sin(-rotRad);
+
+      const toLocal = (px: number, py: number) => {
+        const dx = px - winObj.x;
+        const dy = py - winObj.y;
+        return {
+          x: dx * cosR - dy * sinR,
+          y: dx * sinR + dy * cosR
+        };
+      };
+
+      const lStart = toLocal(tsx, tsy);
+      const lEnd = toLocal(tex, tey);
+
+      const lx0 = lStart.x;
+      const ly0 = lStart.y;
+      const ldx = lEnd.x - lStart.x;
+      const ldy = lEnd.y - lStart.y;
+
+      const p = [-ldx, ldx, -ldy, ldy];
+      const q = [lx0, w - lx0, ly0, h - ly0];
+
+      let tNear = -Infinity;
+      let tFar = Infinity;
+
+      for (let i = 0; i < 4; i++) {
+        if (p[i] === 0) {
+          if (q[i] < 0) return;
+        } else {
+          let t = q[i] / p[i];
+          if (p[i] < 0) {
+            if (t > tNear) tNear = t;
+          } else {
+            if (t < tFar) tFar = t;
+          }
+        }
+      }
+
+      if (tNear > tFar || tFar < 0 || tNear > 1) return;
+
+      if (tNear >= 0 && tNear <= 1) {
+        const pHitX = tsx + tNear * trajDx;
+        const pHitY = tsy + tNear * trajDy;
+        const key = `win-${Math.round(pHitX)}-${Math.round(pHitY)}`;
+        if (!addedPoints.has(key)) {
+          addedPoints.add(key);
+          newObjects.push({
+            ...(glassDef || {}),
+            type: 'symbol',
+            symbolId: 'tr-bullet-glass',
+            categoryId: 'traces',
+            src: glassDef?.src || '/assets/symbols/bullet_hole_1.png',
+            id: uuidv4(),
+            parentId: trajId,
+            x: pHitX - 12.5,
+            y: pHitY - 12.5,
+            width: 25,
+            height: 25,
+            rotation: winObj.rotation || 0,
+            scaleX: 1, scaleY: 1,
+            zHeight: Math.max(0, zH + tNear * dz),
+            isVertical: true,
+            hidden2D: true,
+            zIndex: objects.length + newObjects.length + 1
+          });
         }
       }
     });
@@ -3988,7 +4405,7 @@ export const CanvasArea: React.FC = () => {
       if (tNear >= 0 && tNear <= 1) {
         const pHitX = tsx + tNear * trajDx;
         const pHitY = tsy + tNear * trajDy;
-        const key = `wall-${Math.round(pHitX)}-${Math.round(pHitY)}`;
+        const key = `wall-in-${Math.round(pHitX)}-${Math.round(pHitY)}`;
         if (!addedPoints.has(key)) {
           addedPoints.add(key);
           newObjects.push({
@@ -3996,7 +4413,7 @@ export const CanvasArea: React.FC = () => {
             type: 'symbol',
             symbolId: 'tr-bullet-wall',
             categoryId: 'traces',
-            src: '/assets/symbols/bullet_hole_2.png',
+            src: wallDef?.src || '/assets/symbols/bullet_hole_2.png',
             id: uuidv4(),
             parentId: trajId,
             x: pHitX - 12.5,
@@ -4010,7 +4427,34 @@ export const CanvasArea: React.FC = () => {
             hidden2D: true,
             zIndex: objects.length + newObjects.length + 1
           });
-          addedWall = true;
+        }
+      }
+
+      if (tFar >= 0 && tFar <= 1 && Math.abs(tFar - tNear) > 0.01) {
+        const pHitX = tsx + tFar * trajDx;
+        const pHitY = tsy + tFar * trajDy;
+        const key = `wall-out-${Math.round(pHitX)}-${Math.round(pHitY)}`;
+        if (!addedPoints.has(key)) {
+          addedPoints.add(key);
+          newObjects.push({
+            ...(wallDef || {}),
+            type: 'symbol',
+            symbolId: 'tr-bullet-wall',
+            categoryId: 'traces',
+            src: wallDef?.src || '/assets/symbols/bullet_hole_2.png',
+            id: uuidv4(),
+            parentId: trajId,
+            x: pHitX - 12.5,
+            y: pHitY - 12.5,
+            width: 25,
+            height: 25,
+            rotation: wObj.rotation || 0,
+            scaleX: 1, scaleY: 1,
+            zHeight: Math.max(0, zH + tFar * dz),
+            isVertical: true,
+            hidden2D: true,
+            zIndex: objects.length + newObjects.length + 1
+          });
         }
       }
     });
@@ -4018,18 +4462,10 @@ export const CanvasArea: React.FC = () => {
     if (newObjects.length > 0) {
       newObjects.forEach(obj => addObject(obj));
       
-      let message = 'İsabet İzleri Eklendi';
-      let description = 'Atış yönü çizgisine göre ';
-      const descParts = [];
-      if (addedMannequin) descParts.push('ceset üzerinde giriş/çıkış yaraları');
-      if (addedGlass) descParts.push('cam üzerinde isabet izi');
-      if (addedWall) descParts.push('duvar üzerinde isabet izi');
-      description += descParts.join(', ') + ' otomatik oluşturuldu.';
-
       addNotification({
         type: 'success',
-        message,
-        description
+        message: 'İsabet İzleri Eklendi',
+        description: 'Atış yönü çizgisine göre duvar, cam ve manken üzerinde otomatik isabet izleri/yaraları oluşturuldu.'
       });
     }
   };
@@ -4041,18 +4477,18 @@ export const CanvasArea: React.FC = () => {
     const file = e.target.files?.[0];
     if (!file || !selectedId) return;
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const dataUrl = event.target?.result as string;
-      updateObject(selectedId, { photo: dataUrl });
+    try {
+      const compressedSrc = await compressAndResizeImage(file, 600, 600, 0.45);
+      updateObject(selectedId, { photo: compressedSrc });
       saveHistory();
       addNotification({
         type: 'success',
         message: 'Fotoğraf Eklendi',
-        description: 'Olay yeri fotoğrafı noktaya başarıyla bağlandı.'
+        description: 'Fotoğraf sıkıştırılarak noktaya başarıyla bağlandı.'
       });
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+      console.error('Camera photo optimization error:', err);
+    }
   };
 
   return (
@@ -4295,6 +4731,14 @@ export const CanvasArea: React.FC = () => {
             {/* Accident Reconstruction Animation Layer */}
             <Layer>
               <AccidentAnimation />
+            </Layer>
+            {/* Fall Animation Canvas Layer */}
+            <Layer>
+              <FallAnimationCanvas />
+            </Layer>
+            {/* Pedestrian Launch Canvas Layer */}
+            <Layer>
+              <PedestrianLaunchCanvas />
             </Layer>
           </Stage>
 
@@ -5038,10 +5482,8 @@ export const CanvasArea: React.FC = () => {
         }}
       />
 
-      <PageControlBar />
-
-      {/* Fixed Bottom status bar */}
-      <div className="h-10 bg-[#1a1a1a] border-t border-[#2a2a2a] flex items-center px-4 gap-1 z-10 flex-shrink-0 bottom-bar">
+      {/* Fixed Bottom status bar (merged with pages) */}
+      <div className="h-12 bg-[#1a1a1a] border-t border-[#2a2a2a] flex items-center px-4 gap-1 z-10 flex-shrink-0 bottom-bar">
         <button
           onClick={() => setGridVisible(!gridVisible)}
           className={`px-3 py-1 text-[10px] font-bold rounded transition-all ${
@@ -5063,7 +5505,12 @@ export const CanvasArea: React.FC = () => {
         >
           ZEMİN: {canvasBgColor === '#ffffff' ? 'BEYAZ' : 'SİYAH'}
         </button>
+
         <div className="h-4 w-px bg-[#333] mx-2" />
+
+        <div className="flex-1 flex items-center gap-1 overflow-x-auto custom-scrollbar">
+          <PageControlBar variant="inline" />
+        </div>
 
         <div className="flex items-center gap-1 bg-[#242424] rounded border border-[#333] px-1 py-0.5">
           <button 
@@ -5094,29 +5541,19 @@ export const CanvasArea: React.FC = () => {
           </button>
           <div className="w-px h-3 bg-[#333]" />
           <button 
-            onClick={() => setIsDistanceMatrixOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#F5C518]/10 hover:bg-[#F5C518]/20 text-[#F5C518] text-[10px] font-black rounded-md border border-[#F5C518]/30 transition-all uppercase"
+            onClick={() => setCanvasOrientation(canvasOrientation === 'landscape' ? 'portrait' : 'landscape')}
+            className="px-3 py-1 text-[10px] font-bold rounded bg-[#242424] text-gray-400 border border-[#333] hover:border-[#F5C518] hover:text-[#F5C518] transition-all uppercase"
           >
-            <Ruler size={14} />
-            MESAFE ÖLÇ
+            TUVAL: A4 ({canvasOrientation === 'landscape' ? 'YATAY' : 'DİKEY'})
           </button>
           <span className="px-2 text-[9px] font-black text-[#F5C518] min-w-[35px] text-center">
             %{Math.round(scale * 100)}
           </span>
         </div>
 
-        <div className="flex-1" />
-
-        <button 
-          onClick={() => setCanvasOrientation(canvasOrientation === 'landscape' ? 'portrait' : 'landscape')}
-          className="px-3 py-1 text-[10px] font-bold rounded bg-[#242424] text-gray-400 border border-[#333] hover:border-[#F5C518] hover:text-[#F5C518] transition-all uppercase"
-        >
-          TUVAL: A4 ({canvasOrientation === 'landscape' ? 'YATAY' : 'DİKEY'})
-        </button>
-
         <div className="h-4 w-px bg-[#333] mx-2" />
 
-        <span className="text-[9px] text-gray-700 italic">
+        <span className="text-[9px] text-gray-700 italic whitespace-nowrap">
           Resmi Makamlar İçin Olay Yeri Dokümantasyonu
         </span>
       </div>

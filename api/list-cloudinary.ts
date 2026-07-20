@@ -23,17 +23,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // "kroki-olusturucu" tag'ine sahip tüm görselleri listele
     // Admin API limitlerine dikkat edilmeli (500 per request max)
     const response = await fetch(
-      `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/resources/search`,
+      `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/resources/image/upload?prefix=kroki-olusturucu&max_results=500`,
       {
-        method: 'POST',
+        method: 'GET',
         headers: {
-          'Content-Type': 'application/json',
           'Authorization': 'Basic ' + Buffer.from(API_KEY + ':' + API_SECRET).toString('base64'),
         },
-        body: JSON.stringify({
-          expression: 'folder:kroki-olusturucu/*',
-          max_results: 500
-        }),
       }
     );
 

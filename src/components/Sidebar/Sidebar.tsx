@@ -2,7 +2,6 @@ import React, { useState, useMemo, useEffect } from 'react';
 import {
   Package,
   ImageIcon,
-  Star,
   Search,
   Type,
   Upload,
@@ -11,14 +10,17 @@ import {
   ChevronRight,
   CheckCircle2,
   Settings2,
+  Play,
 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { v4 as uuidv4 } from 'uuid';
 import { Lock, Calculator } from 'lucide-react';
 import { CalculatorIndex } from './Calculators/CalculatorIndex';
+import { AnimationIndex } from './Animations/AnimationIndex';
+import { compressAndResizeImage } from '../../utils/canvasUtils';
 
 export const Sidebar: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'symbols' | 'uploads' | 'favorites' | 'calculators'>('symbols');
+  const [activeTab, setActiveTab] = useState<'symbols' | 'uploads' | 'animations' | 'calculators'>('symbols');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const {
@@ -35,8 +37,7 @@ export const Sidebar: React.FC = () => {
     addNotification,
     isAdmin,
     recoverCloudinaryImages,
-    symbolUsage,
-    refreshSymbols,
+    refreshSymbols
   } = useStore();
 
   useEffect(() => {
@@ -48,57 +49,53 @@ export const Sidebar: React.FC = () => {
   const [showAllUploads, setShowAllUploads] = useState(false);
   const [hoveredSymbol, setHoveredSymbol] = useState<{ id: string, name: string, description?: string, rect: DOMRect } | null>(null);
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file && isAdmin) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
+    if (file) {
+      try {
+        const compressedSrc = await compressAndResizeImage(file, 600, 600, 0.45);
         const capitalizedName = file.name.charAt(0).toUpperCase() + file.name.slice(1);
         
         addUploadedImage({
           id: uuidv4(),
-          src: event.target?.result as string,
+          src: compressedSrc,
           name: capitalizedName,
           category: 'uncategorized',
         });
         addNotification({
           type: 'success',
           message: 'Görsel Yüklendi',
-          description: `"${file.name}" başarıyla sisteme eklendi ve "Yüklenenler" sekmesine alındı. Buradan kategorisini seçebilirsiniz.`
+          description: `"${file.name}" başarıyla sıkıştırılıp sisteme eklendi.`
         });
-      };
-      reader.readAsDataURL(file);
+      } catch (err) {
+        console.error('Image optimization error:', err);
+      }
     }
   };
 
-  const handleCategoryUpload = (e: React.ChangeEvent<HTMLInputElement>, categoryId: string) => {
+  const handleCategoryUpload = async (e: React.ChangeEvent<HTMLInputElement>, categoryId: string) => {
     const file = e.target.files?.[0];
-    if (file && isAdmin) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
+    if (file) {
+      try {
+        const compressedSrc = await compressAndResizeImage(file, 600, 600, 0.45);
         const capitalizedName = file.name.charAt(0).toUpperCase() + file.name.slice(1);
         
         addUploadedImage({
           id: uuidv4(),
-          src: event.target?.result as string,
+          src: compressedSrc,
           name: capitalizedName,
           category: categoryId,
         });
         addNotification({
           type: 'success',
           message: 'Görsel Yüklendi',
-          description: `"${file.name}" başarıyla buluta (${categoryId}) eklendi.`
+          description: `"${file.name}" başarıyla sıkıştırılıp sisteme eklendi.`
         });
-      };
-      reader.readAsDataURL(file);
+      } catch (err) {
+        console.error('Category upload error:', err);
+      }
     }
   };
-
-  useEffect(() => {
-    if (!isAdmin && activeTab === 'uploads') {
-      setActiveTab('symbols');
-    }
-  }, [isAdmin, activeTab]);
 
   useEffect(() => {
     const handleGlobalDragEnd = () => {
@@ -251,8 +248,8 @@ export const Sidebar: React.FC = () => {
 
   const tabs = [
     { id: 'symbols' as const, label: 'SEMBOLLER', icon: <Package size={18} /> },
-    ...(isAdmin ? [{ id: 'uploads' as const, label: 'YÜKLENENLER', icon: <ImageIcon size={18} /> }] : []),
-    { id: 'favorites' as const, label: 'FAVORİLER', icon: <Star size={18} /> },
+    { id: 'uploads' as const, label: 'YÜKLENENLER', icon: <ImageIcon size={18} /> },
+    { id: 'animations' as const, label: 'ANİMASYON', icon: <Play size={18} /> },
     { id: 'calculators' as const, label: 'HESAPLAYICI', icon: <Calculator size={18} /> },
   ];
 
@@ -272,8 +269,8 @@ export const Sidebar: React.FC = () => {
         {isSidebarOpen ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
       </button>
 
-      {/* Content wrapper with hidden overflow when closed */}
-      <div className={`flex flex-col h-full w-96 overflow-hidden transition-opacity duration-200 ${
+      {/* Content wrapper — overflow-visible so absolute dropdowns are not clipped */}
+      <div className={`flex flex-col h-full w-96 overflow-visible transition-opacity duration-200 ${
         isSidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
       }`}>
         {/* Tabs */}
@@ -724,81 +721,8 @@ export const Sidebar: React.FC = () => {
             </div>
           )}
 
-          {activeTab === 'favorites' && (
-            <div className="p-3 space-y-4">
-              <div className="flex items-center gap-2 px-1 mb-2">
-                <Star size={14} className="text-[#F5C518]" />
-                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                  EN ÇOK KULLANILANLAR
-                </h4>
-              </div>
-              
-              {(() => {
-                // Flatten all symbols and uploaded images
-                const allItems: any[] = [];
-                allSymbols.forEach(cat => {
-                  cat.symbols.forEach((s: any) => allItems.push({ ...s, categoryId: cat.id, isUpload: false }));
-                });
-                uploadedImages.forEach(img => {
-                  allItems.push({ ...img, categoryId: img.category || 'uncategorized', isUpload: true });
-                });
-
-                // Filter items that have been used at least once and sort by usage count
-                const favoriteItems = allItems
-                  .filter(item => (symbolUsage[item.id] || 0) > 0)
-                  .sort((a, b) => (symbolUsage[b.id] || 0) - (symbolUsage[a.id] || 0))
-                  .slice(0, 24); // Show top 24
-
-                if (favoriteItems.length === 0) {
-                  return (
-                    <div className="flex flex-col items-center justify-center py-16 text-center px-4 border-2 border-dashed border-[#222] rounded-2xl">
-                      <div className="w-14 h-14 bg-[#1e1e1e] rounded-full flex items-center justify-center mb-3">
-                        <Star size={28} className="text-gray-700" />
-                      </div>
-                      <p className="text-gray-600 text-[10px] leading-relaxed">
-                        Henüz kullanılan sembol yok.<br/>Kullandığınız semboller burada listelenecektir.
-                      </p>
-                    </div>
-                  );
-                }
-
-                return (
-                  <div className="grid grid-cols-3 gap-2">
-                    {favoriteItems.map((item) => (
-                      <div
-                        key={item.id}
-                        className={`group relative aspect-square bg-[#111] border rounded-xl flex flex-col items-center p-2 cursor-move transition-all duration-300 border-white/5 hover:border-[#F5C518]/40 hover:bg-[#0a0a0a]`}
-                        title={`${item.name} (${symbolUsage[item.id]} kullanım)`}
-                      >
-                        <div 
-                          draggable
-                          onDragStart={(e) => handleDragStart(e, item, item.categoryId, item.isUpload)}
-                          onDragEnd={handleDragEnd}
-                          className="w-full h-12 flex items-center justify-center relative flex-shrink-0 cursor-move"
-                        >
-                          <img
-                            src={item.src}
-                            alt={item.name}
-                            className={`max-w-[95%] max-h-[95%] object-contain transition-transform duration-300 group-hover:scale-110 relative z-10 pointer-events-none ${
-                              (item.name.toLowerCase().includes('kuzey') || (!item.isUpload && (['architecture', 'streets', 'shapes', 'arrows'].includes(item.categoryId)))) ? 'yellow-icon-filter' : ''
-                            }`}
-                          />
-                        </div>
-                        <div className="w-full flex-1 flex items-start justify-center mt-1.5 px-0.5">
-                          <span className="text-[9px] font-bold text-gray-400 text-center leading-tight transition-colors group-hover:text-white block w-full truncate">
-                            {item.name}
-                          </span>
-                        </div>
-                        {/* Usage Counter Badge */}
-                        <div className="absolute -top-1 -right-1 bg-[#F5C518] text-black text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center shadow-lg border border-black/20 z-20">
-                          {symbolUsage[item.id]}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })()}
-            </div>
+          {activeTab === 'animations' && (
+            <AnimationIndex />
           )}
           {activeTab === 'calculators' && (
             <CalculatorIndex />

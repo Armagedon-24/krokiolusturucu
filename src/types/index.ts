@@ -19,6 +19,7 @@ export interface CanvasObject {
   fill?: string;
   stroke?: string;
   strokeWidth?: number;
+  cornerRadius?: number;
   points?: number[];
   zIndex: number;
   label?: string;
@@ -121,6 +122,22 @@ export interface ScaleCalibration {
 
 export type VehicleType = 'car' | 'suv' | 'truck' | 'bus' | 'motorcycle' | 'van' | 'pickup' | 'other';
 
+export type EvasiveAction = 'none' | 'swerve_left' | 'swerve_right' | 'hard_brake';
+
+export interface PedestrianData {
+  id: string;
+  name: string;
+  startX: number;
+  startY: number;
+  endX: number;
+  endY: number;
+  speed: number; // walking speed km/h
+  size: 'adult' | 'child';
+  color: string;
+  show: boolean;
+  appearProgress: number; // 0-1 when pedestrian starts walking
+}
+
 export interface VehicleData {
   id: string;
   type: VehicleType;
@@ -146,11 +163,15 @@ export interface VehicleData {
   showPath: boolean;
   showBrakeMarks: boolean;
   showVehicle: boolean;
+  evasiveAction: EvasiveAction;
+  evasiveOffset: number; // px offset for swerve
+  evasiveStartProgress: number; // when evasive maneuver starts
 }
 
 export interface AccidentReconstruction {
   enabled: boolean;
   vehicles: [VehicleData, VehicleData?];
+  pedestrians: PedestrianData[];
   roadSurface: 'asphalt_dry' | 'asphalt_wet' | 'concrete_dry' | 'concrete_wet' | 'gravel' | 'soil' | 'snow' | 'ice';
   frictionCoefficient: number;
   speedLimit: number;
@@ -170,6 +191,17 @@ export interface AccidentAnimationState {
   showTimeline: boolean;
 }
 
+export interface FallData {
+  height: number;
+  distance: number;
+  velocity: number;
+  impactVelocity: number;
+  impactEnergy: number;
+  time: number;
+  weight: number;
+  useDrag: boolean;
+}
+
 export interface FallAnimationState {
   isOpen: boolean;
   isPlaying: boolean;
@@ -177,6 +209,49 @@ export interface FallAnimationState {
   speed: number;
   loop: boolean;
   duration: number;
+  canvasData: FallData | null;  // Set when user clicks TUVALE AKTAR
+}
+
+export interface PedestrianLaunchData {
+  vehicleSpeed: number;     // km/h
+  pedestrianHeight: number; // cm
+  pedestrianWeight: number; // kg
+  launchSpeed: number;      // m/s (pedestrian's initial speed after impact)
+  launchAngle: number;      // degrees
+  throwDistance: number;    // m (total: flight + slide)
+  flightDistance: number;   // m
+  slideDistance: number;    // m (savrulma mesafesi)
+  flightTime: number;       // seconds
+  landingSpeed: number;     // km/h
+  maxHeight: number;        // m (max height of center of mass during flight)
+  pedestrianState: 'stationary' | 'walking_same' | 'walking_opposite' | 'running_same' | 'running_opposite';
+}
+
+export interface PedestrianLaunchAnimationState {
+  isOpen: boolean;
+  isPlaying: boolean;
+  currentTime: number;
+  speed: number;
+  loop: boolean;
+  duration: number;
+  canvasData: PedestrianLaunchData | null;
+}
+
+export interface ShotDirectionData {
+  entryX: number;          // cm from reference
+  entryY: number;          // cm from reference
+  entryZ: number;          // height cm
+  exitX: number;           // cm from reference
+  exitY: number;           // cm from reference
+  exitZ: number;           // height cm
+  hasExitWound: boolean;
+  impactAngle: number;     // degrees (vertical impact angle)
+  horizontalAngle: number; // degrees (shooter's horizontal bearing)
+  shooterDistance: number; // estimated meters
+  shooterHeight: number;   // estimated meters
+  bulletType: string;
+  deflectionAngle: number; // degrees
+  entrySurface: 'glass' | 'metal' | 'drywall' | 'wood' | 'concrete' | 'other';
 }
 
 export interface SavedAnimation {
@@ -184,6 +259,16 @@ export interface SavedAnimation {
   name: string;
   createdAt: string;
   data: AccidentReconstruction;
+}
+
+export interface ShotDirectionAnimationState {
+  isOpen: boolean;
+  isPlaying: boolean;
+  currentTime: number;
+  speed: number;
+  loop: boolean;
+  duration: number;
+  canvasData: ShotDirectionData | null;
 }
 
 export interface CanvasState {

@@ -26,12 +26,10 @@ function App() {
     const init = async () => {
       try {
         refreshSymbols();
-        const restored = await restoreFromCloud();
-        // Only clear canvas if no state was restored from cloud
-        const store = useStore.getState();
-        if (store.objects.length === 0 && !restored) {
-          clearCanvas();
-        }
+        // Always restore cloud symbols/settings, but start with a blank canvas
+        await restoreFromCloud();
+        // Always clear to blank canvas on page load — user must open a file from Case Manager
+        clearCanvas();
       } catch (error) {
         console.error('Initialization error:', error);
       } finally {

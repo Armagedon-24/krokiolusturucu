@@ -4,6 +4,8 @@ import type { CanvasObject } from '../../types';
 import { cloudinary } from '../../lib/cloudinary';
 import { useStore } from '../../store/useStore';
 
+import { compressAndResizeImage } from '../../utils/canvasUtils';
+
 interface EvidencePhotoModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -35,11 +37,21 @@ export const EvidencePhotoModal: React.FC<EvidencePhotoModalProps> = ({
     try {
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
+        const compressedDataUrl = await compressAndResizeImage(file, 600, 600, 0.45);
         const fileName = `evidence_${object.findingNo || 'marker'}_${Date.now()}_${i}`;
-        const url = await cloudinary.upload(file, fileName, 'evidence_photos');
-        newPhotoUrls.push(url);
+        try {
+          const url = await cloudinary.upload(compressedDataUrl, fileName, 'evidence_photos');
+          newPhotoUrls.push(url || compressedDataUrl);
+        } catch {
+          newPhotoUrls.push(compressedDataUrl);
+        }
       }
       onUpdatePhotos(newPhotoUrls);
+      addNotification({
+        type: 'success',
+        message: 'Fotoğraf Eklendi',
+        description: 'Bulgu fotoğrafları optimize edilerek eklendi.'
+      });
     } catch (error) {
       console.error('Photo upload failed:', error);
       addNotification({

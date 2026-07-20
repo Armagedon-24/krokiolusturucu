@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { 
-  Activity, 
   Zap, 
   Droplets, 
   Target, 
@@ -9,9 +8,7 @@ import {
   ChevronDown,
   GitMerge,
   Flame,
-  AlertTriangle
 } from 'lucide-react';
-import { FallCalculator } from '../FallCalculator';
 import { SkidMarkCalculator } from './SkidMarkCalculator';
 import { BloodstainCalculator } from './BloodstainCalculator';
 import { BulletTrajectoryCalculator } from './BulletTrajectoryCalculator';
@@ -19,16 +16,14 @@ import { ShadowCalculator } from './ShadowCalculator';
 import { AlgorMortisCalculator } from './AlgorMortisCalculator';
 import { CollisionSpeedCalculator } from './CollisionSpeedCalculator';
 import { GunshotDistanceCalculator } from './GunshotDistanceCalculator';
-import { AccidentReconstructionCalculator } from './AccidentReconstructionCalculator';
 
-type CalculatorType = 'fall' | 'skid' | 'collision' | 'bloodstain' | 'bullet' | 'gunshot' | 'shadow' | 'algor' | 'accident';
+type CalculatorType = 'skid' | 'collision' | 'bloodstain' | 'bullet' | 'gunshot' | 'shadow' | 'algor';
 
 export const CalculatorIndex: React.FC = () => {
-  const [activeCalc, setActiveCalc] = useState<CalculatorType>('accident');
+  const [activeCalc, setActiveCalc] = useState<CalculatorType>('skid');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const calculators = [
-    { id: 'fall', name: 'Düşme Mesafesi', icon: <Activity size={14} />, component: <FallCalculator /> },
     { id: 'skid', name: 'Fren İzi / Hız', icon: <Zap size={14} />, component: <SkidMarkCalculator /> },
     { id: 'collision', name: 'Çarpışma Hızı (Momentum)', icon: <GitMerge size={14} />, component: <CollisionSpeedCalculator /> },
     { id: 'bloodstain', name: 'Kan Sıçrama (BPA)', icon: <Droplets size={14} />, component: <BloodstainCalculator /> },
@@ -36,7 +31,6 @@ export const CalculatorIndex: React.FC = () => {
     { id: 'gunshot', name: 'Atış Mesafesi (Barut İzi)', icon: <Flame size={14} />, component: <GunshotDistanceCalculator /> },
     { id: 'shadow', name: 'Gölge / Zaman', icon: <Sun size={14} />, component: <ShadowCalculator /> },
     { id: 'algor', name: 'Ölüm Saati (Vücut Isısı)', icon: <Thermometer size={14} />, component: <AlgorMortisCalculator /> },
-    { id: 'accident', name: 'Kaza Yeniden Canlandırma', icon: <AlertTriangle size={14} />, component: <AccidentReconstructionCalculator /> },
   ];
 
   const activeCalculator = calculators.find(c => c.id === activeCalc);

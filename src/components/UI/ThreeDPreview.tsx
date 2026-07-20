@@ -63,7 +63,7 @@ const Wall = ({ x, y, width, rotation, h = 250, yOffset = 0, wallColor, wallThic
   const posZ = y;
 
   return (
-    <mesh position={[posX, (h * SCALE) / 2 + yOffset, posZ]} rotation={[0, -rad, 0]}>
+    <mesh position={[posX, (h * SCALE) / 2 + yOffset, posZ]} rotation={[0, rad, 0]}>
       <boxGeometry args={[width, h * SCALE, thickness]} />
       <meshStandardMaterial color={wallColor || "#2c3e50"} metalness={0.1} roughness={0.8} />
     </mesh>
@@ -107,8 +107,13 @@ const Door3D = ({ x, y, width, h, rad, thickness = 10 * SCALE, zOffset }: any) =
   );
 };
 
-const Window3D = ({ x, y, width, h, rad, sillH, thickness, zOffset }: any) => {
-  const [isOpen, setIsOpen] = useState(false);
+const Window3D = ({ obj, updateObject, x, y, width, h, rad, sillH, thickness, zOffset }: any) => {
+  const isOpen = obj?.customData?.isOpen || false;
+  const setIsOpen = (val: boolean) => {
+    if (obj && updateObject) {
+      updateObject(obj.id, { customData: { ...(obj.customData || {}), isOpen: val } });
+    }
+  };
   const openAngle = isOpen ? -Math.PI / 3 : 0; 
   
   const frameColor = "#333333";
@@ -224,118 +229,7 @@ const Window3D = ({ x, y, width, h, rad, sillH, thickness, zOffset }: any) => {
   );
 };
 
-// --- ADVANCED AI COMMAND ENGINE ---
-const processForensicCommand = (command: string, objects: any[], selectedId: string | null, updateObject: any, addObject: any, removeObject: any) => {
-  const cmd = command.toLowerCase().trim();
-  const selected = selectedId ? objects.find(o => o.id === selectedId) : null;
-  
-  // 1. ADDITION LOGIC
-  if (cmd.includes('ekle') || cmd.includes('koy') || cmd.includes('yerleştir')) {
-    let symbolId = 'ev-human-poseable';
-    let name = 'Yeni Nesne';
-    let w = 60, h = 60;
-
-    if (cmd.includes('manken') || cmd.includes('insan') || cmd.includes('ceset')) {
-      symbolId = 'ev-human-poseable';
-      name = 'Adli Ceset';
-    } else if (cmd.includes('pencere')) {
-      symbolId = 'arch-win';
-      name = 'Pencere';
-      w = 100; h = 15;
-    } else if (cmd.includes('duvar')) {
-      symbolId = 'arch-w1';
-      name = 'Duvar';
-      w = 200; h = 15;
-    } else if (cmd.includes('kapı')) {
-      symbolId = 'arch-d1r';
-      name = 'Kapı';
-      w = 90; h = 15;
-    } else if (cmd.includes('yatak')) {
-      symbolId = 'f-bed-1';
-      name = 'Yatak';
-      w = 120; h = 200;
-    } else if (cmd.includes('masa')) {
-      symbolId = 'f-table-1';
-      name = 'Masa';
-      w = 120; h = 80;
-    }
-
-    addObject({
-      type: 'symbol',
-      symbolId,
-      x: 500,
-      y: 500,
-      width: w,
-      height: h,
-      name,
-      rotation: 0,
-      zHeight: 0
-    });
-    return `${name} sahneye eklendi.`;
-  }
-
-  // 2. DELETION LOGIC
-  if (cmd.includes('sil') || cmd.includes('kaldır') || cmd.includes('yok et')) {
-    if (selected) {
-      removeObject(selected.id);
-      return "Seçili nesne kaldırıldı.";
-    }
-    return "Lütfen silmek istediğiniz nesneyi önce seçin.";
-  }
-
-  // 3. TRANSFORMATION LOGIC (Move, Rotate, Resize)
-  if (selected) {
-    // Movement
-    if (cmd.includes('sağ')) {
-      updateObject(selected.id, { x: selected.rawX + 50 });
-      return "Sağa kaydırıldı.";
-    }
-    if (cmd.includes('sol')) {
-      updateObject(selected.id, { x: selected.rawX - 50 });
-      return "Sola kaydırıldı.";
-    }
-    if (cmd.includes('yukarı') || cmd.includes('ileri')) {
-      updateObject(selected.id, { y: selected.rawY - 50 });
-      return "İleri kaydırıldı.";
-    }
-    if (cmd.includes('aşağı') || cmd.includes('geri')) {
-      updateObject(selected.id, { y: selected.rawY + 50 });
-      return "Geri kaydırıldı.";
-    }
-
-    // Rotation
-    if (cmd.includes('döndür') || cmd.includes('çevir')) {
-      updateObject(selected.id, { rotation: (selected.rotation + 45) % 360 });
-      return "45 derece döndürüldü.";
-    }
-
-    // Mannequin Specific
-    if (selected.isMannequin || selected.symbolId === 'ev-human-poseable') {
-      if (cmd.includes('yüzüstü')) {
-        updateObject(selected.id, { pose: 'prone' });
-        return "Ceset yüzüstü yatırıldı.";
-      }
-      if (cmd.includes('sırtüstü')) {
-        updateObject(selected.id, { pose: 'supine' });
-        return "Ceset sırtüstü yatırıldı.";
-      }
-      if (cmd.includes('ayakta')) {
-        updateObject(selected.id, { pose: 'standing' });
-        return "Ceset ayağa kaldırıldı.";
-      }
-      if (cmd.includes('zemine') || cmd.includes('yere') || cmd.includes('indir')) {
-        updateObject(selected.id, { zHeight: 0 });
-        return "Nesne zemine indirildi.";
-      }
-    }
-  }
-
-  return "Komut anlaşılamadı. 'Masa ekle', 'Sola kaydır', 'Döndür' gibi komutlar kullanabilirsiniz.";
-};
-
-
 const WOUND_IN_SVG = `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iMTAwIiB2aWV3Qm94PSIwIDAgMTAwIDEwMCI+PGNpcmNsZSBjeD0iNTAiIGN5PSI1MCIgcj0iMTUiIGZpbGw9IiMwMDAwMDAiLz48Y2lyY2xlIGN4PSI1MCIgY3k9IjUwIiByPSIxMiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjOTkwMDAwIiBzdHJva2Utd2lkdGg9IjQiLz48L3N2Zz4=`;
-
 const WOUND_OUT_SVG = `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iMTAwIiB2aWV3Qm94PSIwIDAgMTAwIDEwMCI+PHBhdGggZD0iTSA1MCAyMCBMIDYwIDQwIEwgODAgNDUgIEwgNjUgNjAgIEwgNzAgODAgIEwgNTAgNzAgIEwgMzAgODAgIEwgMzUgNjAgIEwgMjAgNDUgIEwgNDAgNDAgWiIgZmlsbD0iIzk5MDAwMCIgc3Ryb2tlPSIjNjYwMDAwIiBzdHJva2Utd2lkdGg9IjIiLz48L3N2Zz4=`;
 
 class SafeComponent extends React.Component<{ children: React.ReactNode; fallback?: React.ReactNode }, { hasError: boolean }> {
@@ -602,17 +496,32 @@ const ModernHandgun3D = ({ position, target }: any) => {
 };
 
 const ShootingTrajectory3D = ({ obj, allWalls, visualObjects, uploadedImages }: any) => {
+  // Use stable static paths for textures — avoids hook-order violations from dynamic store reads
   const isabetIziSrc = uploadedImages?.find((img: any) => {
     if (!img || typeof img.name !== 'string') return false;
     const name = img.name.toLowerCase().replace(/[-_\s]/g, '');
     return name === 'isabetizipng' || name === 'isabetizi';
   })?.src;
-  const glassTexSrc = (isabetIziSrc && typeof isabetIziSrc === 'string' && isabetIziSrc.trim() !== '')
-    ? isabetIziSrc : '/assets/symbols/bullet_hole_1.png';
-  const glassTex = useTexture(glassTexSrc) as THREE.Texture;
-  const wallTex = useTexture('/assets/symbols/bullet_hole_2.png') as THREE.Texture;
+
+  // Stable texture sources — never change between renders to preserve hook order
+  const GLASS_TEX_SRC = '/assets/symbols/bullet_hole_1.png';
+  const WALL_TEX_SRC_DEFAULT = '/assets/symbols/bullet_hole_2.png';
+
+  const glassTex = useTexture(GLASS_TEX_SRC) as THREE.Texture;
+  // Always load static wall texture - hook must always be called with the same arg
+  const wallTex = useTexture(WALL_TEX_SRC_DEFAULT) as THREE.Texture;
   const woundInTex = useTexture(WOUND_IN_SVG) as THREE.Texture;
   const woundOutTex = useTexture(WOUND_OUT_SVG) as THREE.Texture;
+
+  // If an uploaded İsabet İzi image is available, create a Three.js texture from it (no hook)
+  const effectiveWallTex = React.useMemo(() => {
+    if (isabetIziSrc && typeof isabetIziSrc === 'string' && isabetIziSrc.trim() !== '') {
+      const loader = new THREE.TextureLoader();
+      return loader.load(isabetIziSrc);
+    }
+    return wallTex;
+  }, [isabetIziSrc, wallTex]);
+
   
   const { visualSettings } = useStore();
   const wallThicknessFromStore = ((visualSettings as any)?.wallThickness || 10) * SCALE;
@@ -667,20 +576,19 @@ const ShootingTrajectory3D = ({ obj, allWalls, visualObjects, uploadedImages }: 
     const extZHEnd = extEnd.y;
 
     items.forEach((item: any, idx: number) => {
-      const r = (item.rotation || 0) * (Math.PI / 180);
-      const actualRotation = isWindowObj ? -r : r;
-      const cos = Math.cos(-actualRotation);
-      const sin = Math.sin(-actualRotation);
-      
-      const dx1 = extWSx - item.x;
-      const dy1 = extWSz - item.y;
-      const lx1 = dx1 * cos - dy1 * sin;
-      const lz1 = dx1 * sin + dy1 * cos;
-      
-      const dx2 = extWEx - item.x;
-      const dy2 = extWEz - item.y;
-      const lx2 = dx2 * cos - dy2 * sin;
-      const lz2 = dx2 * sin + dy2 * cos;
+        const r = (item.rotation || 0) * (Math.PI / 180);
+        const cos = Math.cos(r);
+        const sin = Math.sin(r);
+        
+        const dx1 = extWSx - item.x;
+        const dy1 = extWSz - item.y;
+        const lx1 = dx1 * cos - dy1 * sin;
+        const lz1 = dx1 * sin + dy1 * cos;
+        
+        const dx2 = extWEx - item.x;
+        const dy2 = extWEz - item.y;
+        const lx2 = dx2 * cos - dy2 * sin;
+        const lz2 = dx2 * sin + dy2 * cos;
       
       // ── PHYSICS-BASED INTERSECTION ─────────────────────────────────────
       // Helper: get traj_param (0 = barrel, distance3D = endpoint) for a world hit
@@ -688,13 +596,18 @@ const ShootingTrajectory3D = ({ obj, allWalls, visualObjects, uploadedImages }: 
         dir3D.x * (hx - wSx) + dir3D.y * (hy - zH) + dir3D.z * (hz - wSz);
 
       const pushHole = (hitX: number, finalHitY: number, hitZ: number, faceDir: number, hitIdx: number) => {
-        const rayOffset = 0.4 * SCALE * faceDir;
+        const wallRotRad = (item.rotation || 0) * Math.PI / 180;
+        const fnX = -Math.sin(wallRotRad);
+        const fnZ = Math.cos(wallRotRad);
+        const normalOffset = 0.4 * SCALE * faceDir;
+        const q = new THREE.Quaternion();
+        q.setFromUnitVectors(new THREE.Vector3(0, 0, 1), new THREE.Vector3(fnX, 0, fnZ).multiplyScalar(faceDir));
         holes.push({
           id: `hole-${isWindowObj ? 'win' : 'wall'}-${idx}-${hitIdx}`,
-          x: hitX + dir3D.x * rayOffset,
-          y: finalHitY + dir3D.y * rayOffset,
-          z: hitZ + dir3D.z * rayOffset,
-          isWindow: isWindowObj, rotY: item.rotation || 0, faceDir
+          x: hitX + fnX * normalOffset,
+          y: finalHitY,
+          z: hitZ + fnZ * normalOffset,
+          isWindow: isWindowObj, rotY: item.rotation || 0, faceDir, quaternion: q,
         });
       };
 
@@ -759,328 +672,12 @@ const ShootingTrajectory3D = ({ obj, allWalls, visualObjects, uploadedImages }: 
     });
   };
 
-  const checkMannequinIntersections = (mannequins: any[]) => {
-    mannequins.forEach((m) => {
-      const mRotY = -(m.rotation || 0) * (Math.PI / 180);
-      const pose = m.pose || 'standing';
-      let poseRot = new THREE.Quaternion();
-      
-      const zHeight = m.zHeight !== undefined ? m.zHeight : 0;
-      const yOff = (m.yOffset || 0) * SCALE;
-      const totalOffset = (zHeight * SCALE) + yOff;
-
-      let posePos = new THREE.Vector3(0, totalOffset + 45 * SCALE, 0); 
-
-      if (pose === 'prone') {
-        poseRot.setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2);
-        posePos.set(0, totalOffset + 10 * SCALE, 0);
-      } else if (pose === 'supine') {
-        poseRot.setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
-        posePos.set(0, totalOffset + 10 * SCALE, 0);
-      } else {
-        // standing
-        posePos.set(0, totalOffset + 80 * SCALE, 0);
-      }
-
-      const worldPos = new THREE.Vector3(m.x, 0, m.y).add(posePos.clone().applyAxisAngle(new THREE.Vector3(0,1,0), mRotY));
-      const worldQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), mRotY).multiply(poseRot);
-      const worldMatrix = new THREE.Matrix4().compose(worldPos, worldQuat, new THREE.Vector3(1,1,1));
-      const invWorldMatrix = worldMatrix.clone().invert();
-
-      const rayStart = new THREE.Vector3(wSx, zH, wSz);
-      const rayEnd = new THREE.Vector3(wEx, targetZH, wEz);
-      
-      const dir3D = new THREE.Vector3().subVectors(rayEnd, rayStart).normalize();
-      const extStart = rayStart.clone().addScaledVector(dir3D, -100 * SCALE);
-      const extEnd = rayEnd.clone().addScaledVector(dir3D, 100 * SCALE);
-
-      const localRayStart = extStart.clone().applyMatrix4(invWorldMatrix);
-      const localRayEnd = extEnd.clone().applyMatrix4(invWorldMatrix);
-
-      // Helper for cylinder intersection in local space
-      const intersectCylinder = (lStart: THREE.Vector3, lEnd: THREE.Vector3, radius: number, minY: number, maxY: number) => {
-        const dx = lEnd.x - lStart.x;
-        const dz = lEnd.z - lStart.z;
-        
-        const A = dx*dx + dz*dz;
-        if (A === 0) return null;
-        
-        const B = 2 * (dx*lStart.x + dz*lStart.z);
-        const C = lStart.x*lStart.x + lStart.z*lStart.z - radius*radius;
-        const det = B*B - 4*A*C;
-        if (det < 0) return null;
-        
-        const t1 = (-B - Math.sqrt(det)) / (2*A);
-        const t2 = (-B + Math.sqrt(det)) / (2*A);
-        
-        const hits: number[] = [];
-        [t1, t2].forEach(t => {
-          if (t >= 0 && t <= 1) {
-            const y = lStart.y + t * (lEnd.y - lStart.y);
-            if (y >= minY && y <= maxY) {
-              hits.push(t);
-            }
-          }
-        });
-        return hits.length > 0 ? hits : null;
-      };
-
-      // Helper for sphere intersection in local space
-      const intersectSphere = (lStart: THREE.Vector3, lEnd: THREE.Vector3, center: THREE.Vector3, radius: number) => {
-        const d = new THREE.Vector3().subVectors(lEnd, lStart);
-        const f = new THREE.Vector3().subVectors(lStart, center);
-        
-        const A = d.lengthSq();
-        if (A === 0) return null;
-        const B = 2 * f.dot(d);
-        const C = f.lengthSq() - radius*radius;
-        const det = B*B - 4*A*C;
-        if (det < 0) return null;
-        
-        const t1 = (-B - Math.sqrt(det)) / (2*A);
-        const t2 = (-B + Math.sqrt(det)) / (2*A);
-        
-        const hits: number[] = [];
-        [t1, t2].forEach(t => {
-          if (t >= 0 && t <= 1) {
-            hits.push(t);
-          }
-        });
-        return hits.length > 0 ? hits : null;
-      };
-
-      const allHits: { t: number; type: 'torso' | 'legs' | 'head' }[] = [];
-
-      // 1. Torso & Arms (15 * SCALE matches the humanoid's actual torso mesh capsule radius)
-      const torsoHits = intersectCylinder(localRayStart, localRayEnd, 15 * SCALE, 0, 70 * SCALE);
-      if (torsoHits) torsoHits.forEach(t => allHits.push({ t, type: 'torso' }));
-
-      // 2. Legs (12 * SCALE matches the bounding boundaries of left/right legs)
-      const legsHits = intersectCylinder(localRayStart, localRayEnd, 12 * SCALE, -80 * SCALE, 0);
-      if (legsHits) legsHits.forEach(t => allHits.push({ t, type: 'legs' }));
-
-      // 3. Head
-      const headHits = intersectSphere(localRayStart, localRayEnd, new THREE.Vector3(0, 80 * SCALE, 0), 10 * SCALE);
-      if (headHits) headHits.forEach(t => allHits.push({ t, type: 'head' }));
-
-
-
-      if (allHits.length > 0) {
-        // Sort by t (ray parameter) to find entry and exit
-        allHits.sort((a, b) => a.t - b.t);
-        const tNear = allHits[0].t;
-        const tFar = allHits[allHits.length - 1].t;
-
-        const isThrough = allHits.length >= 2;
-
-        [tNear, tFar].forEach((t, hitIdx) => {
-          // If only 1 hit, only render the entry wound
-          if (!isThrough && hitIdx === 1) return;
-
-          const localHit = new THREE.Vector3().lerpVectors(localRayStart, localRayEnd, t);
-          const hitType = allHits[hitIdx === 0 ? 0 : allHits.length - 1].type;
-          
-          const worldHit = localHit.clone().applyMatrix4(worldMatrix);
-
-          // Calculate local normal
-          let localNormal = new THREE.Vector3();
-          if (hitType === 'head') {
-            const headCenter = new THREE.Vector3(0, 80 * SCALE, 0);
-            localNormal.subVectors(localHit, headCenter).normalize();
-          } else {
-            localNormal.set(localHit.x, 0, localHit.z).normalize();
-          }
-
-          // Transform normal to world space
-          const worldNormal = localNormal.clone().applyQuaternion(worldQuat).normalize();
-          
-          // Calculate quaternion that aligns Z-axis with worldNormal
-          const impactQuat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), worldNormal);
-
-          // Offset reduced to 0.015 * SCALE (0.75 cm) so decals touch the mannequin body skin perfectly
-          const newHole = {
-            id: `hole-mannequin-${m.id}-${hitIdx}`,
-            x: worldHit.x + worldNormal.x * 0.015 * SCALE,
-            y: worldHit.y + worldNormal.y * 0.015 * SCALE,
-            z: worldHit.z + worldNormal.z * 0.015 * SCALE,
-            isMannequin: true,
-            isEntry: hitIdx === 0,
-            quaternion: impactQuat,
-            size: (hitIdx === 0 ? 12 : 18) * SCALE, // Slightly increased sizes to match visual representation
-            faceDir: 1
-          };
-
-          holes.push(newHole);
-        });
-      }
-    });
-  };
-
-  const isMannequinObject = (o: any) => {
-    if (!o) return false;
-    const sIdLower = o.symbolId?.toLowerCase() || '';
-    const srcLower = (o.src && typeof o.src === 'string') ? o.src.toLowerCase() : '';
-    const nameLower = (o.name && typeof o.name === 'string') ? o.name.toLowerCase() : '';
-    const labelLower = (o.label && typeof o.label === 'string') ? o.label.toLowerCase() : '';
-    const textLower = (o.text && typeof o.text === 'string') ? o.text.toLowerCase() : '';
-
-    const isHumanSrc = srcLower.includes('manken') || 
-                       srcLower.includes('human') || 
-                       srcLower.includes('person') || 
-                       srcLower.includes('p-1') || 
-                       srcLower.includes('p-2') ||
-                       srcLower.includes('standing-man') ||
-                       srcLower.includes('standing-woman') ||
-                       srcLower.includes('body') ||
-                       srcLower.includes('ceset') ||
-                       nameLower.includes('ceset') ||
-                       labelLower.includes('ceset') ||
-                       textLower.includes('ceset') ||
-                       nameLower.includes('manken') ||
-                       labelLower.includes('manken') ||
-                       textLower.includes('manken');
-
-    return sIdLower.startsWith('p-') || isHumanSrc || sIdLower === 'ev-human-poseable' || o.isMannequin;
-  };
-
-  const isFurnitureObject = (o: any) => {
-    if (!o) return false;
-    const sId = (o.symbolId || '').toLowerCase();
-    const name = (o.name || '').toLowerCase();
-    const src = (o.src || '').toLowerCase();
-    
-    if (isWindow(o) || isDoor(o) || sId.startsWith('arch-w1') || sId === 'arch-7' || sId === 'arch-w-square' || sId.includes('shooting') || sId.includes('atış') || sId.includes('ateş') || isMannequinObject(o)) {
-      return false;
-    }
-    
-    return sId.startsWith('f-') || 
-           sId.includes('yatak') || sId.includes('bed') || name.includes('yatak') ||
-           sId.includes('koltuk') || sId.includes('sofa') || name.includes('koltuk') ||
-           sId.includes('masa') || sId.includes('sehpa') || sId.includes('table') ||
-           sId.includes('sandalye') || sId.includes('chair') ||
-           sId.includes('mutfak') || sId.includes('tezgah') || src.includes('kitchen') ||
-           sId.includes('gardırop') || sId.includes('gardrop') || name.includes('gardırop') || name.includes('dolap') ||
-           sId.includes('tv') || sId.includes('televizyon') || sId.includes('ekran') ||
-           sId.startsWith('v-') || sId.includes('car');
-  };
-
-  const checkFurnitureIntersections = (furnitureItems: any[]) => {
-    furnitureItems.forEach((item: any, idx: number) => {
-      const r = (item.rotation || 0) * (Math.PI / 180);
-      const cos = Math.cos(r);
-      const sin = -Math.sin(r);
-      
-      const w = item.width || 0;
-      const d = item.height || 0;
-      const autoH = getStandardHeight(item.symbolId);
-      
-      const isBedOrSofaOrFloor = item.symbolId?.toLowerCase().includes('bed') || 
-                                 item.symbolId?.toLowerCase().includes('yatak') || 
-                                 item.symbolId?.toLowerCase().includes('koltuk') || 
-                                 item.symbolId?.toLowerCase().includes('sofa') ||
-                                 item.symbolId?.toLowerCase().includes('floor') ||
-                                 item.symbolId?.toLowerCase().includes('zemin');
-
-      const zHeight = item.zHeight !== undefined ? item.zHeight : 0;
-      const yOff = (item.yOffset || 0) * SCALE;
-      const totalOffset = isBedOrSofaOrFloor ? (zHeight * SCALE) + yOff : yOff;
-      const h = (isBedOrSofaOrFloor ? autoH : (zHeight > 0 ? zHeight : autoH)) * SCALE;
-      
-      // Transform ray segment to local coordinates
-      const lx1 = (wSx - item.x) * cos - (wSz - item.y) * sin;
-      const lz1 = (wSx - item.x) * sin + (wSz - item.y) * cos;
-      const ly1 = zH - totalOffset;
-      
-      const lx2 = (wEx - item.x) * cos - (wEz - item.y) * sin;
-      const lz2 = (wEx - item.x) * sin + (wEz - item.y) * cos;
-      const ly2 = targetZH - totalOffset;
-      
-      // Liang-Barsky / Slab method for Segment-OBB intersection
-      const dx = lx2 - lx1;
-      const dy = ly2 - ly1;
-      const dz = lz2 - lz1;
-      
-      let tMin = 0;
-      let tMax = 1;
-      
-      const bounds = [
-        { min: -w / 2, max: w / 2, p: -dx, q: lx1 - (-w / 2) },
-        { min: -w / 2, max: w / 2, p: dx, q: w / 2 - lx1 },
-        { min: 0, max: h, p: -dy, q: ly1 - 0 },
-        { min: 0, max: h, p: dy, q: h - ly1 },
-        { min: -d / 2, max: d / 2, p: -dz, q: lz1 - (-d / 2) },
-        { min: -d / 2, max: d / 2, p: dz, q: d / 2 - lz1 }
-      ];
-      
-      let possible = true;
-      for (let i = 0; i < 6; i++) {
-        const { p, q } = bounds[i];
-        if (p === 0) {
-          if (q < 0) { possible = false; break; }
-        } else {
-          const t = q / p;
-          if (p < 0) {
-            if (t > tMin) tMin = t;
-          } else {
-            if (t < tMax) tMax = t;
-          }
-        }
-      }
-      
-      if (possible && tMin <= tMax && tMin >= 0 && tMin <= 1) {
-        const hitT = tMin;
-        const hitX = wSx + hitT * (wEx - wSx);
-        const hitY = zH + hitT * (targetZH - zH);
-        const hitZ = wSz + hitT * (wEz - wSz);
-        
-        let faceDir = 1;
-        const localHitZ = lz1 + hitT * dz;
-        
-        if (Math.abs(localHitZ + d / 2) < 0.5 * SCALE) {
-          faceDir = -1;
-        }
-        
-        const tp = direction.x * (hitX - wSx) + direction.y * (hitY - zH) + direction.z * (hitZ - wSz);
-        if (tp >= 0 && tp <= distance3D) {
-          const rayOffset = 0.4 * SCALE * faceDir;
-          holes.push({
-            id: `hole-furniture-${item.id}-${idx}`,
-            x: hitX + direction.x * rayOffset,
-            y: hitY + direction.y * rayOffset,
-            z: hitZ + direction.z * rayOffset,
-            isWindow: false,
-            isMannequin: false,
-            isFurniture: true,
-            rotY: item.rotation || 0,
-            faceDir
-          });
-        }
-      }
-    });
-  };
-
-  if (allWalls) checkIntersections(allWalls, false);
-  if (visualObjects) {
-    checkIntersections(visualObjects.filter((o: any) => isWindow(o)), true);
-    checkMannequinIntersections(visualObjects.filter(isMannequinObject));
-    checkFurnitureIntersections(visualObjects.filter(isFurnitureObject));
-  }
+if (allWalls) checkIntersections(allWalls, false);
 
   // ── DEDUPLICATION: camda hem cam hem duvar izi oluşmasını önle ──────────
-  // Pencere isabet izine yakın (30 SCALE birim) olan duvar izlerini sil
-  const windowHoles = holes.filter((h: any) => h.isWindow);
-  const dedupedHoles = holes.filter((h: any) => {
-    if (!h.isWindow && !h.isMannequin) {
-      const DEDUP_THRESHOLD = 30 * SCALE;
-      return !windowHoles.some((wh: any) => {
-        const dx = h.x - wh.x;
-        const dy = h.y - wh.y;
-        const dz = h.z - wh.z;
-        return Math.sqrt(dx * dx + dy * dy + dz * dz) < DEDUP_THRESHOLD;
-      });
-    }
-    return true;
-  });
+  // Cam izi 2. passtan geldiği için bu deduplication daha sonra yeniden uygulanacak.
+  // İlk geçişte tüm duvar izlerini al (henüz cam izi eklenmedi)
+  const dedupedHoles: any[] = holes.filter(() => true); // tüm 1.pass izleri
 
   // ── TRAJECTORY LINE: silah namlu ucundan çıkarak tüm isabet izlerinin merkezinden geçer ──
   const rayDir3D = direction.clone(); // already normalized above
@@ -1097,55 +694,371 @@ const ShootingTrajectory3D = ({ obj, allWalls, visualObjects, uploadedImages }: 
     if (t > maxT) maxT = t;
   });
 
-  // 2nd pass: project visualObject positions onto the ray and create guaranteed-on-ray holes
-  // This ensures every auto-created impact mark aligns with the trajectory line
+  // 2nd pass: glass marks projected exactly onto ray; mannequin wounds at correct body height
+  const addedWindowObjectIds = new Set<string>();
+  // Collect mannequin wounds separately so we can order entry/exit by t
+  const mankWounds: { t: number; x: number; y: number; z: number; isEntry: boolean; quaternion: any }[] = [];
+
   if (visualObjects) {
     visualObjects.forEach((h: any) => {
       const sId = (h.symbolId || '').toLowerCase();
-      if (sId === 'tr-bullet-glass' || sId === 'tr-bullet-wall') {
-        const hasParent = !!h.parentId;
-        if (!hasParent) return; // only auto-created marks, skip user-placed ones
+      const isGlassMark = sId === 'tr-bullet-glass';
+      const isWallMark  = sId === 'tr-bullet-wall';
+      const isMankIn    = sId === 'in-bullet-in';
+      const isMankOut   = sId === 'in-bullet-out';
+
+      const hasParent = !!h.parentId;
+      if (!hasParent && !isGlassMark && !isWallMark && !isMankIn && !isMankOut) return;
+
+      // ── GLASS ────────────────────────────────────────────────────────────
+      if (isGlassMark) {
+        if (addedWindowObjectIds.has(h.id)) return;
+        addedWindowObjectIds.add(h.id);
+
+        // Calculate exact intersection of the ray with the window's vertical plane
+        const vRotRad = -(h.rotation || 0) * Math.PI / 180;
+        const faceNormal = new THREE.Vector3(0, 0, 1).applyAxisAngle(new THREE.Vector3(0, 1, 0), vRotRad);
         
-        const zh = (h.zHeight || 120) * SCALE;
-        const hv = new THREE.Vector3(h.x - gunBarrelOrigin.x, zh - gunBarrelOrigin.y, h.y - gunBarrelOrigin.z);
-        const t = hv.dot(rayDir3D);
+        const denom = rayDir3D.dot(faceNormal);
+        let t = 0;
+        if (Math.abs(denom) > 0.0001) {
+          // A point on the window vertical plane (Y is free, we use gunBarrelOrigin.y for simple XZ plane math)
+          const winPlanePoint = new THREE.Vector3(h.x, gunBarrelOrigin.y, h.y);
+          t = winPlanePoint.clone().sub(gunBarrelOrigin).dot(faceNormal) / denom;
+        } else {
+          // Fallback to closest projection on the ray if parallel
+          const markPos = new THREE.Vector3(h.x, (h.zHeight !== undefined ? h.zHeight : 120) * SCALE, h.y);
+          t = markPos.clone().sub(gunBarrelOrigin).dot(rayDir3D);
+        }
+
+        // Only place where ray actually goes
+        if (t < -10 * SCALE || t > distance3D + 10 * SCALE) return;
+
+        // Exact point on the ray at that intersection depth
+        const hitOnRay = gunBarrelOrigin.clone().addScaledVector(rayDir3D, t);
+
+        // Calculate local X to see if it's on the right (openable) glass
+        const dx = hitOnRay.x - h.x;
+        const dz = hitOnRay.z - h.y;
+        const localX = dx * Math.cos(-vRotRad) - dz * Math.sin(-vRotRad);
+
+        let finalX = hitOnRay.x;
+        let finalZ = hitOnRay.z;
+        let rotY = h.rotation || 0;
+        let finalFaceNormal = faceNormal.clone();
+
+        if (localX > 0 && h.customData?.isOpen) {
+           const width = (h.width || 100) * SCALE;
+           const frameThickness = 3 * SCALE;
+           const pivotX = width / 2 - frameThickness;
+           const openAngle = -Math.PI / 3;
+           
+           const relX = localX - pivotX;
+           const relZ = 0; // The glass is at local Z=0
+           
+           const rotRelX = relX * Math.cos(openAngle) - relZ * Math.sin(openAngle);
+           const rotRelZ = relX * Math.sin(openAngle) + relZ * Math.cos(openAngle);
+           
+           const newLocalX = rotRelX + pivotX;
+           const newLocalZ = rotRelZ;
+           
+           finalX = h.x + newLocalX * Math.cos(vRotRad) - newLocalZ * Math.sin(vRotRad);
+           finalZ = h.y + newLocalX * Math.sin(vRotRad) + newLocalZ * Math.cos(vRotRad);
+           
+           rotY += (openAngle * 180 / Math.PI);
+           finalFaceNormal.applyAxisAngle(new THREE.Vector3(0, 1, 0), openAngle);
+        }
+
+        // Small offset along the face normal to avoid z-fighting with the window glass mesh
+        const faceDir = finalFaceNormal.dot(rayDir3D) > 0 ? 1 : -1;
+        const normalOffset = 0.3 * SCALE;
+
         if (t < minT) minT = t;
         if (t > maxT) maxT = t;
-        
-        // Project the visualObject position onto the ray for a guaranteed-on-ray hole
+
+        // Deduplicate spatially
+        const isNear = dedupedHoles.some((dh: any) => {
+          if (!dh.isWindow) return false;
+          return hitOnRay.distanceTo(new THREE.Vector3(dh.x, dh.y, dh.z)) < 5 * SCALE;
+        });
+        if (isNear) return;
+
+        dedupedHoles.push({
+          id: `proj-glass-${h.id}`,
+          x: finalX + finalFaceNormal.x * normalOffset * faceDir,
+          y: hitOnRay.y + finalFaceNormal.y * normalOffset * faceDir,
+          z: finalZ + finalFaceNormal.z * normalOffset * faceDir,
+          isWindow: true,
+          isMannequin: false,
+          isFurniture: false,
+          rotY,
+          faceDir,
+          quaternion: null
+        });
+        return;
+      }
+
+      // ── WALL MARK ─────────────────────────────────────────────────────────
+      if (isWallMark) {
+        const zh = (h.zHeight !== undefined ? h.zHeight : 120) * SCALE;
+        const hv = new THREE.Vector3(h.x - gunBarrelOrigin.x, zh - gunBarrelOrigin.y, h.y - gunBarrelOrigin.z);
+        const t = hv.dot(rayDir3D);
+        if (t < 0 || t > distance3D + 10 * SCALE) return;
+
         const projX = gunBarrelOrigin.x + t * rayDir3D.x;
         const projY = gunBarrelOrigin.y + t * rayDir3D.y;
         const projZ = gunBarrelOrigin.z + t * rayDir3D.z;
-        
-        // Determine face direction from visualObject rotation vs ray direction
-        const vRotRad = -(h.rotation || 0) * Math.PI / 180;
-        const faceNormal = new THREE.Vector3(0, 0, 1).applyAxisAngle(new THREE.Vector3(0, 1, 0), vRotRad);
-        const faceDir = faceNormal.dot(rayDir3D) > 0 ? 1 : -1;
-        
-        // Check if this projected position is close to an existing deduped hole
-        const isNearExisting = dedupedHoles.some((dh: any) => {
-          const dx = dh.x - projX;
-          const dy = dh.y - projY;
-          const dz = dh.z - projZ;
-          return Math.sqrt(dx*dx + dy*dy + dz*dz) < 5 * SCALE;
-        });
-        
-        if (!isNearExisting && t >= 0) {
-          dedupedHoles.push({
-            id: `proj-${sId}-${h.id}`,
-            x: projX,
-            y: projY,
-            z: projZ,
-            isWindow: sId === 'tr-bullet-glass',
-            isMannequin: false,
-            isFurniture: sId === 'tr-bullet-wall' && h.isFurniture,
-            rotY: h.rotation || 0,
-            faceDir
-          });
+
+        // Only create hole if projected point lies on a wall surface
+        let hitWall: any = null;
+        if (allWalls) {
+          for (const wall of allWalls) {
+            const wr = (wall.rotation || 0) * Math.PI / 180;
+            const cos = Math.cos(wr);
+            const sin = Math.sin(wr);
+            const dx = projX - wall.x;
+            const dz = projZ - wall.y;
+            const lx = dx * cos - dz * sin;
+            const lz = dx * sin + dz * cos;
+            const halfW = (wall.width || 100 * SCALE) / 2;
+            const halfT = wallThicknessFromStore / 2;
+            if (Math.abs(lx) > halfW) continue;
+            if (Math.abs(lz) > halfT + 3 * SCALE) continue;
+            const baseY = (wall.yOffset || 0) * SCALE;
+            const wallH = (wall.h || 250) * SCALE;
+            if (projY < baseY || projY > baseY + wallH) continue;
+            hitWall = wall;
+            break;
+          }
         }
+        if (!hitWall) return;
+
+        const wallRotRad = -(hitWall.rotation || 0) * Math.PI / 180;
+        const faceNormal = new THREE.Vector3(0, 0, 1).applyAxisAngle(new THREE.Vector3(0, 1, 0), wallRotRad);
+        const faceDir = faceNormal.dot(rayDir3D) > 0 ? 1 : -1;
+
+        const normalOffset = (wallThicknessFromStore / 2 + 0.2 * SCALE) * faceDir;
+        const oX = projX + faceNormal.x * normalOffset;
+        const oY = projY + faceNormal.y * normalOffset;
+        const oZ = projZ + faceNormal.z * normalOffset;
+
+        const isNear = dedupedHoles.some((dh: any) => {
+          const ddx = dh.x - oX, ddy = dh.y - oY, ddz = dh.z - oZ;
+          return Math.sqrt(ddx*ddx + ddy*ddy + ddz*ddz) < 3 * SCALE;
+        });
+        if (isNear) return;
+
+        const q = new THREE.Quaternion();
+        q.setFromUnitVectors(new THREE.Vector3(0, 0, 1), faceNormal.clone().multiplyScalar(faceDir));
+
+        dedupedHoles.push({
+          id: `proj-wall-${h.id}`,
+          x: oX, y: oY, z: oZ,
+          isWindow: false, isMannequin: false, isFurniture: false,
+          rotY: hitWall.rotation || 0, faceDir, quaternion: q,
+        });
+        return;
+      }
+
+      // ── MANNEQUIN WOUNDS ──────────────────────────────────────────────────
+      if (isMankIn || isMankOut) {
+        const torsoH = h.zHeight !== undefined && h.zHeight > 0
+          ? h.zHeight * SCALE
+          : 80 * SCALE;
+
+        const hv = new THREE.Vector3(
+          h.x - gunBarrelOrigin.x,
+          torsoH - gunBarrelOrigin.y,
+          h.y - gunBarrelOrigin.z
+        );
+        const t = hv.dot(rayDir3D);
+        if (t < -10 * SCALE || t > distance3D + 10 * SCALE) return;
+
+        const projX = gunBarrelOrigin.x + t * rayDir3D.x;
+        const projY = gunBarrelOrigin.y + t * rayDir3D.y;
+        const projZ = gunBarrelOrigin.z + t * rayDir3D.z;
+
+        mankWounds.push({ t, x: projX, y: projY, z: projZ, isEntry: isMankIn, quaternion: null });
+      }
+    });
+
+    // Auto-detect mannequin body intersection along the trajectory
+    visualObjects.forEach((h: any) => {
+      const sId = (h.symbolId || '').toLowerCase();
+      const isHumanSrc = h.src && typeof h.src === 'string' && (h.src.includes('manken') || h.src.includes('human') || h.src.includes('person') || h.src.includes('p-1') || h.src.includes('p-2'));
+      const isMannequin = sId.startsWith('p-') || isHumanSrc || sId === 'ev-human-poseable' || h.isMannequin;
+      if (!isMannequin) return;
+
+      const mx = h.x, mz = h.y;
+      const isLying = (h.pose || 'standing') === 'prone' || h.pose === 'supine';
+      const bodyCenterY = isLying ? 10 * SCALE : 80 * SCALE;
+      const bodyRadius = isLying ? 30 * SCALE : 20 * SCALE;
+      const bodyHalfH = isLying ? 10 * SCALE : 45 * SCALE;
+
+      const vx = gunBarrelOrigin.x - mx, vz = gunBarrelOrigin.z - mz;
+      const rdx = rayDir3D.x, rdz = rayDir3D.z;
+      const a = rdx*rdx + rdz*rdz;
+      if (a < 1e-10) return;
+      const halfB = vx*rdx + vz*rdz;
+      const c = vx*vx + vz*vz - bodyRadius*bodyRadius;
+      const disc = halfB*halfB - a*c;
+      if (disc < 0) return;
+      const sqrtDisc = Math.sqrt(disc);
+      [(-halfB - sqrtDisc)/a, (-halfB + sqrtDisc)/a].forEach((t, hitIdx) => {
+        if (t < -10 * SCALE || t > distance3D + 10 * SCALE) return;
+        const hitY = gunBarrelOrigin.y + t * rayDir3D.y;
+        if (hitY < bodyCenterY - bodyHalfH || hitY > bodyCenterY + bodyHalfH) return;
+        const projX = gunBarrelOrigin.x + t * rayDir3D.x;
+        const projY = hitY;
+        const projZ = gunBarrelOrigin.z + t * rayDir3D.z;
+        const isEntry = hitIdx === 0;
+        // dedupe against manually-placed wounds
+        const isNear = mankWounds.some((w: any) => {
+          const ddx = w.x - projX, ddy = w.y - projY, ddz = w.z - projZ;
+          return Math.sqrt(ddx*ddx + ddy*ddy + ddz*ddz) < 8 * SCALE;
+        });
+        if (isNear) return;
+        mankWounds.push({
+          t, x: projX, y: projY, z: projZ, isEntry, quaternion: null,
+        });
+      });
+    });
+  }
+
+  // Sort mannequin wounds by t (ascending = closer to gun barrel first)
+  mankWounds.sort((a, b) => a.t - b.t);
+  mankWounds.forEach((w, idx) => {
+    const isEntry = w.isEntry;
+
+    const q = new THREE.Quaternion();
+    const sourceVec = new THREE.Vector3(0, 0, 1);
+    const targetDir = isEntry ? rayDir3D.clone().negate() : rayDir3D.clone();
+    
+    // Safe quaternion generation to prevent NaN when vectors are colinear or opposite
+    const dot = sourceVec.dot(targetDir);
+    if (dot < -0.9999) {
+      q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI);
+    } else if (dot > 0.9999) {
+      q.identity();
+    } else {
+      q.setFromUnitVectors(sourceVec, targetDir);
+    }
+
+    if (w.t < minT) minT = w.t;
+    if (w.t > maxT) maxT = w.t;
+
+    // Offset wound slightly along its normal direction so the plane sits
+    // in front of the mannequin body surface instead of being hidden
+    // inside the capsule by depth testing.
+    const offsetAmt = 0.5 * SCALE;
+    const woundPos = {
+      x: w.x + targetDir.x * offsetAmt,
+      y: w.y + targetDir.y * offsetAmt,
+      z: w.z + targetDir.z * offsetAmt,
+    };
+
+    dedupedHoles.push({
+      id: `mank-${isEntry ? 'in' : 'out'}-${idx}`,
+      x: woundPos.x, y: woundPos.y, z: woundPos.z,
+      isWindow: false,
+      isMannequin: true,
+      isEntry,
+      isFurniture: false,
+      rotY: 0,
+      faceDir: isEntry ? -1 : 1,
+      size: 15 * SCALE,
+      quaternion: q
+    });
+  });
+
+
+  // Fallback projected holes for wall/furniture objects near the ray path
+  // (when checkIntersections/checkFurnitureIntersections miss due to rotation math)
+  if (visualObjects) {
+    visualObjects.forEach((h: any) => {
+      const sId = (h.symbolId || '').toLowerCase();
+      const name = (h.name || '').toLowerCase();
+      const src = (h.src || '').toLowerCase();
+      
+      if (sId.includes('shooting') || sId.includes('atış') || sId.includes('ateş')) return;
+      if (!h.parentId && (sId === 'tr-bullet-glass' || sId === 'tr-bullet-wall')) return;
+      
+      const isFurniture = sId.startsWith('f-') || sId.includes('yatak') || sId.includes('bed') || 
+        name.includes('yatak') || sId.includes('koltuk') || sId.includes('sofa') ||
+        name.includes('koltuk') || sId.includes('masa') || sId.includes('sehpa') ||
+        sId.includes('table') || sId.includes('sandalye') || sId.includes('chair') ||
+        sId.includes('mutfak') || sId.includes('tezgah') || src.includes('kitchen') ||
+        sId.includes('gardırop') || sId.includes('gardrop') || name.includes('gardırop') ||
+        name.includes('dolap') || sId.includes('tv') || sId.includes('televizyon') ||
+        sId.includes('ekran') || sId.startsWith('v-') || sId.includes('car');
+      
+      if (!isFurniture) return;
+      
+      const objZH = (h.zHeight || 0) * SCALE;
+      const hv = new THREE.Vector3(h.x - gunBarrelOrigin.x, objZH - gunBarrelOrigin.y, h.y - gunBarrelOrigin.z);
+      const t = hv.dot(rayDir3D);
+      if (t < 0) return;
+      
+      const projX = gunBarrelOrigin.x + t * rayDir3D.x;
+      const projY = gunBarrelOrigin.y + t * rayDir3D.y;
+      const projZ = gunBarrelOrigin.z + t * rayDir3D.z;
+      
+      const r = (h.rotation || 0) * (Math.PI / 180);
+      const cos = Math.cos(r);
+      const sin = Math.sin(r);
+      const dx = projX - h.x;
+      const dz = projZ - h.y;
+      const lx = dx * cos - dz * sin;
+      const lz = dx * sin + dz * cos;
+      
+      const halfW = (h.width || 50 * SCALE) / 2;
+      const halfD = (h.height || 50 * SCALE) / 2;
+      if (Math.abs(lx) > halfW || Math.abs(lz) > halfD) return;
+      
+      const isNearExisting = dedupedHoles.some((dh: any) => {
+        const ddx = dh.x - projX, ddy = dh.y - projY, ddz = dh.z - projZ;
+        return Math.sqrt(ddx*ddx + ddy*ddy + ddz*ddz) < 8 * SCALE;
+      });
+      
+      if (!isNearExisting) {
+        const q = new THREE.Quaternion();
+        q.setFromUnitVectors(new THREE.Vector3(0, 0, 1), new THREE.Vector3(-Math.sin(r), 0, Math.cos(r)).multiplyScalar(1));
+        dedupedHoles.push({
+          id: `fallback-${h.id}`,
+          x: projX, y: projY, z: projZ,
+          isWindow: false,
+          isMannequin: false,
+          isFurniture: isFurniture,
+          rotY: h.rotation || 0,
+          faceDir: 1,
+          quaternion: q,
+        });
       }
     });
   }
+
+  // ── FINAL GLASS DEDUP: cam izlerine yakın tüm duvar izlerini sil ──────────
+  // 2. passtan sonra cam izi eklendi — şimdi glass bölgesindeki wall/furniture izleri temizlenir
+  const finalGlassHoles = dedupedHoles.filter((h: any) => h.isWindow);
+  const GLASS_DEDUP_DIST = 60 * SCALE;
+  const finalHoles = dedupedHoles.filter((h: any) => {
+    if (h.isWindow || h.isMannequin) return true; // cam ve yara izleri korunur
+    // cam izine yakın duvar/fürnity izlerini at
+    return !finalGlassHoles.some((gh: any) => {
+      const dx = h.x - gh.x;
+      const dy = h.y - gh.y;
+      const dz = h.z - gh.z;
+      return Math.sqrt(dx*dx + dy*dy + dz*dz) < GLASS_DEDUP_DIST;
+    });
+  });
+
+  // Re-run the maxT update loop to include all fallback and 2nd pass holes
+  finalHoles.forEach((hole: any) => {
+    const hv = new THREE.Vector3(hole.x - gunBarrelOrigin.x, hole.y - gunBarrelOrigin.y, hole.z - gunBarrelOrigin.z);
+    const t = hv.dot(rayDir3D);
+    if (t < minT) minT = t;
+    if (t > maxT) maxT = t;
+  });
 
   // Line starts at gun barrel (minT clamped to 0) and goes past the last impact
   // Allow a small overshoot beyond the last impact mark (10 * SCALE ≈ 5.5 cm)
@@ -1178,8 +1091,8 @@ const ShootingTrajectory3D = ({ obj, allWalls, visualObjects, uploadedImages }: 
         </mesh>
       )}
       
-      {/* Bullet Holes — deduplicated (cam üzerinde sadece cam izi) */}
-      {dedupedHoles.map((hole: any) => {
+      {/* Bullet Holes — cam bölgesinde sadece cam izi gösterilir */}
+      {finalHoles.map((hole: any) => {
         
         if (hole.isMannequin) {
            const woundSize = hole.size || (15 * SCALE);
@@ -1210,9 +1123,7 @@ const ShootingTrajectory3D = ({ obj, allWalls, visualObjects, uploadedImages }: 
            );
         }
 
-        const baseRot = (hole.isWindow || hole.isFurniture)
-          ? -(hole.rotY || 0) * Math.PI / 180
-          : (hole.rotY || 0) * Math.PI / 180;
+        const baseRot = -(hole.rotY || 0) * Math.PI / 180;
         const localRot = baseRot + (hole.faceDir === -1 ? Math.PI : 0);
         
         if (hole.isWindow) {
@@ -1233,10 +1144,20 @@ const ShootingTrajectory3D = ({ obj, allWalls, visualObjects, uploadedImages }: 
            );
         } else {
            return (
-             <mesh key={hole.id} position={[hole.x, hole.y, hole.z]} rotation={[0, localRot, 0]} renderOrder={50}>
+             <mesh 
+               key={hole.id} 
+               position={[hole.x, hole.y, hole.z]} 
+               {...(hole.quaternion ? { quaternion: hole.quaternion } : { rotation: [0, localRot, 0] as any })}
+               onUpdate={(self) => {
+                 if (hole.quaternion) {
+                   self.quaternion.copy(hole.quaternion);
+                 }
+               }}
+               renderOrder={50}
+             >
                <planeGeometry args={[35 * SCALE, 35 * SCALE]} />
                <meshBasicMaterial 
-                 map={wallTex} 
+                 map={effectiveWallTex} 
                  transparent 
                  alphaTest={0.005} 
                  side={THREE.DoubleSide} 
@@ -1313,7 +1234,9 @@ const Symbol3D = ({ obj, wallThickness, realObj, allWalls, visualObjects, upload
   const isTV = sIdLower.includes('tv') || sIdLower.includes('televizyon') || sIdLower.includes('ekran');
   
   // Flat floor items (roads, carpets, tracks, fingerprints, ruler, etc.)
-  const isFloorItem = sIdLower.startsWith('f-9') || sIdLower.startsWith('f-10') || sIdLower.startsWith('f-11') || sIdLower.includes('halı') || sIdLower.includes('carpet') || sIdLower.startsWith('st-1') || sIdLower.startsWith('st-2') || sIdLower.startsWith('st-3') || sIdLower.startsWith('st-4') || sIdLower.startsWith('tr-2') || sIdLower.startsWith('tr-3') || sIdLower.includes('iz') || sIdLower.includes('rögar') || sIdLower.includes('zebra') || sIdLower.includes('gecit') || sIdLower.includes('geçit');
+  const isFloorItem = sIdLower.startsWith('f-9') || sIdLower.startsWith('f-10') || sIdLower.startsWith('f-11') || sIdLower.includes('halı') || sIdLower.includes('carpet') || sIdLower.startsWith('st-1') || sIdLower.startsWith('st-2') || sIdLower.startsWith('st-3') || sIdLower.startsWith('st-4') || sIdLower.startsWith('st-5') || sIdLower.startsWith('st-6') || sIdLower.startsWith('st-7') || sIdLower.startsWith('st-8') || sIdLower.startsWith('st-9') || sIdLower === 'st-drain' || sIdLower.startsWith('tr-2') || sIdLower.startsWith('tr-3') || sIdLower.includes('iz') || sIdLower.includes('rögar') || sIdLower.includes('zebra') || sIdLower.includes('gecit') || sIdLower.includes('geçit');
+  // Buildings rendered as 3D extruded boxes
+  const isBuilding = sIdLower.startsWith('arch-b') || sIdLower === 'arch-house';
 
   // Interactive 3D Objects
   const isVehicle = sIdLower.startsWith('v-') || sIdLower.includes('car') || sIdLower.includes('sedan') || sIdLower.includes('suv') || sIdLower.includes('truck') || sIdLower.includes('bus') || sIdLower.includes('motor') || sIdLower.includes('police') || sIdLower.includes('ambulance') || sIdLower.includes('itfaiye') || sIdLower.includes('kepçe') || nameLower.includes('araç') || nameLower.includes('otomobil') || nameLower.includes('kamyon') || nameLower.includes('motosiklet') || nameLower.includes('otobüs') || nameLower.includes('ambulans') || nameLower.includes('polis') || nameLower.includes('itfaiye') || nameLower.includes('kepçe') || nameLower.includes('traktör') || nameLower.includes('çekici') || nameLower.includes('araba') || nameLower.includes('taksi') || nameLower.includes('minibüs');
@@ -1344,7 +1267,7 @@ const Symbol3D = ({ obj, wallThickness, realObj, allWalls, visualObjects, upload
   if (isWindow(effSymbolId)) {
     const rawZHeight = actualObj.zHeight || 120;
     const rawSillH = Math.max(0, (actualObj.sillH || (125 - rawZHeight / 2)));
-    return <Window3D x={x} y={y} width={width} h={rawZHeight * SCALE} rad={rad} sillH={rawSillH * SCALE} thickness={currentWallThickness} zOffset={yOff} />;
+    return <Window3D obj={actualObj} updateObject={obj.updateObject} x={x} y={y} width={width} h={rawZHeight * SCALE} rad={rad} sillH={rawSillH * SCALE} thickness={currentWallThickness} zOffset={yOff} />;
   }
   if (isTraj) {
     return (
@@ -1363,7 +1286,7 @@ const Symbol3D = ({ obj, wallThickness, realObj, allWalls, visualObjects, upload
 
   let textureSrcRaw = (src && typeof src === 'string' && !src.startsWith('data:text')) ? src : "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
   
-  if (sIdLower === 'tr-bullet-glass' && isabetIziImg?.src && typeof isabetIziImg.src === 'string' && isabetIziImg.src.trim() !== '') {
+  if (sIdLower === 'tr-bullet-wall' && isabetIziImg?.src && typeof isabetIziImg.src === 'string' && isabetIziImg.src.trim() !== '') {
     textureSrcRaw = isabetIziImg.src;
   }
 
@@ -1372,13 +1295,19 @@ const Symbol3D = ({ obj, wallThickness, realObj, allWalls, visualObjects, upload
 
   // 6. Volumetric Rendering
   if (isImpactMark) {
+    const allSymbols = useStore.getState().allSymbols || [];
+    const flatSymbols = allSymbols.flatMap((c: any) => c.symbols || []);
+    const glassDef = flatSymbols.find((s: any) => s.id === 'tr-bullet-glass');
+    const wallDef = flatSymbols.find((s: any) => s.id === 'tr-bullet-wall');
+
     const pngSrc = sIdLower === 'tr-bullet-wall'
-      ? '/assets/symbols/bullet_hole_2.png'
-      : '/assets/symbols/bullet_hole_1.png';
+      ? ((isabetIziImg?.src && typeof isabetIziImg.src === 'string' && isabetIziImg.src.trim() !== '') ? isabetIziImg.src : (wallDef?.src || '/assets/symbols/bullet_hole_2.png'))
+      : (glassDef?.src || '/assets/symbols/bullet_hole_1.png');
     return (
       <GlassImpact3D
         textureSrc={pngSrc}
         zHeight={zHeight || 120}
+        wallThickness={currentWallThickness}
       />
     );
   }
@@ -1431,11 +1360,13 @@ const Symbol3D = ({ obj, wallThickness, realObj, allWalls, visualObjects, upload
   if (isTrafficSign) return <TrafficSign3D x={posX} y={posZ} width={finalW} height={finalH} rad={rad} type={sIdLower} textureSrc={textureSrc} zOffset={yOff} />;
 
   if (isFloorItem) return <FloorItem3D x={posX} y={posZ} width={finalW} height={finalH} rad={rad} textureSrc={textureSrc} zOffset={totalOffset} />;
+  if (isBuilding) {
+    const floors = sIdLower === 'arch-house' ? 1 : parseInt(sIdLower.replace('arch-b', ''), 10) || 1;
+    return <Building3D x={posX} y={posZ} width={finalW} height={finalH} rad={rad} floors={floors} textureSrc={textureSrc} />;
+  }
 
   return <SymbolWithTexture x={posX} y={posZ} width={finalW} height={finalH} rad={rad} fill={fill} textureSrc={textureSrc} zHeight={(actualObj.zHeight || autoHeight) * SCALE} isVertical={actualObj.isVertical} isWound={isWound} zOffset={yOff} />;
 };
-
-
 
 const Sofa3D = ({ width, height, rad, x, y, zOffset }: any) => {
   const w = width; // already scaled
@@ -2104,25 +2035,6 @@ const Wardrobe3D = ({ x, y, width, height, rad, doors, zOffset }: any) => {
     setOpenDoors(prev => prev.map((v, idx) => idx === i ? !v : v));
   };
 
-  const handleFrontClick = (e: any) => {
-    e.stopPropagation();
-    e.nativeEvent?.stopPropagation?.();
-    const p = e.point;
-    if (!p) return;
-    // Transform world hit point to local X of this group (rotated by rad)
-    const dx = p.x - x;
-    const dz = p.z - y;
-    const cos = Math.cos(-rad);
-    const sin = Math.sin(-rad);
-    const localX = dx * cos - dz * sin;
-    const doorStartX = -w / 2 + frameT;
-    const relX = localX - doorStartX;
-    const idx = Math.floor(relX / doorW);
-    if (idx >= 0 && idx < numDoors) {
-      toggleDoor(idx, e);
-    }
-  };
-
   return (
     <group position={[x, zOffset || 0, y]} rotation={[0, rad, 0]}>
       {/* Back panel */}
@@ -2162,15 +2074,6 @@ const Wardrobe3D = ({ x, y, width, height, rad, doors, zOffset }: any) => {
         <cylinderGeometry args={[0.8 * SCALE, 0.8 * SCALE, w - frameT * 2, 8]} />
         <meshStandardMaterial color="#888" metalness={0.9} roughness={0.1} />
       </mesh>
-      {/* Invisible click plane across all doors — unified hit detection */}
-      <mesh 
-        onClick={handleFrontClick}
-        position={[0, h / 2, d / 2]}
-        renderOrder={-1}
-      >
-        <planeGeometry args={[w - frameT * 2, h - frameT * 2]} />
-        <meshBasicMaterial transparent opacity={0} side={THREE.DoubleSide} depthWrite={false} />
-      </mesh>
       {/* Doors — swinging outward */}
       {openDoors.map((open, i) => {
         const isLeftHinge = i % 2 === 0;
@@ -2181,7 +2084,7 @@ const Wardrobe3D = ({ x, y, width, height, rad, doors, zOffset }: any) => {
         return (
           <group key={i} position={[pivotX, h / 2, d / 2]}>
             <group rotation={[0, open ? swingDir * Math.PI * 0.5 : 0, 0]}>
-              <mesh position={[panelOffsetX, 0, 0.8 * SCALE]} castShadow>
+              <mesh position={[panelOffsetX, 0, 0.8 * SCALE]} castShadow onClick={(e) => toggleDoor(i, e)}>
                 <boxGeometry args={[doorW - 0.3 * SCALE, h - frameT * 2 - 0.5 * SCALE, 2 * SCALE]} />
                 <meshStandardMaterial color={open ? "#e8d5a3" : "#d4a855"} roughness={0.35} metalness={0.05} />
               </mesh>
@@ -2250,16 +2153,10 @@ const Cabinet3D = ({ x, y, width, height, rad, zHeight, zOffset }: any) => {
         </mesh>
       ))}
 
-      {/* Invisible click plane on front face */}
-      <mesh onClick={handleOpenClose} position={[0, h / 2, d / 2]} renderOrder={-1}>
-        <planeGeometry args={[w - frameT * 2, h - frameT * 2]} />
-        <meshBasicMaterial transparent opacity={0} side={THREE.DoubleSide} depthWrite={false} />
-      </mesh>
-
       {/* Left Door */}
       <group position={[-w / 2, h / 2, d / 2]}>
         <group rotation={[0, open ? -Math.PI * 0.5 : 0, 0]}>
-          <mesh position={[w / 4, 0, 0]} castShadow>
+          <mesh position={[w / 4, 0, 0]} castShadow onClick={handleOpenClose}>
             <boxGeometry args={[w / 2 - 0.2, h - frameT * 2, 2 * SCALE]} />
             <meshStandardMaterial color="#f0f0f0" />
           </mesh>
@@ -2274,7 +2171,7 @@ const Cabinet3D = ({ x, y, width, height, rad, zHeight, zOffset }: any) => {
       {/* Right Door */}
       <group position={[w / 2, h / 2, d / 2]}>
         <group rotation={[0, open ? Math.PI * 0.5 : 0, 0]}>
-          <mesh position={[-w / 4, 0, 0]} castShadow>
+          <mesh position={[-w / 4, 0, 0]} castShadow onClick={handleOpenClose}>
             <boxGeometry args={[w / 2 - 0.2, h - frameT * 2, 2 * SCALE]} />
             <meshStandardMaterial color="#f0f0f0" />
           </mesh>
@@ -2376,6 +2273,78 @@ const FloorItem3D = ({ x, y, width, height, rad, textureSrc, zOffset }: any) => 
   );
 };
 
+// Building3D: renders extruded building matching 2D footprint
+const Building3D = ({ x, y, width, height, rad, floors, textureSrc }: any) => {
+  const tFacade = useTexture(textureSrc) as THREE.Texture;
+  const floorH = 33 * SCALE; // ~3.3m per floor
+  const totalH = floors * floorH;
+  const w = width;
+  const d = height;
+  const roofThick = 3 * SCALE;
+
+  // Repeat facade texture per floor
+  const facTex = tFacade.clone();
+  facTex.needsUpdate = true;
+  facTex.repeat.set(1, floors);
+  facTex.wrapS = THREE.RepeatWrapping;
+  facTex.wrapT = THREE.RepeatWrapping;
+
+  return (
+    <group position={[x, 0, y]} rotation={[0, rad, 0]}>
+      {/* Main body */}
+      <mesh position={[0, totalH / 2, 0]} castShadow receiveShadow>
+        <boxGeometry args={[w, totalH, d]} />
+        <meshStandardMaterial map={facTex} roughness={0.85} metalness={0.05} />
+      </mesh>
+      {/* Flat roof */}
+      <mesh position={[0, totalH + roofThick / 2, 0]} castShadow>
+        <boxGeometry args={[w + SCALE, roofThick, d + SCALE]} />
+        <meshStandardMaterial color="#555555" roughness={0.9} />
+      </mesh>
+      {/* Window rows per floor */}
+      {Array.from({ length: floors }).map((_, fi) => {
+        const floorY = fi * floorH + floorH * 0.55;
+        const winW = Math.min(20 * SCALE, w * 0.18);
+        const winH = floorH * 0.35;
+        const numWinsX = Math.max(1, Math.floor(w / (winW * 2.2)));
+        const numWinsZ = Math.max(1, Math.floor(d / (winW * 2.2)));
+        return (
+          <React.Fragment key={fi}>
+            {/* Front / Back windows */}
+            {Array.from({ length: numWinsX }).map((_, wi) => {
+              const xPos = (wi - (numWinsX - 1) / 2) * (w / numWinsX);
+              return (
+                <React.Fragment key={wi}>
+                  {[-(d / 2 + 0.05), (d / 2 + 0.05)].map((zPos, si) => (
+                    <mesh key={si} position={[xPos, floorY, zPos]}>
+                      <planeGeometry args={[winW, winH]} />
+                      <meshStandardMaterial color="#87CEEB" transparent opacity={0.7} metalness={0.6} roughness={0.1} side={THREE.DoubleSide} />
+                    </mesh>
+                  ))}
+                </React.Fragment>
+              );
+            })}
+            {/* Side windows */}
+            {Array.from({ length: numWinsZ }).map((_, wi) => {
+              const zPos = (wi - (numWinsZ - 1) / 2) * (d / numWinsZ);
+              return (
+                <React.Fragment key={wi}>
+                  {[-(w / 2 + 0.05), (w / 2 + 0.05)].map((xPos, si) => (
+                    <mesh key={si} position={[xPos, floorY, zPos]} rotation={[0, Math.PI / 2, 0]}>
+                      <planeGeometry args={[winW, winH]} />
+                      <meshStandardMaterial color="#87CEEB" transparent opacity={0.7} metalness={0.6} roughness={0.1} side={THREE.DoubleSide} />
+                    </mesh>
+                  ))}
+                </React.Fragment>
+              );
+            })}
+          </React.Fragment>
+        );
+      })}
+    </group>
+  );
+};
+
 const ImpactOrWound3D = ({ textureSrc, width, height, zHeight, zOffset }: any) => {
   const tex = useTexture(textureSrc) as THREE.Texture;
   const hUnits = (zHeight || 0) * SCALE;
@@ -2398,14 +2367,17 @@ const ImpactOrWound3D = ({ textureSrc, width, height, zHeight, zOffset }: any) =
 };
 
 // Cam / Duvar üzerinde isabet izi — gerçek PNG dosyası ile render edilir
-const GlassImpact3D = ({ textureSrc, zHeight }: any) => {
+// Decal, InteractiveSymbol grubunun lokal Z'si boyunca offsetlenir (duvar kalınlığının yarısı ≈ 2.75 birim)
+// böylece duvar/gönye içinde kalıp görünmez olmaz. depthTest=false ile z-fighting önlenir.
+const GlassImpact3D = ({ textureSrc, zHeight, wallThickness }: any) => {
   const tex = useTexture(textureSrc) as THREE.Texture;
 
   const hUnits = (zHeight || 120) * SCALE;
-  const size = 35 * SCALE; // 70cm x 70cm — cam yüzünde rahatça görünür
+  const size = 35 * SCALE;
+  const offsetZ = (wallThickness ? (wallThickness / 2) : 5 * SCALE) + 0.2 * SCALE;
 
   return (
-    <group position={[0, hUnits, 0]}>
+    <group position={[0, hUnits, offsetZ]}>
       <mesh position={[0, 0, 0]} renderOrder={999}>
         <planeGeometry args={[size, size]} />
         <meshBasicMaterial
@@ -2414,9 +2386,7 @@ const GlassImpact3D = ({ textureSrc, zHeight }: any) => {
           alphaTest={0.01}
           side={THREE.DoubleSide}
           depthWrite={false}
-          polygonOffset
-          polygonOffsetFactor={-4}
-          polygonOffsetUnits={-4}
+          depthTest={false}
         />
       </mesh>
     </group>
@@ -2610,11 +2580,11 @@ const Vehicle3D = ({ x, y, width, height, rad, type, fill, zOffset, zHeight }: a
   const targetHeightCm = zHeight || defaultHeightCm;
   const heightScale = targetHeightCm / defaultHeightCm;
 
-  let bodyH = (isTruck ? 80 : isBus ? 110 : 50) * SCALE * heightScale;
-  let cabinH = (isTruck ? 70 : isBus ? 0 : 40) * SCALE * heightScale;
+  let bodyH = (isTruck ? 80 : isBus ? 110 : isSUV ? 80 : 65) * SCALE * heightScale;
+  let cabinH = (isTruck ? 70 : isBus ? 0 : isSUV ? 45 : 55) * SCALE * heightScale;
   let groundClearance = (isTruck ? 25 : isBus ? 20 : isMotorcycle ? 20 : 15) * SCALE * heightScale;
-  const wheelR = (isTruck ? 22 : isBus ? 22 : isMotorcycle ? 20 : 18) * SCALE * heightScale;
-  const wheelW = (isTruck ? 12 : isBus ? 12 : isMotorcycle ? 8 : 10) * SCALE * heightScale;
+  const wheelR = (isTruck ? 22 : isBus ? 22 : isMotorcycle ? 20 : 20) * SCALE * heightScale;
+  const wheelW = (isTruck ? 12 : isBus ? 12 : isMotorcycle ? 8 : 12) * SCALE * heightScale;
 
   // Custom Shape Profiles with Cutout Holes for realistic interiors
   // WINDING ORDER WARNING: Main shape MUST be clockwise, holes MUST be counter-clockwise!
@@ -2642,24 +2612,43 @@ const Vehicle3D = ({ x, y, width, height, rad, type, fill, zOffset, zHeight }: a
     } else if (isMotorcycle) {
       shape.moveTo(0, 0);
     } else if (typeLower.includes('suv') || typeLower.includes('jeep') || typeLower.includes('ambulance') || typeLower.includes('ambulans')) {
-      // SUV / Ambulance Lower Body Profile (Clockwise)
+      // SUV / Ambulance Lower Body Profile (Clockwise) - curved
       shape.moveTo(-w / 2, groundClearance);
-      shape.lineTo(-w / 2, groundClearance + bodyH);
-      shape.lineTo(w * 0.25, groundClearance + bodyH);
-      shape.lineTo(w * 0.38, groundClearance + bodyH * 0.8);
-      shape.lineTo(w * 0.5, groundClearance + bodyH * 0.75);
-      shape.lineTo(w * 0.5, groundClearance);
+      shape.lineTo(-w / 2, groundClearance + 2 * SCALE);
+      shape.quadraticCurveTo(-w / 2 + 3 * SCALE, groundClearance + bodyH * 0.8, -w / 2 + 4 * SCALE, groundClearance + bodyH);
+      shape.lineTo(w * 0.2, groundClearance + bodyH);
+      shape.quadraticCurveTo(w * 0.3, groundClearance + bodyH, w * 0.38, groundClearance + bodyH * 0.85);
+      shape.quadraticCurveTo(w * 0.45, groundClearance + bodyH * 0.78, w * 0.5, groundClearance + bodyH * 0.72);
+      shape.lineTo(w * 0.5, groundClearance + 2 * SCALE);
+      shape.quadraticCurveTo(w * 0.5, groundClearance, w * 0.48, groundClearance);
       shape.lineTo(-w / 2, groundClearance);
     } else {
-      // Sedan Lower Body Profile (Clockwise)
-      shape.moveTo(-w / 2, groundClearance);
-      shape.lineTo(-w / 2, groundClearance + bodyH * 0.8);
-      shape.lineTo(-w * 0.25, groundClearance + bodyH);
-      shape.lineTo(w * 0.2, groundClearance + bodyH);
-      shape.lineTo(w * 0.35, groundClearance + bodyH * 0.8);
-      shape.lineTo(w * 0.5, groundClearance + bodyH * 0.75);
-      shape.lineTo(w * 0.5, groundClearance);
-      shape.lineTo(-w / 2, groundClearance);
+      // Sedan Lower Body Profile (Clockwise) - aerodynamic curves
+      const c = groundClearance;
+      const b = bodyH;
+      shape.moveTo(-w / 2, c);
+      // Rear bumper lower lip
+      shape.lineTo(-w / 2 + 0.5 * SCALE, c);
+      shape.lineTo(-w / 2 + 0.5 * SCALE, c + b * 0.55);
+      // Rear bumper curve up to decklid
+      shape.quadraticCurveTo(-w / 2 + 4 * SCALE, c + b * 0.95, -w * 0.25, c + b);
+      // Trunk deck / rear roofline
+      shape.lineTo(-w * 0.08, c + b);
+      // Rear windshield base to roof (slight dip)
+      shape.quadraticCurveTo(-w * 0.03, c + b * 0.97, 0, c + b * 0.96);
+      shape.lineTo(w * 0.04, c + b * 0.96);
+      // Roof to front windshield base
+      shape.quadraticCurveTo(w * 0.08, c + b, w * 0.12, c + b);
+      // Hood top
+      shape.lineTo(w * 0.22, c + b);
+      // Hood front curve down to nose
+      shape.quadraticCurveTo(w * 0.32, c + b * 0.95, w * 0.38, c + b * 0.82);
+      // Front nose curve
+      shape.quadraticCurveTo(w * 0.45, c + b * 0.75, w * 0.5, c + b * 0.7);
+      // Front bumper
+      shape.lineTo(w * 0.5, c + 0.5 * SCALE);
+      shape.quadraticCurveTo(w * 0.5, c, w * 0.48, c);
+      shape.lineTo(-w / 2, c);
     }
     return shape;
   }, [isTruck, isBus, typeLower, w, bodyH, cabinH, groundClearance]);
@@ -2710,8 +2699,12 @@ const Vehicle3D = ({ x, y, width, height, rad, type, fill, zOffset, zHeight }: a
   const headlightR = 3 * SCALE;
   const taillightR = 2.5 * SCALE;
 
+  // Ensure car is proportionally sized vs the road canvas
+  const minLengthUnits = Math.max(100, (targetHeightCm || 150) * 0.7 * SCALE);
+  const sizeScale = w < minLengthUnits ? minLengthUnits / w : 1;
+
   return (
-    <group position={[x, zOffset || 0, y]} rotation={[0, adjustedRad, 0]}>
+    <group position={[x, zOffset || 0, y]} rotation={[0, adjustedRad, 0]} scale={[sizeScale, sizeScale, sizeScale]}>
       {/* Chassis */}
       <mesh position={[0, groundClearance - 2 * SCALE, 0]}>
         <boxGeometry args={[w * 0.98, 4 * SCALE, d * 0.98]} />
@@ -2722,9 +2715,74 @@ const Vehicle3D = ({ x, y, width, height, rad, type, fill, zOffset, zHeight }: a
       <group position={[0, 0, -d / 2]}>
         <mesh castShadow receiveShadow>
           <extrudeGeometry args={[bodyProfileShape, extrudeSettings]} />
-          <meshStandardMaterial color={color} metalness={0.6} roughness={0.15} />
+          <meshPhysicalMaterial color={color} metalness={0.6} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
         </mesh>
       </group>
+
+      {/* Body Panel Gap Lines (Hood & Trunk) */}
+      {!isTruck && !isBus && !isMotorcycle && (
+        <group>
+          {/* Hood gap */}
+          <mesh position={[w * 0.19, groundClearance + bodyH * 1.01, 0]}>
+            <boxGeometry args={[0.3 * SCALE, 0.3 * SCALE, d * 0.85]} />
+            <meshBasicMaterial color="#111" />
+          </mesh>
+          {/* Trunk gap */}
+          <mesh position={[-w * 0.18, groundClearance + bodyH * 1.01, 0]}>
+            <boxGeometry args={[0.3 * SCALE, 0.3 * SCALE, d * 0.85]} />
+            <meshBasicMaterial color="#111" />
+          </mesh>
+        </group>
+      )}
+
+      {/* Wheel Arch Fenders & Side Details */}
+      {!isTruck && !isBus && !isMotorcycle && (
+        <>
+          {/* Front wheel arch (left side) */}
+          <group position={[w / 3.2, groundClearance + bodyH * 0.65, d / 2 - 0.5 * SCALE]}>
+            <mesh>
+              <boxGeometry args={[8 * SCALE, wheelR * 1.1, 0.8 * SCALE]} />
+              <meshPhysicalMaterial color={color} metalness={0.6} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
+            </mesh>
+          </group>
+          {/* Front wheel arch (right side) */}
+          <group position={[w / 3.2, groundClearance + bodyH * 0.65, -d / 2 + 0.5 * SCALE]}>
+            <mesh>
+              <boxGeometry args={[8 * SCALE, wheelR * 1.1, 0.8 * SCALE]} />
+              <meshPhysicalMaterial color={color} metalness={0.6} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
+            </mesh>
+          </group>
+          {/* Rear wheel arch (left side) */}
+          <group position={[-w / 3.2, groundClearance + bodyH * 0.65, d / 2 - 0.5 * SCALE]}>
+            <mesh>
+              <boxGeometry args={[8 * SCALE, wheelR * 1.1, 0.8 * SCALE]} />
+              <meshPhysicalMaterial color={color} metalness={0.6} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
+            </mesh>
+          </group>
+          {/* Rear wheel arch (right side) */}
+          <group position={[-w / 3.2, groundClearance + bodyH * 0.65, -d / 2 + 0.5 * SCALE]}>
+            <mesh>
+              <boxGeometry args={[8 * SCALE, wheelR * 1.1, 0.8 * SCALE]} />
+              <meshPhysicalMaterial color={color} metalness={0.6} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
+            </mesh>
+          </group>
+          {/* Side sill / rocker panel strip (left) */}
+          <mesh position={[0, groundClearance + 3 * SCALE, d / 2 - 0.3 * SCALE]}>
+            <boxGeometry args={[w * 0.7, 1.5 * SCALE, 0.6 * SCALE]} />
+            <meshStandardMaterial color="#1a1a1a" roughness={0.8} />
+          </mesh>
+          {/* Side sill / rocker panel strip (right) */}
+          <mesh position={[0, groundClearance + 3 * SCALE, -d / 2 + 0.3 * SCALE]}>
+            <boxGeometry args={[w * 0.7, 1.5 * SCALE, 0.6 * SCALE]} />
+            <meshStandardMaterial color="#1a1a1a" roughness={0.8} />
+          </mesh>
+          {/* Exhaust pipe (rear left) */}
+          <mesh position={[-w / 2 + 2 * SCALE, groundClearance + 3 * SCALE, d * 0.25]}>
+            <cylinderGeometry args={[1.5 * SCALE, 2 * SCALE, 3 * SCALE, 12]} />
+            <meshStandardMaterial color="#7f8c8d" metalness={0.9} roughness={0.2} />
+          </mesh>
+        </>
+      )}
 
       {/* Sedan Cabin Frame & Windshields */}
       {!isTruck && !isBus && !isMotorcycle && !isSUV && (
@@ -2732,7 +2790,7 @@ const Vehicle3D = ({ x, y, width, height, rad, type, fill, zOffset, zHeight }: a
           {/* Roof */}
           <mesh position={[-w * 0.025, groundClearance + bodyH + cabinH - 1 * SCALE, 0]} castShadow>
             <boxGeometry args={[w * 0.45, 2 * SCALE, d * 0.95]} />
-            <meshStandardMaterial color={color} metalness={0.6} roughness={0.15} />
+            <meshPhysicalMaterial color={color} metalness={0.6} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
           </mesh>
           {/* Front windshield — glass + top/bottom frames, A-pillars are the side edges */}
           <group position={[w * 0.275, groundClearance + bodyH + cabinH * 0.5, 0]} rotation={[0, 0, Math.PI / 4.5]}>
@@ -2764,11 +2822,11 @@ const Vehicle3D = ({ x, y, width, height, rad, type, fill, zOffset, zHeight }: a
           {/* A-Pillars (Front Frame — left and right edges of windshield) */}
           <mesh position={[w * 0.275, groundClearance + bodyH + cabinH * 0.5, d / 2 - 0.15 * SCALE]} rotation={[0, 0, Math.PI / 4.5]}>
             <boxGeometry args={[w * 0.04, cabinH * 1.4, 1.5 * SCALE]} />
-            <meshStandardMaterial color={color} metalness={0.6} roughness={0.15} />
+            <meshPhysicalMaterial color={color} metalness={0.6} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
           </mesh>
           <mesh position={[w * 0.275, groundClearance + bodyH + cabinH * 0.5, -d / 2 + 0.15 * SCALE]} rotation={[0, 0, Math.PI / 4.5]}>
             <boxGeometry args={[w * 0.04, cabinH * 1.4, 1.5 * SCALE]} />
-            <meshStandardMaterial color={color} metalness={0.6} roughness={0.15} />
+            <meshPhysicalMaterial color={color} metalness={0.6} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
           </mesh>
 
           {/* Rear windshield — glass + top/bottom frames, C-pillars are the side edges */}
@@ -2801,11 +2859,11 @@ const Vehicle3D = ({ x, y, width, height, rad, type, fill, zOffset, zHeight }: a
           {/* C-Pillars (Rear Frame — left and right edges of rear windshield) */}
           <mesh position={[-w * 0.315, groundClearance + bodyH + cabinH * 0.5, d / 2 - 0.15 * SCALE]} rotation={[0, 0, -Math.PI / 4]}>
             <boxGeometry args={[w * 0.05, cabinH * 1.4, 1.5 * SCALE]} />
-            <meshStandardMaterial color={color} metalness={0.6} roughness={0.15} />
+            <meshPhysicalMaterial color={color} metalness={0.6} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
           </mesh>
           <mesh position={[-w * 0.315, groundClearance + bodyH + cabinH * 0.5, -d / 2 + 0.15 * SCALE]} rotation={[0, 0, -Math.PI / 4]}>
             <boxGeometry args={[w * 0.05, cabinH * 1.4, 1.5 * SCALE]} />
-            <meshStandardMaterial color={color} metalness={0.6} roughness={0.15} />
+            <meshPhysicalMaterial color={color} metalness={0.6} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
           </mesh>
 
           {/* B-Pillars (Center vertical posts) */}
@@ -2826,7 +2884,7 @@ const Vehicle3D = ({ x, y, width, height, rad, type, fill, zOffset, zHeight }: a
           {/* Roof */}
           <mesh position={[-w * 0.075, groundClearance + bodyH + cabinH - 1 * SCALE, 0]} castShadow>
             <boxGeometry args={[w * 0.8, 2 * SCALE, d * 0.95]} />
-            <meshStandardMaterial color={color} metalness={0.6} roughness={0.15} />
+            <meshPhysicalMaterial color={color} metalness={0.6} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
           </mesh>
           {/* Front windshield — glass + top/bottom frames */}
           <group position={[w * 0.387, groundClearance + bodyH + cabinH * 0.5, 0]} rotation={[0, 0, Math.PI / 4.2]}>
@@ -2847,11 +2905,11 @@ const Vehicle3D = ({ x, y, width, height, rad, type, fill, zOffset, zHeight }: a
           {/* A-Pillars */}
           <mesh position={[w * 0.387, groundClearance + bodyH + cabinH * 0.5, d / 2 - 0.15 * SCALE]} rotation={[0, 0, Math.PI / 4.2]}>
             <boxGeometry args={[w * 0.04, cabinH * 1.4, 1.5 * SCALE]} />
-            <meshStandardMaterial color={color} metalness={0.6} roughness={0.15} />
+            <meshPhysicalMaterial color={color} metalness={0.6} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
           </mesh>
           <mesh position={[w * 0.387, groundClearance + bodyH + cabinH * 0.5, -d / 2 + 0.15 * SCALE]} rotation={[0, 0, Math.PI / 4.2]}>
             <boxGeometry args={[w * 0.04, cabinH * 1.4, 1.5 * SCALE]} />
-            <meshStandardMaterial color={color} metalness={0.6} roughness={0.15} />
+            <meshPhysicalMaterial color={color} metalness={0.6} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
           </mesh>
 
           {/* Rear windshield — flat back glass */}
@@ -2873,11 +2931,11 @@ const Vehicle3D = ({ x, y, width, height, rad, type, fill, zOffset, zHeight }: a
           {/* D-Pillars (Rear Flat Pillars) */}
           <mesh position={[-w * 0.485, groundClearance + bodyH + cabinH * 0.5, d / 2 - 0.15 * SCALE]}>
             <boxGeometry args={[w * 0.04, cabinH * 0.95, 1.5 * SCALE]} />
-            <meshStandardMaterial color={color} metalness={0.6} roughness={0.15} />
+            <meshPhysicalMaterial color={color} metalness={0.6} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
           </mesh>
           <mesh position={[-w * 0.485, groundClearance + bodyH + cabinH * 0.5, -d / 2 + 0.15 * SCALE]}>
             <boxGeometry args={[w * 0.04, cabinH * 0.95, 1.5 * SCALE]} />
-            <meshStandardMaterial color={color} metalness={0.6} roughness={0.15} />
+            <meshPhysicalMaterial color={color} metalness={0.6} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
           </mesh>
 
           {/* B-Pillars */}
@@ -2908,7 +2966,7 @@ const Vehicle3D = ({ x, y, width, height, rad, type, fill, zOffset, zHeight }: a
           {/* Cab Roof */}
           <mesh position={[w * 0.235, groundClearance + bodyH + cabinH - 1 * SCALE, 0]} castShadow>
             <boxGeometry args={[w * 0.23, 2 * SCALE, d * 0.95]} />
-            <meshStandardMaterial color={color} metalness={0.7} roughness={0.15} />
+            <meshPhysicalMaterial color={color} metalness={0.7} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
           </mesh>
           {/* Front windshield — glass + top/bottom frames */}
           <group position={[w * 0.39, groundClearance + bodyH + cabinH * 0.5, 0]} rotation={[0, 0, Math.PI / 5]}>
@@ -2928,7 +2986,7 @@ const Vehicle3D = ({ x, y, width, height, rad, type, fill, zOffset, zHeight }: a
           {/* Rear Cab Wall & Window */}
           <mesh position={[w * 0.11, groundClearance + bodyH + cabinH * 0.5, 0]}>
             <boxGeometry args={[w * 0.02, cabinH, d * 0.9]} />
-            <meshStandardMaterial color={color} metalness={0.7} roughness={0.15} />
+            <meshPhysicalMaterial color={color} metalness={0.7} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
           </mesh>
           <mesh position={[w * 0.11, groundClearance + bodyH + cabinH * 0.6, 0]}>
             <boxGeometry args={[w * 0.025, cabinH * 0.5, d * 0.5]} />
@@ -2937,11 +2995,11 @@ const Vehicle3D = ({ x, y, width, height, rad, type, fill, zOffset, zHeight }: a
           {/* A-Pillars (Front Frame) */}
           <mesh position={[w * 0.39, groundClearance + bodyH + cabinH * 0.5, d / 2 - 0.15 * SCALE]} rotation={[0, 0, Math.PI / 5]}>
             <boxGeometry args={[w * 0.04, cabinH * 1.3, 1.5 * SCALE]} />
-            <meshStandardMaterial color={color} metalness={0.7} roughness={0.15} />
+            <meshPhysicalMaterial color={color} metalness={0.7} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
           </mesh>
           <mesh position={[w * 0.39, groundClearance + bodyH + cabinH * 0.5, -d / 2 + 0.15 * SCALE]} rotation={[0, 0, Math.PI / 5]}>
             <boxGeometry args={[w * 0.04, cabinH * 1.3, 1.5 * SCALE]} />
-            <meshStandardMaterial color={color} metalness={0.7} roughness={0.15} />
+            <meshPhysicalMaterial color={color} metalness={0.7} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
           </mesh>
         </group>
       )}
@@ -2952,7 +3010,7 @@ const Vehicle3D = ({ x, y, width, height, rad, type, fill, zOffset, zHeight }: a
           {/* Bus Roof */}
           <mesh position={[0, groundClearance + bodyH - 1 * SCALE, 0]} castShadow>
             <boxGeometry args={[w * 0.98, 2 * SCALE, d * 0.95]} />
-            <meshStandardMaterial color={color} metalness={0.6} roughness={0.15} />
+            <meshPhysicalMaterial color={color} metalness={0.6} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
           </mesh>
           {/* Bus Rear Glass & Frame */}
           <mesh position={[-w / 2 + 1 * SCALE, groundClearance + bodyH * 0.775, 0]}>
@@ -2970,22 +3028,22 @@ const Vehicle3D = ({ x, y, width, height, rad, type, fill, zOffset, zHeight }: a
           {/* Rear Left Corner Pillar */}
           <mesh position={[-w / 2 + 1 * SCALE, groundClearance + bodyH * 0.775, d / 2 - 0.2 * SCALE]}>
             <boxGeometry args={[w * 0.03, bodyH * 0.45, 0.4 * SCALE]} />
-            <meshStandardMaterial color={color} metalness={0.6} roughness={0.15} />
+            <meshPhysicalMaterial color={color} metalness={0.6} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
           </mesh>
           {/* Rear Right Corner Pillar */}
           <mesh position={[-w / 2 + 1 * SCALE, groundClearance + bodyH * 0.775, -d / 2 + 0.2 * SCALE]}>
             <boxGeometry args={[w * 0.03, bodyH * 0.45, 0.4 * SCALE]} />
-            <meshStandardMaterial color={color} metalness={0.6} roughness={0.15} />
+            <meshPhysicalMaterial color={color} metalness={0.6} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
           </mesh>
           {/* Front Left Corner Pillar */}
           <mesh position={[w / 2 - 1 * SCALE, groundClearance + bodyH * 0.775, d / 2 - 0.2 * SCALE]}>
             <boxGeometry args={[w * 0.03, bodyH * 0.45, 0.4 * SCALE]} />
-            <meshStandardMaterial color={color} metalness={0.6} roughness={0.15} />
+            <meshPhysicalMaterial color={color} metalness={0.6} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
           </mesh>
           {/* Front Right Corner Pillar */}
           <mesh position={[w / 2 - 1 * SCALE, groundClearance + bodyH * 0.775, -d / 2 + 0.2 * SCALE]}>
             <boxGeometry args={[w * 0.03, bodyH * 0.45, 0.4 * SCALE]} />
-            <meshStandardMaterial color={color} metalness={0.6} roughness={0.15} />
+            <meshPhysicalMaterial color={color} metalness={0.6} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
           </mesh>
         </group>
       )}
@@ -3133,7 +3191,7 @@ const Vehicle3D = ({ x, y, width, height, rad, type, fill, zOffset, zHeight }: a
             {/* Door Outer Panel (Car Color) */}
             <mesh position={[-w * 0.11, groundClearance + bodyH * 0.275, 0.5 * SCALE]} castShadow onClick={toggleLeft}>
               <boxGeometry args={[w * 0.22, bodyH * 0.55, 0.6 * SCALE]} />
-              <meshStandardMaterial color={color} metalness={0.7} roughness={0.15} />
+              <meshPhysicalMaterial color={color} metalness={0.7} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
             </mesh>
             
             {/* Door Inner Lining Panel */}
@@ -3168,7 +3226,7 @@ const Vehicle3D = ({ x, y, width, height, rad, type, fill, zOffset, zHeight }: a
             {/* Side Mirror */}
             <mesh position={[-w * 0.02, groundClearance + bodyH * 0.57, 1.2 * SCALE]} rotation={[0, 0.2, 0]} onClick={toggleLeft}>
               <boxGeometry args={[w * 0.05, 3 * SCALE, 2 * SCALE]} />
-              <meshStandardMaterial color={color} metalness={0.7} roughness={0.15} />
+              <meshPhysicalMaterial color={color} metalness={0.7} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
             </mesh>
           </group>
 
@@ -3188,7 +3246,7 @@ const Vehicle3D = ({ x, y, width, height, rad, type, fill, zOffset, zHeight }: a
             {/* Door Outer Panel (Car Color) */}
             <mesh position={[-w * 0.115, groundClearance + bodyH * 0.275, 0.5 * SCALE]} castShadow onClick={toggleLeftRear}>
               <boxGeometry args={[w * 0.23, bodyH * 0.55, 0.6 * SCALE]} />
-              <meshStandardMaterial color={color} metalness={0.7} roughness={0.15} />
+              <meshPhysicalMaterial color={color} metalness={0.7} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
             </mesh>
             
             {/* Door Inner Lining Panel */}
@@ -3238,7 +3296,7 @@ const Vehicle3D = ({ x, y, width, height, rad, type, fill, zOffset, zHeight }: a
             {/* Door Outer Panel (Car Color) */}
             <mesh position={[-w * 0.11, groundClearance + bodyH * 0.275, -0.5 * SCALE]} castShadow onClick={toggleRight}>
               <boxGeometry args={[w * 0.22, bodyH * 0.55, 0.6 * SCALE]} />
-              <meshStandardMaterial color={color} metalness={0.7} roughness={0.15} />
+              <meshPhysicalMaterial color={color} metalness={0.7} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
             </mesh>
 
             {/* Door Inner Lining Panel */}
@@ -3273,7 +3331,7 @@ const Vehicle3D = ({ x, y, width, height, rad, type, fill, zOffset, zHeight }: a
             {/* Side Mirror */}
             <mesh position={[-w * 0.02, groundClearance + bodyH * 0.57, -1.2 * SCALE]} rotation={[0, -0.2, 0]} onClick={toggleRight}>
               <boxGeometry args={[w * 0.05, 3 * SCALE, 2 * SCALE]} />
-              <meshStandardMaterial color={color} metalness={0.7} roughness={0.15} />
+              <meshPhysicalMaterial color={color} metalness={0.7} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
             </mesh>
           </group>
 
@@ -3293,7 +3351,7 @@ const Vehicle3D = ({ x, y, width, height, rad, type, fill, zOffset, zHeight }: a
             {/* Door Outer Panel (Car Color) */}
             <mesh position={[-w * 0.115, groundClearance + bodyH * 0.275, -0.5 * SCALE]} castShadow onClick={toggleRightRear}>
               <boxGeometry args={[w * 0.23, bodyH * 0.55, 0.6 * SCALE]} />
-              <meshStandardMaterial color={color} metalness={0.7} roughness={0.15} />
+              <meshPhysicalMaterial color={color} metalness={0.7} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
             </mesh>
 
             {/* Door Inner Lining Panel */}
@@ -3348,7 +3406,7 @@ const Vehicle3D = ({ x, y, width, height, rad, type, fill, zOffset, zHeight }: a
             {/* Lower Panel */}
             <mesh position={[-w * 0.1, groundClearance + bodyH * 0.35, 0.5 * SCALE]} castShadow onClick={toggleTruck}>
               <boxGeometry args={[w * 0.2, bodyH * 0.7, 0.6 * SCALE]} />
-              <meshStandardMaterial color={color} metalness={0.7} roughness={0.15} />
+              <meshPhysicalMaterial color={color} metalness={0.7} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
             </mesh>
             {/* Inner Lining Panel */}
             <mesh position={[-w * 0.1, groundClearance + bodyH * 0.35, -0.2 * SCALE]} onClick={toggleTruck}>
@@ -3400,7 +3458,7 @@ const Vehicle3D = ({ x, y, width, height, rad, type, fill, zOffset, zHeight }: a
             {/* Lower Panel */}
             <mesh position={[-w * 0.1, groundClearance + bodyH * 0.35, -0.5 * SCALE]} castShadow onClick={toggleTruck}>
               <boxGeometry args={[w * 0.2, bodyH * 0.7, 0.6 * SCALE]} />
-              <meshStandardMaterial color={color} metalness={0.7} roughness={0.15} />
+              <meshPhysicalMaterial color={color} metalness={0.7} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
             </mesh>
             {/* Inner Lining Panel */}
             <mesh position={[-w * 0.1, groundClearance + bodyH * 0.35, 0.2 * SCALE]} onClick={toggleTruck}>
@@ -3510,7 +3568,7 @@ const Vehicle3D = ({ x, y, width, height, rad, type, fill, zOffset, zHeight }: a
         </>
       )}
 
-      {/* High-Fidelity Wheels */}
+      {/* Realistic Wheels with Spoked Rims */}
       {[
         { px: w / 3.2, pz: d / 2 - wheelW / 4 },
         { px: w / 3.2, pz: -d / 2 + wheelW / 4 },
@@ -3522,29 +3580,96 @@ const Vehicle3D = ({ x, y, width, height, rad, type, fill, zOffset, zHeight }: a
         ] : [])
       ].map((pos, idx) => (
         <group key={idx} position={[pos.px, wheelR, pos.pz]} rotation={[Math.PI / 2, 0, 0]}>
+          {/* Tire */}
           <mesh castShadow>
             <cylinderGeometry args={[wheelR, wheelR, wheelW, 24]} />
-            <meshStandardMaterial color="#151515" roughness={0.9} />
+            <meshStandardMaterial color="#1a1a1a" roughness={0.95} />
           </mesh>
-          <mesh position={[0, wheelW * 0.1, 0]}>
-            <cylinderGeometry args={[wheelR * 0.6, wheelR * 0.6, wheelW * 0.9, 16]} />
-            <meshStandardMaterial color="#dcdde1" metalness={0.9} roughness={0.1} />
+          {/* Tire sidewall ring */}
+          <mesh position={[0, 0, wheelW * 0.46]}>
+            <torusGeometry args={[wheelR * 0.82, wheelR * 0.08, 8, 24]} />
+            <meshStandardMaterial color="#222" roughness={0.9} />
           </mesh>
-          <mesh position={[0, wheelW * 0.2, 0]}>
-            <cylinderGeometry args={[wheelR * 0.15, wheelR * 0.15, wheelW * 0.9, 6]} />
-            <meshStandardMaterial color="#2f3640" metalness={0.9} />
+          {/* Rim outer lip (front) */}
+          <mesh position={[0, 0, -wheelW * 0.42]}>
+            <torusGeometry args={[wheelR * 0.58, wheelR * 0.06, 8, 24]} />
+            <meshStandardMaterial color="#bdc3c7" metalness={0.85} roughness={0.15} />
           </mesh>
+          {/* Rim outer lip (back) */}
+          <mesh position={[0, 0, wheelW * 0.42]}>
+            <torusGeometry args={[wheelR * 0.58, wheelR * 0.06, 8, 24]} />
+            <meshStandardMaterial color="#bdc3c7" metalness={0.85} roughness={0.15} />
+          </mesh>
+          {/* Rim barrel */}
+          <mesh>
+            <cylinderGeometry args={[wheelR * 0.58, wheelR * 0.58, wheelW * 0.45, 20]} />
+            <meshStandardMaterial color="#95a5a6" metalness={0.8} roughness={0.2} />
+          </mesh>
+          {/* Spokes (5-spoke design) */}
+          {(() => {
+            const spokeLen = wheelR * 0.42;
+            const spokeW = wheelR * 0.06;
+            const spokes = [];
+            for (let si = 0; si < 5; si++) {
+              const ang = (si / 5) * Math.PI * 2;
+              const cx = Math.cos(ang) * spokeLen * 0.45;
+              const cy = Math.sin(ang) * spokeLen * 0.45;
+              spokes.push(
+                <group key={si}>
+                  {/* Spoke arm */}
+                  <mesh position={[cy, cx, 0]} rotation={[0, 0, ang]}>
+                    <boxGeometry args={[spokeW, spokeLen * 0.8, wheelW * 0.25]} />
+                    <meshStandardMaterial color="#bdc3c7" metalness={0.85} roughness={0.15} />
+                  </mesh>
+                  {/* Spoke split (Y-shape toward rim) */}
+                  <mesh position={[cy * 1.7, cx * 1.7, 0]} rotation={[0, 0, ang + 0.25]}>
+                    <boxGeometry args={[spokeW * 0.7, spokeLen * 0.35, wheelW * 0.18]} />
+                    <meshStandardMaterial color="#bdc3c7" metalness={0.85} roughness={0.15} />
+                  </mesh>
+                  <mesh position={[cy * 1.7, cx * 1.7, 0]} rotation={[0, 0, ang - 0.25]}>
+                    <boxGeometry args={[spokeW * 0.7, spokeLen * 0.35, wheelW * 0.18]} />
+                    <meshStandardMaterial color="#bdc3c7" metalness={0.85} roughness={0.15} />
+                  </mesh>
+                </group>
+              );
+            }
+            return spokes;
+          })()}
+          {/* Center hub cap */}
+          <mesh position={[0, 0, -wheelW * 0.1]}>
+            <cylinderGeometry args={[wheelR * 0.1, wheelR * 0.12, wheelW * 0.35, 16]} />
+            <meshStandardMaterial color="#7f8c8d" metalness={0.9} roughness={0.1} />
+          </mesh>
+          {/* Lug nuts */}
+          {[0, 1, 2, 3, 4].map(li => {
+            const lang = (li / 5) * Math.PI * 2;
+            return (
+              <mesh key={li} position={[Math.sin(lang) * wheelR * 0.16, Math.cos(lang) * wheelR * 0.16, -wheelW * 0.2]}>
+                <cylinderGeometry args={[wheelR * 0.025, wheelR * 0.03, wheelW * 0.12, 8]} />
+                <meshStandardMaterial color="#dcdde1" metalness={0.9} roughness={0.1} />
+              </mesh>
+            );
+          })}
         </group>
       ))}
 
-      {/* Headlights */}
+      {/* Headlights - Emissive */}
       <mesh position={[w * 0.5 - 1 * SCALE, groundClearance + bodyH * 0.35, d * 0.35]}>
         <sphereGeometry args={[headlightR, 12, 12]} />
-        <meshBasicMaterial color="#ffffcc" />
+        <meshPhysicalMaterial color="#ffffcc" emissive="#ffffaa" emissiveIntensity={1.5} roughness={0.1} metalness={0.0} />
       </mesh>
       <mesh position={[w * 0.5 - 1 * SCALE, groundClearance + bodyH * 0.35, -d * 0.35]}>
         <sphereGeometry args={[headlightR, 12, 12]} />
-        <meshBasicMaterial color="#ffffcc" />
+        <meshPhysicalMaterial color="#ffffcc" emissive="#ffffaa" emissiveIntensity={1.5} roughness={0.1} metalness={0.0} />
+      </mesh>
+      {/* Headlight housings */}
+      <mesh position={[w * 0.5 - 0.5 * SCALE, groundClearance + bodyH * 0.35, d * 0.35]}>
+        <boxGeometry args={[0.8 * SCALE, headlightR * 2.5, headlightR * 2.5]} />
+        <meshStandardMaterial color="#1a1a1a" roughness={0.9} />
+      </mesh>
+      <mesh position={[w * 0.5 - 0.5 * SCALE, groundClearance + bodyH * 0.35, -d * 0.35]}>
+        <boxGeometry args={[0.8 * SCALE, headlightR * 2.5, headlightR * 2.5]} />
+        <meshStandardMaterial color="#1a1a1a" roughness={0.9} />
       </mesh>
 
       {/* Front Radiator Grille */}
@@ -3561,14 +3686,14 @@ const Vehicle3D = ({ x, y, width, height, rad, type, fill, zOffset, zHeight }: a
         </mesh>
       </group>
 
-      {/* Taillights */}
+      {/* Taillights - Emissive */}
       <mesh position={[-w * 0.5 + 1 * SCALE, groundClearance + bodyH * 0.4, d * 0.35]}>
         <boxGeometry args={[2 * SCALE, taillightR * 2, taillightR * 2]} />
-        <meshBasicMaterial color="#ff3333" />
+        <meshBasicMaterial color="#ff2222" />
       </mesh>
       <mesh position={[-w * 0.5 + 1 * SCALE, groundClearance + bodyH * 0.4, -d * 0.35]}>
         <boxGeometry args={[2 * SCALE, taillightR * 2, taillightR * 2]} />
-        <meshBasicMaterial color="#ff3333" />
+        <meshBasicMaterial color="#ff2222" />
       </mesh>
 
       {/* Rear License Plate (White/Blue European style) */}
@@ -3920,7 +4045,7 @@ const InteractiveSymbol = React.memo(({ obj, onSelect, isSelected, stageWidth, s
       {isSelected && <TransformControls object={groupRef} mode="translate" onMouseUp={handleTransform} makeDefault />}
       <group ref={groupRef} position={[obj.x, 0, obj.y]} rotation={[0, -(obj.rotation || 0) * (Math.PI / 180), 0]}>
         <group onPointerDown={(e) => { e.stopPropagation(); onSelect(obj.id); }}>
-          <Symbol3D obj={{...obj, x: 0, y: 0, rotation: 0}} realObj={obj} wallThickness={wallThickness} allWalls={allWalls} visualObjects={visualObjects} uploadedImages={uploadedImages} />
+          <Symbol3D obj={{...obj, x: 0, y: 0, rotation: 0, updateObject}} realObj={obj} wallThickness={wallThickness} allWalls={allWalls} visualObjects={visualObjects} uploadedImages={uploadedImages} />
         </group>
       </group>
     </>
@@ -3930,12 +4055,28 @@ const InteractiveSymbol = React.memo(({ obj, onSelect, isSelected, stageWidth, s
 
 const SceneCaptureController = ({ onCaptureRef }: { onCaptureRef: React.MutableRefObject<any> }) => {
   const { gl, scene, camera } = useThree();
-  
+
   useEffect(() => {
+    (window as any).export3DScene = () => {
+      const exporter = new GLTFExporter();
+      exporter.parse(scene, (result: any) => {
+        const output = result instanceof ArrayBuffer ? result : JSON.stringify(result);
+        const blob = new Blob([output], { type: result instanceof ArrayBuffer ? 'model/gltf-binary' : 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.style.display = 'none';
+        link.href = url;
+        link.download = 'olay-yeri-3d-model.glb';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }, { binary: true });
+    };
+
     onCaptureRef.current = {
       takeScreenshot: () => {
         gl.render(scene, camera);
-        return gl.domElement.toDataURL('image/png');
+        return gl.domElement.toDataURL('image/png', 1.0);
       },
       getCanvasElement: () => {
         return gl.domElement;
@@ -4269,28 +4410,15 @@ const Scene = ({ objects, viewMode, selectedId, setSelectedId, onCaptureRef }: a
     return { visualObjects: resolvedObjects, allWalls: finalWalls, wallThickness: thickness };
   }, [objects, stageWidth, stageHeight, visualSettings]);
 
-  const { scene } = useThree();
-  useEffect(() => {
-    (window as any).export3DScene = () => {
-      const exporter = new GLTFExporter();
-      exporter.parse(scene, (result: any) => {
-        const output = result instanceof ArrayBuffer ? result : JSON.stringify(result);
-        const blob = new Blob([output], { type: result instanceof ArrayBuffer ? 'model/gltf-binary' : 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `Forensic_Scene_${new Date().getTime()}.glb`;
-        link.click();
-      }, { binary: true });
-    };
-  }, [scene]);
+  const contentGroupRef = useRef<THREE.Group>(null!);
 
   return (
     <>
       <SceneCaptureController onCaptureRef={onCaptureRef} />
       <PerspectiveCamera makeDefault position={[0, 400, 400]} fov={50} />
+      <AutoFitCamera contentRef={contentGroupRef} />
       {viewMode === 'orbit' ? (
-        <OrbitControls makeDefault minPolarAngle={0} maxPolarAngle={Math.PI / 2.1} />
+        <OrbitControls makeDefault minPolarAngle={0} maxPolarAngle={Math.PI / 2.1} minDistance={30} maxDistance={2000} />
       ) : (
         <Player isWalkMode={true} />
       )}
@@ -4298,7 +4426,7 @@ const Scene = ({ objects, viewMode, selectedId, setSelectedId, onCaptureRef }: a
       <ambientLight intensity={0.5} />
       <directionalLight position={[100, 200, 100]} intensity={1} castShadow />
       
-      <group>
+      <group ref={contentGroupRef}>
         {allWalls.map((wall: any, idx: number) => (
           <SafeComponent key={wall.id || `wall-${idx}`}>
             <Symbol3D obj={wall} wallThickness={wallThickness} uploadedImages={uploadedImages} />
@@ -4308,8 +4436,8 @@ const Scene = ({ objects, viewMode, selectedId, setSelectedId, onCaptureRef }: a
         {visualObjects.filter((o: any) => {
           const sId = o.symbolId?.toLowerCase() || '';
           const hasParent = !!o.parentId;
-          const isAutoImpact = (sId === 'tr-bullet-wall' || sId === 'tr-bullet-glass') && hasParent;
-          return !sId.includes('shooting') && !sId.includes('atış') && !sId.includes('ateş') && !isAutoImpact;
+          const isAutoDecal = (sId === 'tr-bullet-glass' || sId === 'tr-bullet-wall' || sId === 'in-bullet-in' || sId === 'in-bullet-out') && hasParent;
+          return !sId.includes('shooting') && !sId.includes('atış') && !sId.includes('ateş') && !isAutoDecal;
         }).map((obj: any) => (
           <SafeComponent key={obj.id}>
             <InteractiveSymbol 
@@ -4356,10 +4484,88 @@ const Scene = ({ objects, viewMode, selectedId, setSelectedId, onCaptureRef }: a
   );
 };
 
+// Standalone auto-fit — runs ONCE on mount, uses content group bounding box only
+// Uses useFrame so controls are guaranteed mounted when auto-fit runs
+const AutoFitCamera = ({ contentRef }: { contentRef: React.RefObject<THREE.Group | null> }) => {
+  const camera = useThree((s) => s.camera as THREE.PerspectiveCamera);
+  const get = useThree((s) => s.get);
+  const hasFitted = useRef(false);
+  const retryCount = useRef(0);
+  useFrame(() => {
+    if (hasFitted.current) return;
+    const ctrls = get().controls as any;
+    if (!ctrls || !contentRef.current) return;
+    const box = new THREE.Box3().setFromObject(contentRef.current);
+    if (!isFinite(box.min.x)) {
+      retryCount.current++;
+      if (retryCount.current > 10) {
+        // Fallback: set a reasonable default view
+        camera.position.set(0, 300, 500);
+        ctrls.target.set(0, 80, 0);
+        ctrls.update();
+        hasFitted.current = true;
+      }
+      return;
+    }
+    const center = new THREE.Vector3();
+    box.getCenter(center);
+    const size = new THREE.Vector3();
+    box.getSize(size);
+    const hExtent = Math.max(size.x, size.z);
+    if (hExtent < 10) {
+      retryCount.current++;
+      if (retryCount.current > 10) {
+        // Small scene - close view
+        camera.position.set(center.x, 200, center.z + 300);
+        ctrls.target.set(center.x, 80, center.z);
+        ctrls.update();
+        hasFitted.current = true;
+      }
+      return;
+    }
+    const dist = hExtent / (2 * Math.tan((camera.fov * Math.PI) / 360)) * 0.9;
+    camera.position.set(center.x, 150, center.z + dist);
+    ctrls.target.set(center.x, 100, center.z);
+    ctrls.update();
+    hasFitted.current = true;
+  });
+  return null;
+};
+
+// Camera preset view switcher - animates camera to predefined positions
+const CameraPresets = ({ preset }: { preset: string | null }) => {
+  const { camera } = useThree();
+  const get = useThree((s) => s.get);
+  const prevPreset = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!preset || preset === prevPreset.current) return;
+    prevPreset.current = preset;
+
+    const ctrls = get().controls as any;
+    if (!ctrls) return;
+
+    const t = ctrls.target;
+    let pos: [number, number, number];
+    switch (preset) {
+      case 'top':    pos = [t.x, 500, t.z + 0.01]; break;
+      case 'front':  pos = [t.x, 80, t.z + 400];   break;
+      case 'side':   pos = [t.x + 400, 80, t.z];    break;
+      case 'back':   pos = [t.x, 80, t.z - 400];    break;
+      default: return;
+    }
+    camera.position.set(pos[0], pos[1], pos[2]);
+    ctrls.update();
+  }, [preset, camera, get]);
+
+  return null;
+};
+
 export const ThreeDPreview: React.FC<ThreeDPreviewProps> = ({ isOpen, onClose }) => {
   const { objects, updateObject, addNotification } = useStore();
   const [viewMode, setViewMode] = useState<'orbit' | 'walk'>('orbit');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [cameraPreset] = useState<string | null>(null);
 
   const captureRef = useRef<any>(null);
   const [capturedMedia, setCapturedMedia] = useState<{ id: string; type: 'photo' | 'video'; url: string; timestamp: string }[]>([]);
@@ -4530,12 +4736,16 @@ export const ThreeDPreview: React.FC<ThreeDPreviewProps> = ({ isOpen, onClose })
             </button>
           )}
         </div>
-        <button onClick={onClose} className="p-2 text-gray-400 hover:text-white transition-colors"><X size={24} /></button>
+        <div className="flex items-center gap-1.5">
+          <div className="h-6 w-px bg-white/10 mx-1" />
+          <button onClick={onClose} className="p-2 text-gray-400 hover:text-white transition-colors"><X size={24} /></button>
+        </div>
       </div>
       <div className="flex-1 relative">
         <Canvas shadows gl={{ preserveDrawingBuffer: true }} camera={{ position: [0, 400, 400], fov: 50 }}>
           <Suspense fallback={null}>
             <Scene objects={objects} viewMode={viewMode} selectedId={selectedId} setSelectedId={setSelectedId} onCaptureRef={captureRef} />
+            <CameraPresets preset={cameraPreset} />
           </Suspense>
         </Canvas>
         
@@ -4691,37 +4901,6 @@ export const ThreeDPreview: React.FC<ThreeDPreviewProps> = ({ isOpen, onClose })
           </div>
         )}
 
-        {/* Forensic AI Command Console */}
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 w-[500px] max-w-[90%]">
-          <div className="bg-black/80 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-1 flex items-center gap-2 ring-1 ring-white/5">
-            <div className="flex-1 flex items-center gap-3 px-4">
-              <Rotate3D size={16} className="text-[#3a7ca5]" />
-              <input 
-                type="text" 
-                placeholder="Sahneyi düzenlemek için yazın... (Örn: 'ceset ekle', 'sil')"
-                className="bg-transparent border-none outline-none text-white text-[13px] w-full py-3 font-medium placeholder:text-gray-600"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    processForensicCommand(
-                      e.currentTarget.value, 
-                      objects, 
-                      selectedId, 
-                      updateObject, 
-                      (useStore.getState() as any).addObject, 
-                      (useStore.getState() as any).removeObject
-                    );
-                    e.currentTarget.value = '';
-                    // Command processed successfully
-                  }
-                }}
-              />
-            </div>
-            <button className="bg-[#3a7ca5] text-white px-5 py-2.5 rounded-xl text-[11px] font-bold hover:bg-[#4a8cb5] transition-all">
-              UYGULA
-            </button>
-          </div>
-        </div>
       </div>
     </div>,
     document.body

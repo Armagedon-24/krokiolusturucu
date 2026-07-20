@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { CanvasObject, CanvasState, ProjectInfo, Symbol, ScaleCalibration, AccidentReconstruction, AccidentAnimationState, FallAnimationState, VehicleData, SavedAnimation } from '../types';
+import type { CanvasObject, CanvasState, ProjectInfo, Symbol, ScaleCalibration, AccidentReconstruction, AccidentAnimationState, FallAnimationState, PedestrianLaunchAnimationState, ShotDirectionAnimationState, VehicleData, PedestrianData, SavedAnimation } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { SYMBOL_CATEGORIES } from '../constants/symbols';
 import { createKrokiTemplate, createDiagramTemplate } from '../constants/templates';
@@ -24,6 +24,7 @@ interface StoreState extends CanvasState {
   updateObject: (id: string, updates: Partial<CanvasObject>, skipHistory?: boolean) => void;
   removeObject: (id: string) => void;
   removeObjects: (ids: string[]) => void;
+  clearObjects: () => void;
   setSelectedId: (id: string | null) => void;
   setBackgroundImage: (src: string | null) => void;
   setBackgroundOpacity: (opacity: number) => void;
@@ -91,6 +92,10 @@ interface StoreState extends CanvasState {
   // 3D Visual Settings
   updateVisualSettings: (updates: Partial<CanvasState['visualSettings']>) => void;
 
+  // Canvas export callback for fall animation save
+  fallAnimationExportRef: (() => Promise<void>) | null;
+  triggerFallAnimationExport: () => Promise<void>;
+
   // Custom Confirm Dialog
   confirmDialog: {
     isOpen: boolean;
@@ -112,9 +117,20 @@ interface StoreState extends CanvasState {
   fallAnimation: FallAnimationState;
   setAccidentData: (data: Partial<AccidentReconstruction>) => void;
   setAccidentVehicle: (index: 0 | 1, data: Partial<VehicleData>) => void;
+  addPedestrian: (data?: Partial<PedestrianData>) => void;
+  updatePedestrian: (id: string, data: Partial<PedestrianData>) => void;
+  removePedestrian: (id: string) => void;
   setAccidentAnimation: (data: Partial<AccidentAnimationState>) => void;
   setFallAnimation: (data: Partial<FallAnimationState>) => void;
   resetAccidentReconstruction: () => void;
+
+  // Pedestrian Launch
+  pedestrianLaunch: PedestrianLaunchAnimationState;
+  setPedestrianLaunch: (data: Partial<PedestrianLaunchAnimationState>) => void;
+
+  // Shot Direction
+  shotDirection: ShotDirectionAnimationState;
+  setShotDirection: (data: Partial<ShotDirectionAnimationState>) => void;
 
   // Saved Animations
   savedAnimations: SavedAnimation[];
@@ -236,8 +252,12 @@ export const useStore = create<StoreState>()(
             showPath: true,
             showBrakeMarks: true,
             showVehicle: true,
+            evasiveAction: 'none',
+            evasiveOffset: 0,
+            evasiveStartProgress: 0.3,
           },
         ],
+        pedestrians: [],
         roadSurface: 'asphalt_dry',
         frictionCoefficient: 0.7,
         speedLimit: 50,
@@ -262,6 +282,25 @@ export const useStore = create<StoreState>()(
         speed: 1,
         loop: false,
         duration: 2,
+        canvasData: null,
+      },
+      pedestrianLaunch: {
+        isOpen: false,
+        isPlaying: false,
+        currentTime: 0,
+        speed: 1,
+        loop: false,
+        duration: 3,
+        canvasData: null,
+      },
+      shotDirection: {
+        isOpen: false,
+        isPlaying: false,
+        currentTime: 0,
+        speed: 1,
+        loop: false,
+        duration: 3,
+        canvasData: null,
       },
       showConfirm: (data) => set({ 
         confirmDialog: { ...data, isOpen: true } 
@@ -520,6 +559,11 @@ export const useStore = create<StoreState>()(
         get().saveHistory();
       },
 
+      clearObjects: () => {
+        set({ objects: [], selectedId: null });
+        get().saveHistory();
+      },
+
       setSelectedId: (id) => set({ selectedId: id }),
 
       setBackgroundImage: (src) => {
@@ -567,7 +611,7 @@ export const useStore = create<StoreState>()(
       },
 
       saveHistory: () => {
-        const { objects, history, historyIndex } = get();
+        const { objects, history, historyIndex, activeSceneId, scenes, archiveScenes, backgroundImage, projectInfo, drawingArea } = get();
         
         // Don't save if nothing changed
         if (historyIndex >= 0 && JSON.stringify(objects) === JSON.stringify(history[historyIndex])) {
@@ -581,9 +625,18 @@ export const useStore = create<StoreState>()(
           newHistory.shift();
         }
 
+        let updatedScenes = scenes;
+        let updatedArchive = archiveScenes || [];
+        if (activeSceneId && scenes.length > 0) {
+          updatedScenes = scenes.map((s: any) => s.id === activeSceneId ? { ...s, objects: [...objects], backgroundImage, projectInfo: { ...projectInfo }, drawingArea } : s);
+          updatedArchive = updatedArchive.map((s: any) => s.id === activeSceneId ? { ...s, objects: [...objects], backgroundImage, projectInfo: { ...projectInfo }, drawingArea } : s);
+        }
+
         set({
           history: newHistory,
           historyIndex: newHistory.length - 1,
+          scenes: updatedScenes,
+          archiveScenes: updatedArchive,
         });
       },
 
@@ -751,6 +804,7 @@ export const useStore = create<StoreState>()(
             corporateLogoConfig
           };
         });
+        get().applyTemplate(get().projectInfo.type);
       },
       applyTemplate: (type) => {
         const orientation = get().canvasOrientation;
@@ -770,18 +824,20 @@ export const useStore = create<StoreState>()(
           result = createDiagramTemplate(width, height, info);
         }
 
-        // Set initial canvas dimensions
         set((state) => {
           const existingObjects = state.objects || [];
-          const clampedExistingObjects = existingObjects.map((obj) => {
-            if (obj.id === 'corporate-logo' || obj.id.startsWith('logo-')) return obj;
-            return null;
-          }).filter(Boolean) as CanvasObject[];
-          const newObjects = result.objects.filter(
-            (n) => !clampedExistingObjects.some((e) => e.id === n.id)
+          // Preserve ONLY non-template user-drawn objects (symbols, lines, texts added by user) and corporate logo
+          const userDrawnObjects = existingObjects.filter(
+            (obj) => !obj.isTemplate || obj.id === 'corporate-logo' || obj.id?.startsWith('logo-')
           );
+          
+          const userHasLogo = userDrawnObjects.some(u => u.id === 'corporate-logo');
+          const newTemplateObjects = result.objects.filter(
+            t => !userHasLogo || (t.id !== 'corporate-logo' && t.id !== 'corporate-logo-box')
+          );
+
           return {
-            objects: [...clampedExistingObjects, ...newObjects],
+            objects: [...newTemplateObjects, ...userDrawnObjects],
             drawingArea: result.drawingArea,
             selectedId: null,
           };
@@ -972,6 +1028,28 @@ export const useStore = create<StoreState>()(
                 updates.scenes = [activeScene];
               }
               updates.activeSceneId = activeScene.id;
+
+              const currentLocalObjects = get().objects || [];
+              const currentLocalBg = get().backgroundImage;
+              const hasUnsavedLocalWork = silent && (currentLocalObjects.length > 0 || !!currentLocalBg);
+
+              if (!hasUnsavedLocalWork) {
+                if (Array.isArray(activeScene.objects)) {
+                  updates.objects = [...activeScene.objects];
+                  updates.history = [[...activeScene.objects]];
+                  updates.historyIndex = 0;
+                }
+                if (activeScene.backgroundImage !== undefined) {
+                  updates.backgroundImage = activeScene.backgroundImage;
+                }
+                if (activeScene.drawingArea) {
+                  updates.drawingArea = activeScene.drawingArea;
+                }
+              }
+
+              if (activeScene.projectInfo) {
+                updates.projectInfo = { ...get().projectInfo, ...activeScene.projectInfo };
+              }
             } else {
               updates.scenes = [];
               updates.activeSceneId = null;
@@ -1112,10 +1190,10 @@ export const useStore = create<StoreState>()(
               'x-auth-token': get().adminPassword || ''
             }
           });
-          const data = await response.json();
+          const data = await response.json().catch(() => ({}));
 
-          if (!data.assets || !Array.isArray(data.assets)) {
-            throw new Error('Görsel listesi alınamadı');
+          if (!response.ok || data.error || !data.assets || !Array.isArray(data.assets)) {
+            throw new Error(data.error || 'Görsel listesi alınamadı');
           }
 
           const cloudAssets = data.assets;
@@ -1300,15 +1378,16 @@ export const useStore = create<StoreState>()(
       },
 
       removeScene: async (id) => {
-        const targetScene = get().scenes.find(s => s.id === id);
-        if (!targetScene) return;
+        const inScenes = (get().scenes || []).some(s => s.id === id);
+        const inArchive = (get().archiveScenes || []).some(s => s.id === id);
+        if (!inScenes && !inArchive) return;
 
         set((state) => {
-          const newScenes = state.scenes.filter(s => s.id !== id);
+          const newScenes = (state.scenes || []).filter(s => s.id !== id);
           const newArchiveScenes = (state.archiveScenes || []).filter(s => s.id !== id);
           let newActiveId = state.activeSceneId;
           if (state.activeSceneId === id) {
-            newActiveId = newScenes.length > 0 ? newScenes[0].id : null;
+            newActiveId = newScenes.length > 0 ? newScenes[0].id : (newArchiveScenes.length > 0 ? newArchiveScenes[0].id : null);
           }
           return { 
             scenes: newScenes, 
@@ -1316,31 +1395,27 @@ export const useStore = create<StoreState>()(
             activeSceneId: newActiveId,
             adminSettings: {
               ...state.adminSettings,
-              deletedSceneIds: [...(state.adminSettings.deletedSceneIds || []), id]
+              deletedSceneIds: Array.from(new Set([...(state.adminSettings.deletedSceneIds || []), id]))
             }
           };
         });
 
-        const { activeSceneId, isAdmin } = get();
-        if (activeSceneId) get().switchScene(activeSceneId);
-        
-        // Sync to cloud after deletion to ensure it stays deleted across sessions
-        // We do this even if not admin if we want the current session to persist, 
-        // but typically only admin has the token to save. 
-        // If not admin, we at least notify that it's a local deletion.
-        if (isAdmin) {
-          try {
-            await get().syncToCloud(true);
-          } catch (error: unknown) {
-            console.error('Scene deletion sync failed:', error);
-          }
-        } else {
-          get().addNotification({
-            type: 'info',
-            message: 'Yerel Kayıt Silindi',
-            description: 'Çizim bu cihazdan kaldırıldı. Kalıcı bulut silme için yönetici girişi gereklidir.'
-          });
+        const { activeSceneId } = get();
+        if (activeSceneId && get().scenes.some(s => s.id === activeSceneId)) {
+          get().switchScene(activeSceneId);
         }
+        
+        try {
+          await get().syncToCloud(true);
+        } catch (error: unknown) {
+          console.error('Scene deletion sync failed:', error);
+        }
+
+        get().addNotification({
+          type: 'success',
+          message: 'Belge Silindi',
+          description: 'Çizim/kroki arşivden başarıyla silindi.'
+        });
       },
 
       updateSceneName: (id, name) => {
@@ -1425,6 +1500,16 @@ export const useStore = create<StoreState>()(
         }
       },
 
+      fallAnimationExportRef: null,
+      triggerFallAnimationExport: async () => {
+        const ref = get().fallAnimationExportRef;
+        if (ref) {
+          await ref();
+        } else {
+          console.warn('Fall animation export function is not registered yet.');
+        }
+      },
+
       updateVisualSettings: (updates) => {
         set((state) => ({
           visualSettings: { ...state.visualSettings, ...updates }
@@ -1448,6 +1533,48 @@ export const useStore = create<StoreState>()(
           };
         });
       },
+      addPedestrian: (data) => {
+        set((state) => {
+          const newPedestrian: PedestrianData = {
+            id: uuidv4(),
+            name: `Yaya ${(state.accidentReconstruction.pedestrians?.length || 0) + 1}`,
+            startX: 800,
+            startY: 300,
+            endX: 800,
+            endY: 700,
+            speed: 5,
+            size: 'adult',
+            color: '#4CAF50',
+            show: true,
+            appearProgress: 0.2,
+            ...data,
+          };
+          return {
+            accidentReconstruction: {
+              ...state.accidentReconstruction,
+              pedestrians: [...(state.accidentReconstruction.pedestrians || []), newPedestrian]
+            }
+          };
+        });
+      },
+      updatePedestrian: (id, data) => {
+        set((state) => ({
+          accidentReconstruction: {
+            ...state.accidentReconstruction,
+            pedestrians: (state.accidentReconstruction.pedestrians || []).map((p) =>
+              p.id === id ? { ...p, ...data } : p
+            )
+          }
+        }));
+      },
+      removePedestrian: (id) => {
+        set((state) => ({
+          accidentReconstruction: {
+            ...state.accidentReconstruction,
+            pedestrians: (state.accidentReconstruction.pedestrians || []).filter((p) => p.id !== id)
+          }
+        }));
+      },
       setAccidentAnimation: (data) => {
         set((state) => ({
           accidentAnimation: { ...state.accidentAnimation, ...data }
@@ -1456,6 +1583,16 @@ export const useStore = create<StoreState>()(
       setFallAnimation: (data) => {
         set((state) => ({
           fallAnimation: { ...state.fallAnimation, ...data }
+        }));
+      },
+      setPedestrianLaunch: (data) => {
+        set((state) => ({
+          pedestrianLaunch: { ...state.pedestrianLaunch, ...data }
+        }));
+      },
+      setShotDirection: (data) => {
+        set((state) => ({
+          shotDirection: { ...state.shotDirection, ...data }
         }));
       },
       saveAnimation: (name) => {
@@ -1516,8 +1653,12 @@ export const useStore = create<StoreState>()(
                 showPath: true,
                 showBrakeMarks: true,
                 showVehicle: true,
+                evasiveAction: 'none' as const,
+                evasiveOffset: 0,
+                evasiveStartProgress: 0.3,
               },
             ],
+            pedestrians: [],
             roadSurface: 'asphalt_dry',
             frictionCoefficient: 0.7,
             speedLimit: 50,
@@ -1539,15 +1680,18 @@ export const useStore = create<StoreState>()(
       },
     }),
     {
-      name: 'kroki-v2', // Changed name to force a clean start and ensure old data doesn't conflict
-      version: 21,
+      name: 'kroki-v2',
+      version: 23,
       partialize: (state) => ({
         // allSymbols and uploadedImages are excluded to avoid localStorage quota issues (5MB limit)
         // They will be fetched from the cloud via restoreFromCloud/refreshSymbols
+        // scenes and archiveScenes persist so saved cases survive app refresh.
+        // objects are NOT persisted — canvas starts empty on page load.
         scaleCalibration: state.scaleCalibration,
         accidentReconstruction: state.accidentReconstruction,
         accidentAnimation: state.accidentAnimation,
         fallAnimation: state.fallAnimation,
+        pedestrianLaunch: state.pedestrianLaunch,
         backgroundGrayscale: state.backgroundGrayscale,
         canvasBgColor: state.canvasBgColor,
         canvasOrientation: state.canvasOrientation,
@@ -1555,15 +1699,86 @@ export const useStore = create<StoreState>()(
         krokiInfo: state.krokiInfo,
         diagramInfo: state.diagramInfo,
         isAdmin: state.isAdmin,
-        objects: state.objects,
-        drawingArea: state.drawingArea,
         symbolUsage: state.symbolUsage,
+        visualSettings: state.visualSettings,
+        savedAnimations: state.savedAnimations,
         scenes: state.scenes,
         archiveScenes: state.archiveScenes,
         activeSceneId: state.activeSceneId,
-        visualSettings: state.visualSettings,
-        savedAnimations: state.savedAnimations,
       }),
+      onRehydrateStorage: () => (state) => {
+        if (state) {
+          // On page refresh: restore user-drawn objects only (no template frames).
+          // Template frames are regenerated dynamically by applyTemplate/switchScene.
+          const activeScene = (state.scenes || []).find((s: any) => s.id === state.activeSceneId) || state.scenes?.[0];
+          if (activeScene && Array.isArray(activeScene.objects)) {
+            // Filter out pure template objects — keep user objects and corporate-logo
+            const userObjects = activeScene.objects.filter(
+              (obj: any) => !obj.isTemplate || obj.id === 'corporate-logo' || obj.id?.startsWith('logo-')
+            );
+            state.objects = userObjects;
+            state.backgroundImage = activeScene.backgroundImage || null;
+            if (activeScene.drawingArea) state.drawingArea = activeScene.drawingArea;
+            if (activeScene.projectInfo) state.projectInfo = { ...state.projectInfo, ...activeScene.projectInfo };
+            state.history = [userObjects];
+          } else {
+            state.objects = [];
+            state.history = [[]];
+          }
+          state.historyIndex = 0;
+          state.selectedId = null;
+          // Reset all animation states so no stale data remains on refresh
+          state.accidentAnimation = { isPlaying: false, currentTime: 0, speed: 1, loop: false, showTimeline: false };
+          state.fallAnimation = { isOpen: false, isPlaying: false, currentTime: 0, speed: 1, loop: false, duration: 2, canvasData: null };
+          state.pedestrianLaunch = { isOpen: false, isPlaying: false, currentTime: 0, speed: 1, loop: false, duration: 3, canvasData: null };
+          state.shotDirection = { isOpen: false, isPlaying: false, currentTime: 0, speed: 1, loop: false, duration: 3, canvasData: null };
+          // Reset accident reconstruction data so previous analysis doesn't persist
+          state.accidentReconstruction = {
+            enabled: false,
+            vehicles: [
+              {
+                id: 'v1',
+                type: 'car',
+                name: 'Araç 1',
+                color: '#E53935',
+                startX: 200,
+                startY: 500,
+                startRotation: 0,
+                initialSpeed: 60,
+                brakeReactionTime: 0.8,
+                brakeEfficiency: 85,
+                brakeMarkLength: 20,
+                brakeMarkWidth: 0.3,
+                brakeMarkType: 'straight',
+                brakeMarkCurvature: 0,
+                collisionX: 600,
+                collisionY: 500,
+                impactSpeed: 30,
+                impactAngle: 0,
+                finalX: 700,
+                finalY: 500,
+                finalRotation: 0,
+                showPath: true,
+                showBrakeMarks: true,
+                showVehicle: true,
+                evasiveAction: 'none' as const,
+                evasiveOffset: 0,
+                evasiveStartProgress: 0.3,
+              },
+            ],
+            pedestrians: [],
+            roadSurface: 'asphalt_dry',
+            frictionCoefficient: 0.7,
+            speedLimit: 50,
+            weather: 'clear',
+            lighting: 'daylight',
+            roadType: 'urban',
+            animationDuration: 5,
+            autoCalculateBraking: false,
+            notes: '',
+          };
+        }
+      },
     }
   )
 );
