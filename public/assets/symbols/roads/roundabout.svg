@@ -14,9 +14,6 @@
   <!-- Intersection Asphalt Cover -->
   <circle cx="100" cy="100" r="50" fill="#333333" />
 
-  <!-- Roundabout Dashed Line -->
-  <circle cx="100" cy="100" r="46" stroke="white" stroke-width="4" stroke-dasharray="12 12" fill="none" />
-
   <!-- Roundabout Island (asfalt rengi, kenarlıksız) -->
   <circle cx="100" cy="100" r="30" fill="#333333" />
 </svg>

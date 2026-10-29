@@ -1019,26 +1019,19 @@ const IndividualObject = ({
                   </Group>
                 );
               } else {
-                // Roundabout (st-1 style)
-                const islandRadius = Math.min(w, h) * 0.22;
+                // Roundabout (st-1 style) — göbek ve ada düz asfalt, hiçbir beyaz çizgi yok
                 return (
                   <Group>
                     {/* Roads */}
                     <Rect x={w/2 - roadWidth/2} y={0} width={roadWidth} height={h} fill={roadColor} />
                     <Rect x={0} y={h/2 - roadWidth/2} width={w} height={roadWidth} fill={roadColor} />
-                    
-                    {/* Hub Cover */}
-                    <Circle x={w/2} y={h/2} radius={roadWidth * 0.8} fill={roadColor} />
-                    
+
                     {/* Center Dashed Lines (st-1 style) */}
                     <Line points={[w/2, 0, w/2, h]} stroke={lineColor} strokeWidth={centerLineWidth} dash={centerDash} lineCap="butt" />
                     <Line points={[0, h/2, w, h/2]} stroke={lineColor} strokeWidth={centerLineWidth} dash={centerDash} lineCap="butt" />
-                    
-                    {/* Roundabout Dashed Circle */}
-                    <Circle x={w/2} y={h/2} radius={islandRadius + 8} stroke={lineColor} strokeWidth={centerLineWidth} dash={[10, 10]} fill="none" opacity={0.8} />
-                    
-                    {/* Central Island (asfalt rengi, kenarlıksız — roundabout.svg ile aynı stil) */}
-                    <Circle x={w/2} y={h/2} radius={islandRadius} fill={roadColor} />
+
+                    {/* Hub Cover — kesikli çizgilerin ÜSTÜNE çizilir; kavşak ve ada tamamen düz asfalt kalır */}
+                    <Circle x={w/2} y={h/2} radius={roadWidth * 0.8} fill={roadColor} />
                   </Group>
                 );
               }
