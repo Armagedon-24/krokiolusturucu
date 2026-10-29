@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   Settings2,
   Play,
+  CloudDownload,
 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { v4 as uuidv4 } from 'uuid';
@@ -19,6 +20,7 @@ import { CalculatorIndex } from './Calculators/CalculatorIndex';
 import { AnimationIndex } from './Animations/AnimationIndex';
 import { processUploadedSymbolImage } from '../../utils/canvasUtils';
 import { getOptimizedCloudinaryUrl } from '../../lib/cloudinary';
+import { CloudGalleryModal } from './CloudGalleryModal';
 
 export const Sidebar: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'symbols' | 'uploads' | 'animations' | 'calculators'>('symbols');
@@ -48,6 +50,7 @@ export const Sidebar: React.FC = () => {
   const [draggedItem, setDraggedItem] = useState<{ id: string, catId: string, isUpload?: boolean } | null>(null);
   const [editingImageId, setEditingImageId] = useState<string | null>(null);
   const [showAllUploads, setShowAllUploads] = useState(false);
+  const [cloudGalleryOpen, setCloudGalleryOpen] = useState(false);
   const [hoveredSymbol, setHoveredSymbol] = useState<{ id: string, name: string, description?: string, rect: DOMRect } | null>(null);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -583,7 +586,14 @@ export const Sidebar: React.FC = () => {
 
                   <div className="flex flex-col gap-2">
 
-                    
+                    <button
+                      onClick={() => setCloudGalleryOpen(true)}
+                      className="w-full py-2 bg-[#F5C518] border border-[#F5C518] text-black rounded-md hover:bg-[#ffd52e] transition-all text-[10px] font-black flex items-center justify-center gap-2"
+                    >
+                      <CloudDownload size={12} />
+                      BULUT GALERİSİNDEN YÜKLE
+                    </button>
+
                     <button
                       onClick={() => recoverCloudinaryImages()}
                       className="w-full py-2 bg-[#F5C518]/10 border border-[#F5C518]/30 text-[#F5C518] rounded-md hover:bg-[#F5C518]/20 transition-all text-[10px] font-bold flex items-center justify-center gap-2"
@@ -769,6 +779,11 @@ export const Sidebar: React.FC = () => {
               .trim()}
           </span>
         </div>
+      )}
+
+      {/* Bulut Galerisi — Cloudinary'deki görselleri kütüphaneye yükleme */}
+      {cloudGalleryOpen && (
+        <CloudGalleryModal onClose={() => setCloudGalleryOpen(false)} />
       )}
     </aside>
   );

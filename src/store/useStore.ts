@@ -4,7 +4,7 @@ import type { CanvasObject, CanvasState, ProjectInfo, Symbol, ScaleCalibration, 
 import { v4 as uuidv4 } from 'uuid';
 import { SYMBOL_CATEGORIES } from '../constants/symbols';
 import { createKrokiTemplate, createDiagramTemplate } from '../constants/templates';
-import { cloudinary as cloud } from '../lib/cloudinary';
+import { cloudinary as cloud, publicIdFromUrl } from '../lib/cloudinary';
 
 const TODAY = new Date().toISOString().split('T')[0];
 const DEFAULT_DRAWING_AREA = { x: 17, y: 167, width: 966, height: 1126 } as const;
@@ -18,7 +18,7 @@ export interface Notification {
 
 interface StoreState extends CanvasState {
   addObject: (obj: Partial<CanvasObject>) => void;
-  addUploadedImage: (img: { id: string, src: string, name: string, category?: string, group?: string }) => void;
+  addUploadedImage: (img: { id: string, src: string, name: string, category?: string, group?: string }, opts?: { allowDeletedName?: boolean }) => void;
   removeUploadedImage: (id: string) => void;
   updateUploadedImage: (id: string, category?: string, group?: string, name?: string) => void;
   updateObject: (id: string, updates: Partial<CanvasObject>, skipHistory?: boolean) => void;
@@ -140,6 +140,18 @@ interface StoreState extends CanvasState {
 }
 
 const MAX_HISTORY = 50;
+
+// Bulut adminSettings önbelleği (60 sn) — her senkronda tam config indirmeyi önler
+let _cloudAdminCache: { at: number; admin: any } | null = null;
+const fetchCloudAdminSettings = async (): Promise<any> => {
+  if (_cloudAdminCache && Date.now() - _cloudAdminCache.at < 60000) {
+    return _cloudAdminCache.admin;
+  }
+  const data = await cloud.load();
+  const admin = data?.projectState?.adminSettings || {};
+  _cloudAdminCache = { at: Date.now(), admin };
+  return admin;
+};
 
 export const useStore = create<StoreState>()(
   persist(
@@ -402,15 +414,37 @@ export const useStore = create<StoreState>()(
         get().saveHistory();
       },
 
-      addUploadedImage: async (img) => {
-        // Check for duplicates in both uploadedImages and predefined allSymbols
-        const isDuplicateInUploads = get().uploadedImages.some(existing => 
-          existing.name === img.name || existing.src === img.src
+      addUploadedImage: async (img, opts) => {
+        // Mükerrer kontrolü: isim, ham src VE Cloudinary public_id üzerinden
+        // (transform parametreleri farklı URL'ler aynı görsel olarak sayılır)
+        const imgPid = publicIdFromUrl(img.src);
+        const isDuplicateInUploads = get().uploadedImages.some(existing => {
+          if (existing.name === img.name || existing.src === img.src) return true;
+          if (imgPid && publicIdFromUrl(existing.src) === imgPid) return true;
+          return false;
+        });
+
+        const isDuplicateInPredefined = get().allSymbols.some(cat =>
+          cat.symbols.some((s: any) => {
+            if (s.name === img.name || s.src === img.src) return true;
+            if (imgPid && publicIdFromUrl(s.src) === imgPid) return true;
+            return false;
+          })
         );
 
-        const isDuplicateInPredefined = get().allSymbols.some(cat => 
-          cat.symbols.some((s: any) => s.name === img.name || s.src === img.src)
-        );
+        // Daha önce kalıcı olarak silinmiş bir görsel aynı adla tekrar eklenemez
+        // (Bulut Galerisi'nden açık talep ile geri yükleme istisnadır)
+        if (!opts?.allowDeletedName) {
+          const deletedKeys = new Set<string>(get().adminSettings.deletedAssetIds || []);
+          if (img.name && deletedKeys.has('name:' + img.name.trim().toLowerCase())) {
+            get().addNotification({
+              type: 'warning',
+              message: 'Mükerrer Kayıt Engellendi',
+              description: `"${img.name}" daha önce kalıcı olarak silindi. Geri yüklemek için Bulut Galerisi'nden seçin.`
+            });
+            return;
+          }
+        }
 
         if (isDuplicateInUploads || isDuplicateInPredefined) {
           get().addNotification({
@@ -466,17 +500,29 @@ export const useStore = create<StoreState>()(
 
         if (isAdmin && targetImg) {
           try {
-            await cloud.delete(targetImg.src);
+            // Buluttan da kalıcı olarak sil (yetkilendirme token'ı ile)
+            await cloud.delete(targetImg.src, get().adminPassword || '');
           } catch (error: unknown) {
             console.error('Bulut silme hatası:', error);
           }
+        }
+
+        // Kalıcı silme anahtarları: yerel id + Cloudinary public_id + ham src + dosya adı.
+        // Bulut taraması (recoverCloudinaryImages) bu anahtarlarla eşleşen görselleri
+        // ASLA geri getirmez; "sildiğim görseller tekrar gelmesin" garantisi.
+        const graveKeys: string[] = [id];
+        if (targetImg) {
+          const pid = publicIdFromUrl(targetImg.src);
+          if (pid) graveKeys.push(pid);
+          if (targetImg.src) graveKeys.push(targetImg.src);
+          if (targetImg.name) graveKeys.push('name:' + targetImg.name.trim().toLowerCase());
         }
 
         set((state) => ({
           uploadedImages: state.uploadedImages.filter((img) => img.id !== id),
           adminSettings: {
             ...state.adminSettings,
-            deletedAssetIds: [...(state.adminSettings.deletedAssetIds || []), id]
+            deletedAssetIds: Array.from(new Set([...(state.adminSettings.deletedAssetIds || []), ...graveKeys]))
           }
         }));
 
@@ -485,7 +531,7 @@ export const useStore = create<StoreState>()(
           get().addNotification({
             type: 'info',
             message: 'Görsel Silindi',
-            description: 'Görsel kütüphaneden kaldırıldı ve bulut yedeği güncellendi.'
+            description: 'Görsel kütüphaneden ve bulut deposundan kalıcı olarak kaldırıldı.'
           });
         }
       },
@@ -892,15 +938,33 @@ export const useStore = create<StoreState>()(
       setIsAdmin: (isAdmin: boolean, password?: string) => set({ isAdmin, adminPassword: isAdmin ? (password || null) : null }),
 
       syncToCloud: async (silent = false) => {
-        const isLocalhost = typeof window !== 'undefined' && 
+        const isLocalhost = typeof window !== 'undefined' &&
           (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
         if (isLocalhost) {
           return;
         }
 
         try {
-          const { uploadedImages, allSymbols, objects, backgroundImage, projectInfo, adminSettings, scenes, archiveScenes = [], activeSceneId, visualSettings } = get();
-          
+          const { uploadedImages, allSymbols, objects, backgroundImage, projectInfo, scenes, archiveScenes = [], activeSceneId, visualSettings } = get();
+
+          // KRİTİK: Silme listelerini buluttaki son haliyle BİRLEŞTİR.
+          // Yeni sekme/cihazda yerel adminSettings boş olabilir; birleştirme yapılmadan
+          // kaydedilirse buluttaki silme kayıtları silinir ve silinen SVG görseller geri gelir.
+          let adminSettings = get().adminSettings;
+          try {
+            const cloudAdmin = await fetchCloudAdminSettings();
+            adminSettings = {
+              ...adminSettings,
+              hiddenSymbolIds: Array.from(new Set([...(adminSettings.hiddenSymbolIds || []), ...(cloudAdmin.hiddenSymbolIds || [])])),
+              deletedAssetIds: Array.from(new Set([...(adminSettings.deletedAssetIds || []), ...(cloudAdmin.deletedAssetIds || [])])),
+              deletedSceneIds: Array.from(new Set([...(adminSettings.deletedSceneIds || []), ...(cloudAdmin.deletedSceneIds || [])])),
+            };
+            // Birleşik listeyi kalıcı hafızaya da yaz (sonraki senkronlarda birikir)
+            set({ adminSettings });
+          } catch (mergeErr) {
+            console.warn('Bulut silme listeleri birleştirilemedi, yerel liste ile devam ediliyor:', mergeErr);
+          }
+
           const hardBlacklist = new Set([
             'ex-11', 'ex-12', 'ex-13', 'ex-14', 'ex-15', 'ex-16', 'ex-17', 'ex-18', 
             'p-4', 'p-10', 'p-11', 'p-12',
@@ -1111,15 +1175,19 @@ export const useStore = create<StoreState>()(
             ...(state.adminSettings.hiddenSymbolIds || [])
           ]);
 
-          // 1. uploadedImages Deduplication (By Source URL) and Filtering
+          // 1. uploadedImages Deduplication (By Source URL + Cloudinary public_id) and Filtering
           const uniqueUploads: any[] = [];
           const seenUrls = new Set();
-          
+          const seenPids = new Set<string>();
+
           state.uploadedImages.forEach(img => {
-            if (!img.src.startsWith('blob:') && !seenUrls.has(img.src) && !hardBlacklist.has(img.id)) {
-              uniqueUploads.push(img);
-              seenUrls.add(img.src);
-            }
+            if (img.src.startsWith('blob:') || hardBlacklist.has(img.id)) return;
+            if (seenUrls.has(img.src)) return;
+            const pid = publicIdFromUrl(img.src);
+            if (pid && seenPids.has(pid)) return; // aynı bulut görseli (farklı transform URL) — mükerrer
+            uniqueUploads.push(img);
+            seenUrls.add(img.src);
+            if (pid) seenPids.add(pid);
           });
 
           // 2. allSymbols Deduplication and Merging
@@ -1197,21 +1265,37 @@ export const useStore = create<StoreState>()(
           }
 
           const cloudAssets = data.assets;
-          // Get all current sources (predefined + uploaded) to check for duplicates
-          const currentUrls = new Set();
-          get().allSymbols.forEach(cat => cat.symbols.forEach((s: any) => currentUrls.add(s.src)));
-          get().uploadedImages.forEach(img => currentUrls.add(img.src));
-          
-          const deletedIds = new Set(get().adminSettings.deletedAssetIds || []);
+          // Mevcut kaynaklar: ham URL + public_id (transform parametreleri farklı olsa da
+          // aynı Cloudinary görseli mükerrer olarak eklenmez)
+          const currentUrls = new Set<string>();
+          const currentPids = new Set<string>();
+          get().allSymbols.forEach(cat => cat.symbols.forEach((s: any) => {
+            currentUrls.add(s.src);
+            const pid = publicIdFromUrl(s.src);
+            if (pid) currentPids.add(pid);
+          }));
+          get().uploadedImages.forEach(img => {
+            currentUrls.add(img.src);
+            const pid = publicIdFromUrl(img.src);
+            if (pid) currentPids.add(pid);
+          });
+
+          // Kalıcı silme anahtarları: id, public_id, ham src ve name: önekli dosya adı
+          const deletedKeys = new Set<string>(get().adminSettings.deletedAssetIds || []);
           const hiddenIds = new Set(get().adminSettings.hiddenSymbolIds || []);
-          
+
           let recoveredCount = 0;
           const newImages = [...uploadedImages];
 
           cloudAssets.forEach((asset: any) => {
-            // Check if URL is already present or if ID was explicitly deleted/hidden
-            const isAlreadyPresent = currentUrls.has(asset.src);
-            const isDeleted = deletedIds.has(asset.id) || hiddenIds.has(asset.id);
+            const assetPid = publicIdFromUrl(asset.src) || asset.id;
+            const nameKey = asset.name ? 'name:' + String(asset.name).trim().toLowerCase() : null;
+            // Silinmiş / gizlenmiş görseller ASLA geri getirilmez
+            const isDeleted = deletedKeys.has(asset.id) || deletedKeys.has(assetPid) ||
+                              deletedKeys.has(asset.src) || (nameKey ? deletedKeys.has(nameKey) : false) ||
+                              hiddenIds.has(asset.id) || hiddenIds.has(assetPid);
+            // Zaten kütüphanede varsa (URL veya public_id eşleşmesi) tekrar eklenmez
+            const isAlreadyPresent = currentUrls.has(asset.src) || currentPids.has(asset.id) || currentPids.has(assetPid);
 
             if (!isAlreadyPresent && !isDeleted) {
               newImages.push({
@@ -1220,6 +1304,8 @@ export const useStore = create<StoreState>()(
                 name: asset.name,
                 category: asset.category || 'uncategorized'
               });
+              currentUrls.add(asset.src);
+              currentPids.add(assetPid);
               recoveredCount++;
             }
           });

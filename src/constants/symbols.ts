@@ -424,6 +424,12 @@ export const SYMBOL_CATEGORIES = [
       { id: 'an-donkey', name: 'Eşek', src: '/assets/symbols/animals/donkey.png', type: 'symbol', width: 132, height: 76, description: 'Eşek silueti (kırsal olay yerleri).' },
       { id: 'an-wolf', name: 'Kurt', src: '/assets/symbols/animals/wolf.png', type: 'symbol', width: 128, height: 76, description: 'Kurt silueti (hayvan saldırıları, kırsal bölgeler).' },
       { id: 'an-fox', name: 'Tilki', src: '/assets/symbols/animals/fox.png', type: 'symbol', width: 126, height: 78, description: 'Tilki silueti (kuduz/hayvan saldırısı olayları).' },
+      { id: 'an-bear', name: 'Ayı', src: '/assets/symbols/animals/bear.png', type: 'symbol', width: 130, height: 76, description: 'Ayı silueti (vahşi hayvan saldırıları, orman alanları).' },
+      { id: 'an-pig', name: 'Domuz (Yaban)', src: '/assets/symbols/animals/pig.png', type: 'symbol', width: 130, height: 72, description: 'Yaban domuzu silueti (vahşi hayvan saldırıları, kırsal olaylar).' },
+      { id: 'an-deer', name: 'Geyik', src: '/assets/symbols/animals/deer.png', type: 'symbol', width: 110, height: 84, description: 'Geyik silueti (araç-hayvan çarpışmaları, kırsal bölgeler).' },
+      { id: 'an-snake', name: 'Yılan', src: '/assets/symbols/animals/snake.png', type: 'symbol', width: 140, height: 60, description: 'Yılan silueti (zehirli hayvan olayları).' },
+      { id: 'an-rabbit', name: 'Tavşan', src: '/assets/symbols/animals/rabbit.png', type: 'symbol', width: 80, height: 86, description: 'Tavşan silueti (kırsal/bahçe olayları).' },
+      { id: 'an-duck', name: 'Ördek', src: '/assets/symbols/animals/duck.png', type: 'symbol', width: 92, height: 72, description: 'Ördek silueti (gölet/tarım alanı olayları).' },
     ]
   }
 ] as const;

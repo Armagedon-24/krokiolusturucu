@@ -1,6 +1,24 @@
 const CLOUD_NAME = 'dzen3qvgp';
 const UPLOAD_PRESET = 'kroki-olusturucu';
 
+/**
+ * Cloudinary URL'sinden transform parametrelerinden bağımsız benzersiz public_id türetir.
+ * Mükerrer kontrolü ve silinen görsellerin yeniden gelmemesi için kullanılır.
+ * Ör: https://res.cloudinary.com/<cloud>/image/upload/f_auto,q_auto,w_80/v123/kroki-olusturucu/uncategorized/kedi.png
+ *   -> 'kroki-olusturucu/uncategorized/kedi'
+ */
+export const publicIdFromUrl = (url: string): string | null => {
+  if (!url || typeof url !== 'string' || !url.includes('res.cloudinary.com')) return null;
+  const idx = url.indexOf('/upload/');
+  if (idx === -1) return null;
+  const rest = url.substring(idx + 8).split('?')[0];
+  const parts = rest.split('/').filter(Boolean);
+  if (parts.length > 0 && /^v\d+$/.test(parts[0])) parts.shift();
+  if (parts.length === 0) return null;
+  const joined = parts.join('/');
+  return joined.replace(/\.[a-zA-Z0-9]+$/, '') || joined;
+};
+
 export const getOptimizedCloudinaryUrl = (url: string, width = 80, height?: number): string => {
   if (!url || typeof url !== 'string') return url;
   if (!url.includes('res.cloudinary.com')) return url;
