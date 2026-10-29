@@ -17,7 +17,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { Lock, Calculator } from 'lucide-react';
 import { CalculatorIndex } from './Calculators/CalculatorIndex';
 import { AnimationIndex } from './Animations/AnimationIndex';
-import { compressAndResizeImage } from '../../utils/canvasUtils';
+import { processUploadedSymbolImage } from '../../utils/canvasUtils';
 import { getOptimizedCloudinaryUrl } from '../../lib/cloudinary';
 
 export const Sidebar: React.FC = () => {
@@ -54,13 +54,15 @@ export const Sidebar: React.FC = () => {
     const file = e.target.files?.[0];
     if (file) {
       try {
-        const compressedSrc = await compressAndResizeImage(file, 600, 600, 0.45);
-        const capitalizedName = file.name.charAt(0).toUpperCase() + file.name.slice(1);
-        
+        // Hangi format gelirse gelsin: yeniden boyutlandır + PNG + şeffaf arka plan
+        const compressedSrc = await processUploadedSymbolImage(file, 600, 600);
+        const capitalizedName = file.name.replace(/\.(png|jpe?g|webp|gif|bmp|svg)$/i, '');
+        const displayName = capitalizedName.charAt(0).toUpperCase() + capitalizedName.slice(1);
+
         addUploadedImage({
           id: uuidv4(),
           src: compressedSrc,
-          name: capitalizedName,
+          name: displayName,
           category: 'uncategorized',
         });
         addNotification({
@@ -78,13 +80,15 @@ export const Sidebar: React.FC = () => {
     const file = e.target.files?.[0];
     if (file) {
       try {
-        const compressedSrc = await compressAndResizeImage(file, 600, 600, 0.45);
-        const capitalizedName = file.name.charAt(0).toUpperCase() + file.name.slice(1);
-        
+        // Hangi format gelirse gelsin: yeniden boyutlandır + PNG + şeffaf arka plan
+        const compressedSrc = await processUploadedSymbolImage(file, 600, 600);
+        const capitalizedName = file.name.replace(/\.(png|jpe?g|webp|gif|bmp|svg)$/i, '');
+        const displayName = capitalizedName.charAt(0).toUpperCase() + capitalizedName.slice(1);
+
         addUploadedImage({
           id: uuidv4(),
           src: compressedSrc,
-          name: capitalizedName,
+          name: displayName,
           category: categoryId,
         });
         addNotification({

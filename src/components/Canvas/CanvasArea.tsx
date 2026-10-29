@@ -2379,11 +2379,13 @@ const IndividualObject = ({
             shapeProps.type !== 'line' && 
             !['arch-1', 'arch-1v'].includes(shapeProps.symbolId || '')
           }
-          enabledAnchors={
-            isStretchable
-              ? ['top-left', 'top-right', 'bottom-left', 'bottom-right', 'middle-left', 'middle-right', 'top-center', 'bottom-center']
-              : ['top-left', 'top-right', 'bottom-left', 'bottom-right']
-          }
+          enabledAnchors={[
+            // Tüm nesnelerde köşe + kenar (orta) tutamaçları aktif.
+            // Kenar tutamaçları Konva'da keepRatio'dan bağımsız tek eksen ölçekler.
+            'top-left', 'top-center', 'top-right',
+            'middle-left', 'middle-right',
+            'bottom-left', 'bottom-center', 'bottom-right',
+          ]}
           keepRatio={shapeProps.categoryId === 'furniture' ? true : !isStretchable}
           boundBoxFunc={(oldBox, newBox) => {
             if (Math.abs(newBox.width) < 5 || Math.abs(newBox.height) < 5) {
@@ -4584,6 +4586,12 @@ export const CanvasArea: React.FC = () => {
               {selectedId === 'background-image' && bgImageRef.current && (
                 <Transformer
                   nodes={[bgImageRef.current]}
+                  enabledAnchors={[
+                    // Arka plan görselinde de köşe + kenar (orta) tutamaçları aktif.
+                    'top-left', 'top-center', 'top-right',
+                    'middle-left', 'middle-right',
+                    'bottom-left', 'bottom-center', 'bottom-right',
+                  ]}
                   boundBoxFunc={(oldBox, newBox) => {
                     // Optional: limit scaling
                     if (newBox.width < 50 || newBox.height < 50) return oldBox;
