@@ -1037,9 +1037,8 @@ const IndividualObject = ({
                     {/* Roundabout Dashed Circle */}
                     <Circle x={w/2} y={h/2} radius={islandRadius + 8} stroke={lineColor} strokeWidth={centerLineWidth} dash={[10, 10]} fill="none" opacity={0.8} />
                     
-                    {/* The Green Central Island */}
-                    <Circle x={w/2} y={h/2} radius={islandRadius} fill="#22c55e" stroke={lineColor} strokeWidth={1.5} />
-                    <Circle x={w/2} y={h/2} radius={islandRadius * 0.7} fill="rgba(255,255,255,0.15)" />
+                    {/* Central Island (asfalt rengi, kenarlıksız — roundabout.svg ile aynı stil) */}
+                    <Circle x={w/2} y={h/2} radius={islandRadius} fill={roadColor} />
                   </Group>
                 );
               }
