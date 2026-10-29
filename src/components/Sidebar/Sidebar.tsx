@@ -744,46 +744,30 @@ export const Sidebar: React.FC = () => {
         </div>
       </div>
 
-      {/* Symbol Description Tooltip */}
+      {/* Symbol Tooltip — sade: sadece isim, butonları kapatmaz */}
       {hoveredSymbol && (
-        <div 
-          className="fixed z-[9999] w-72 bg-[#1e1e1e]/95 backdrop-blur-md border border-[#F5C518]/40 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] p-4 pointer-events-none animate-in fade-in zoom-in-95 duration-200"
+        <div
+          className="fixed z-[60] max-w-[220px] bg-[#161616]/95 backdrop-blur-sm border border-[#F5C518]/40 rounded-md px-2.5 py-1 pointer-events-none animate-in fade-in duration-100"
           style={{
-            left: hoveredSymbol.rect.right + 25,
-            top: Math.min(window.innerHeight - 200, hoveredSymbol.rect.top - 20),
+            left: Math.max(8, Math.min(window.innerWidth - 235, hoveredSymbol.rect.right + 10)),
+            top: Math.max(6, Math.min(
+              window.innerHeight - 36,
+              hoveredSymbol.rect.top + hoveredSymbol.rect.height / 2 - 13
+            )),
           }}
         >
-          <div className="flex items-center gap-2 mb-2 border-b border-[#333] pb-1.5">
-            <div className="w-2 h-2 bg-[#F5C518] rounded-full animate-pulse" />
-            <span className="text-[10px] font-black text-[#F5C518] uppercase tracking-wider">
-              {hoveredSymbol.name
-                .replace(/\.[^/.]+$/, "") 
-                .replace(/\?v=\d+/, "") 
-                .replace(/üstten\s+görünüm/gi, '(Üstten)')
-                .replace(/sağdan\s+görünüm/gi, '(Sağdan)')
-                .replace(/soldan\s+görünüm/gi, '(Soldan)')
-                .replace(/\s[a-z0-9]{6}$/, '') 
-                .replace(/[-_]/g, ' ') 
-                .replace(/\d+$/, '') 
-                .trim()}
-            </span>
-          </div>
-          <p className="text-[10px] text-gray-300 leading-relaxed font-medium italic">
-            {hoveredSymbol.description || `${hoveredSymbol.name
-              .replace(/\.[^/.]+$/, "") 
-              .replace(/\?v=\d+/, "") 
+          <span className="block text-[11px] font-bold text-[#F5C518] truncate leading-tight">
+            {hoveredSymbol.name
+              .replace(/\.[^/.]+$/, "")
+              .replace(/\?v=\d+/, "")
               .replace(/üstten\s+görünüm/gi, '(Üstten)')
               .replace(/sağdan\s+görünüm/gi, '(Sağdan)')
               .replace(/soldan\s+görünüm/gi, '(Soldan)')
-              .replace(/\s[a-z0-9]{6}$/, '') 
-              .replace(/[-_]/g, ' ') 
-              .replace(/\d+$/, '') 
-              .trim()} nesnesini tuvale eklemek için sürükleyin.`}
-          </p>
-          <div className="mt-2 pt-2 border-t border-[#333] flex items-center gap-2">
-            <span className="text-[8px] text-gray-500 font-bold uppercase">Kullanım:</span>
-            <span className="text-[8px] text-gray-400">Tuvale sürükleyip bırakın</span>
-          </div>
+              .replace(/\s[a-z0-9]{6}$/, '')
+              .replace(/[-_]/g, ' ')
+              .replace(/\d+$/, '')
+              .trim()}
+          </span>
         </div>
       )}
     </aside>
