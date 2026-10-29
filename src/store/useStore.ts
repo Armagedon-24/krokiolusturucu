@@ -1785,6 +1785,12 @@ export const useStore = create<StoreState>()(
         krokiInfo: state.krokiInfo,
         diagramInfo: state.diagramInfo,
         isAdmin: state.isAdmin,
+        // KRİTİK: adminSettings (silme listeleri) + adminPassword kalıcı olmalı.
+        // Aksi halde sayfa yenilenince silinen semböl/görsel kayıtları kaybolur ve
+        // bulut taraması silinen SVG görselleri geri getirir; bulut senkronu da
+        // şifre boş kaldığı için sessizce 401 ile başarısız olur.
+        adminSettings: state.adminSettings,
+        adminPassword: state.adminPassword,
         symbolUsage: state.symbolUsage,
         visualSettings: state.visualSettings,
         savedAnimations: state.savedAnimations,
