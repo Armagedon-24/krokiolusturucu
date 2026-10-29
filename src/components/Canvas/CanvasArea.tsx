@@ -250,9 +250,9 @@ const IndividualObject = ({
        'ev-ruler-straight', 'ev-ruler-l', 'ev-rect-hollow'
       ].includes(shapeProps.symbolId || '') ||
       shapeProps.categoryId === 'injuries' ||
-      shapeProps.symbolId === 'p-10' ||
-      shapeProps.symbolId === 'p-11' ||
-      shapeProps.symbolId === 'p-12' ||
+      shapeProps.symbolId === 'kk-child-stand' ||
+      shapeProps.symbolId === 'kk-child-lying' ||
+      shapeProps.symbolId === 'kk-injured' ||
       shapeProps.symbolId?.startsWith('in-blood-') ||
       shapeProps.categoryId === 'explosion' ||
       shapeProps.categoryId === 'traces'

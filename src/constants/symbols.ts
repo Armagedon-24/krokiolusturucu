@@ -63,9 +63,9 @@ export const SYMBOL_CATEGORIES = [
       { id: 'p-7', name: 'Çömelmiş', src: '/assets/symbols/figures/p_crouch.png', type: 'symbol', width: 90, height: 80, description: 'Çömelmiş/eğilmiş kişi silueti.' },
       { id: 'p-8', name: 'Koşan / Kaçan', src: '/assets/symbols/figures/p_run.png', type: 'symbol', width: 90, height: 90, description: 'Koşan veya kaçan kişi silueti (sağa yönlü).' },
       { id: 'p-9', name: 'Yatan (Yan Pozisyon)', src: '/assets/symbols/figures/p_lateral.png', type: 'symbol', width: 160, height: 70, description: 'Yan pozisyonda yatan kişi silueti (lateral).' },
-      { id: 'p-10', name: 'Çocuk (Ayakta)', src: '/assets/symbols/figures/p_child_stand.png', type: 'symbol', width: 70, height: 82, description: 'Ayakta duran çocuk figürü.' },
-      { id: 'p-11', name: 'Çocuk (Yatan)', src: '/assets/symbols/figures/p_child_lying.png', type: 'symbol', width: 130, height: 56, description: 'Yerde yatan çocuk figürü.' },
-      { id: 'p-12', name: 'Yaralı (Yarı Kalkmış)', src: '/assets/symbols/figures/p_injured.png', type: 'symbol', width: 105, height: 70, description: 'Dirseği üzerinde yarı kalkmış yaralı kişi silueti.' },
+      { id: 'kk-child-stand', name: 'Çocuk (Ayakta)', src: '/assets/symbols/figures/p_child_stand.png', type: 'symbol', width: 70, height: 82, description: 'Ayakta duran çocuk figürü.' },
+      { id: 'kk-child-lying', name: 'Çocuk (Yatan)', src: '/assets/symbols/figures/p_child_lying.png', type: 'symbol', width: 130, height: 56, description: 'Yerde yatan çocuk figürü.' },
+      { id: 'kk-injured', name: 'Yaralı (Yarı Kalkmış)', src: '/assets/symbols/figures/p_injured.png', type: 'symbol', width: 105, height: 70, description: 'Dirseği üzerinde yarı kalkmış yaralı kişi silueti.' },
       { id: 'p-13', name: 'Kolluk Görevlisi', src: '/assets/symbols/figures/p_officer.png', type: 'symbol', width: 70, height: 91, description: 'Şapkalı kolluk (polis/jandarma) görevlisi figürü.' },
     ]
   },
@@ -418,6 +418,12 @@ export const SYMBOL_CATEGORIES = [
       { id: 'an-horse', name: 'At', src: '/assets/symbols/animals/horse.png', type: 'symbol', width: 130, height: 74, description: 'At silueti (atlı kolluk, hayvan saldırıları).' },
       { id: 'an-cat', name: 'Kedi', src: '/assets/symbols/animals/cat.png', type: 'symbol', width: 90, height: 64, description: 'Kedi silueti (bahçe/sokak olayları).' },
       { id: 'an-cow', name: 'İnek', src: '/assets/symbols/animals/cow.png', type: 'symbol', width: 130, height: 74, description: 'İnek silueti (kırsal olay yerleri).' },
+      { id: 'an-sheep', name: 'Koyun', src: '/assets/symbols/animals/sheep.png', type: 'symbol', width: 130, height: 76, description: 'Koyun silueti (kırsal olay yerleri, hayvan hırsızlığı).' },
+      { id: 'an-goat', name: 'Keçi', src: '/assets/symbols/animals/goat.png', type: 'symbol', width: 125, height: 78, description: 'Keçi silueti (kırsal olay yerleri).' },
+      { id: 'an-chicken', name: 'Tavuk', src: '/assets/symbols/animals/chicken.png', type: 'symbol', width: 90, height: 80, description: 'Tavuk silueti (kümes/bahçe olayları).' },
+      { id: 'an-donkey', name: 'Eşek', src: '/assets/symbols/animals/donkey.png', type: 'symbol', width: 132, height: 76, description: 'Eşek silueti (kırsal olay yerleri).' },
+      { id: 'an-wolf', name: 'Kurt', src: '/assets/symbols/animals/wolf.png', type: 'symbol', width: 128, height: 76, description: 'Kurt silueti (hayvan saldırıları, kırsal bölgeler).' },
+      { id: 'an-fox', name: 'Tilki', src: '/assets/symbols/animals/fox.png', type: 'symbol', width: 126, height: 78, description: 'Tilki silueti (kuduz/hayvan saldırısı olayları).' },
     ]
   }
 ] as const;
