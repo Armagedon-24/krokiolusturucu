@@ -94,8 +94,14 @@ function App() {
     // Domain Check (Anti-Cloning)
     const checkDomain = () => {
       const allowedDomains = ['localhost', '127.0.0.1', 'kroki-olusturucu.vercel.app', 'kroki-olusturucu-yedek.vercel.app', 'kroki-olusturucu.com'];
+      // Kendi Vercel hesabımıza ait tüm deployment URL'leri (üretim + önizlemeler) serbest:
+      // ör. kroki-olusturucu-abc123-hakanvarlik242424-6523s.vercel.app
+      const vercelAccountSuffixes = ['-hakanvarlik242424-6523s.vercel.app'];
       const hostname = window.location.hostname;
-      if (!allowedDomains.some(domain => hostname === domain || hostname.endsWith('.' + domain))) {
+      const isAllowed =
+        allowedDomains.some(domain => hostname === domain || hostname.endsWith('.' + domain)) ||
+        vercelAccountSuffixes.some(suffix => hostname.endsWith(suffix));
+      if (!isAllowed) {
         const root = document.getElementById('root');
         if (root) {
           while (root.firstChild) root.removeChild(root.firstChild);
