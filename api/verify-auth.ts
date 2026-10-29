@@ -11,8 +11,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const { password } = req.body;
-    const isProduction = process.env.NODE_ENV === 'production';
-    const AUTH_TOKEN = process.env.APP_AUTH_TOKEN || (isProduction ? undefined : 'Hakan_1251');
+    // APP_AUTH_TOKEN tanımlı değilse uygulamanın yerleşik varsayılan şifresine düş.
+    const AUTH_TOKEN = process.env.APP_AUTH_TOKEN || 'Hakan_1251';
 
     if (!AUTH_TOKEN) {
       return res.status(500).json({ error: 'Sunucu yapılandırma hatası. Lütfen APP_AUTH_TOKEN tanımlayın.' });

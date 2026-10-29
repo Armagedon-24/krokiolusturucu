@@ -20,31 +20,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({ error: 'Cloudinary API anahtarları eksik.' });
     }
 
-    // "kroki-olusturucu" tag'ine sahip tüm görselleri listele
-    // Admin API limitlerine dikkat edilmeli (500 per request max)
-    const response = await fetch(
-      `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/resources/image/upload?prefix=kroki-olusturucu&max_results=500`,
-      {
+    // Cloudinary'deki TÜM yüklenmiş görselleri listele (klasör öneki bağımsız).
+    // Eski yüklemeler 'kroki-olusturucu' klasörü dışında kalabildiği için prefix
+    // filtresi kullanmıyoruz; aksi halde bazı bulut görselleri uygulamada görünmez.
+    // Admin API sayfalama limiti: istek başına max 500 kaynak, next_cursor ile devam.
+    const authHeader = 'Basic ' + Buffer.from(API_KEY + ':' + API_SECRET).toString('base64');
+    let allResources: any[] = [];
+    let nextCursor: string | undefined = undefined;
+    let pageCount = 0;
+    do {
+      const listUrl = `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/resources/image/upload?max_results=500${nextCursor ? `&next_cursor=${encodeURIComponent(nextCursor)}` : ''}`;
+      const response = await fetch(listUrl, {
         method: 'GET',
-        headers: {
-          'Authorization': 'Basic ' + Buffer.from(API_KEY + ':' + API_SECRET).toString('base64'),
-        },
+        headers: { 'Authorization': authHeader },
+      });
+
+      const data = await response.json();
+
+      if (data.error) {
+        console.error('Cloudinary API Error Response:', data.error);
+        return res.status(500).json({ error: data.error.message || 'Cloudinary API hatası' });
       }
-    );
 
-    const data = await response.json();
-    
-    if (data.error) {
-      console.error('Cloudinary API Error Response:', data.error);
-      return res.status(500).json({ error: data.error.message || 'Cloudinary API hatası' });
-    }
+      if (!data.resources || !Array.isArray(data.resources)) {
+        return res.status(500).json({ error: 'Geçersiz Cloudinary API yanıtı' });
+      }
 
-    if (!data.resources || !Array.isArray(data.resources)) {
-      return res.status(500).json({ error: 'Geçersiz Cloudinary API yanıtı' });
-    }
+      allResources = allResources.concat(data.resources);
+      nextCursor = data.next_cursor;
+      pageCount++;
+    } while (nextCursor && pageCount < 10); // güvenlik sınırı: en fazla 5000 görsel
     
     // Sadece gerekli alanları döndür
-    const assets = data.resources.map((r: any) => {
+    const assets = allResources.map((r: any) => {
       const parts = r.public_id.split('/');
       const fileNameRaw = parts.pop() || r.public_id;
       const folderName = parts.length > 1 ? parts.pop() : (parts.length === 1 && parts[0] !== 'kroki-olusturucu' ? parts[0] : 'uncategorized');
