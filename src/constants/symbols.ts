@@ -182,8 +182,7 @@ export const SYMBOL_CATEGORIES = [
       { id: 'st-2', name: 'T Kavşak', src: '/assets/symbols/roads/t_junction.svg', type: 'symbol', description: 'T tipi yol birleşimlerini çizmek için kullanılır.' },
       { id: 'st-3', name: 'Y Kavşak', src: '/assets/symbols/roads/y_junction.svg', type: 'symbol', description: 'Y tipi yol ayrımı veya birleşimi.' },
       { id: 'st-4', name: 'Ada (Döner)', src: '/assets/symbols/roads/roundabout.svg?v=2', type: 'symbol', description: 'Döner kavşakları ve trafik adalarını temsil eder.' },
-      { id: 'st-overpass', name: 'Üst Geçit', src: '/assets/symbols/roads/ust_gecit.svg', type: 'symbol', description: 'Yaya üst geçidi (kuşbakışı). İki merdiveni de karşılıklı (zıt) yönde iner.' },
-      { id: 'st-overpass-same', name: 'Üst Geçit (Aynı Yönlü Merdiven)', src: '/assets/symbols/roads/ust_gecit_ayni_yon.svg', type: 'symbol', description: 'Yaya üst geçidi (kuşbakışı). İki merdiveni de aynı yöne (aşağı) iner.' },
+      { id: 'st-overpass', name: 'Üst Geçit', src: '/assets/symbols/roads/ust_gecit.png', type: 'symbol', description: 'Yaya üst geçidi (kuşbakışı, şeffaf PNG). İki merdiveni de aynı yöne iner.' },
       { id: 'st-drain', name: 'Rögar Kapağı', src: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><circle cx="50" cy="50" r="40" fill="none" stroke="black" stroke-width="6"/><line x1="20" y1="50" x2="80" y2="50" stroke="black" stroke-width="4"/><line x1="50" y1="20" x2="50" y2="80" stroke="black" stroke-width="4"/></svg>', type: 'symbol', width: 40, height: 40, fill: '#000000', description: 'Yol üzerindeki kanalizasyon ve altyapı kapaklarını belirtir.' },
     ]
   },
