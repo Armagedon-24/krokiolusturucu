@@ -26,6 +26,28 @@ export const SYMBOL_CATEGORIES = [
       { id: 'ev-angle-ruler', name: 'Açı Ölçer', src: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><path d="M 10 90 L 90 90 M 10 90 L 10 90 L 70 30" fill="none" stroke="%23F5C518" stroke-width="4"/><path d="M 30 90 A 20 20 0 0 0 25 75" fill="none" stroke="%23F5C518" stroke-width="2"/><text x="35" y="80" fill="%23F5C518" font-size="12">45°</text></svg>', type: 'symbol', width: 100, height: 100, description: 'İki nokta arasındaki açıyı ölçmek için kullanılır. Köşe noktası ve kolların uçları sürüklenerek hassas açı ölçümü yapılabilir.' },
       { id: 'ev-camera-link', name: 'Fotoğraf Noktası (Kamera)', src: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect x="10" y="30" width="80" height="55" rx="8" fill="%23F5C518"/><path d="M 35 30 L 42 18 L 58 18 L 65 30 Z" fill="%23F5C518"/><circle cx="50" cy="57" r="18" fill="black"/><circle cx="50" cy="57" r="12" fill="%23F5C518"/></svg>', type: 'symbol', width: 50, height: 50 },
       { id: 'ev-bpa-drop', name: 'Kan Sıçrama Analizi (BPA)', src: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><path d="M 50 10 C 30 50 30 90 50 90 C 70 90 70 50 50 10" fill="%23990000" stroke="white" stroke-width="2"/><line x1="50" y1="90" x2="50" y2="150" stroke="%23990000" stroke-width="2" stroke-dasharray="5,5"/></svg>', type: 'symbol', width: 40, height: 80, description: 'Kan damlası sıçrama analizi için kullanılır. Kuyruk uzunluğu sürüklenerek isabet açısı ve yönü belirlenebilir.' },
+      { id: 'ev-scale-bar', name: 'Ölçek Çubuğu (1:200)', src: '/assets/symbols/evidence/scale_bar.png', type: 'symbol', width: 240, height: 50, description: 'Kroki ölçeğini gösteren metrik çubuk (1:200). Her bölü 1 metreyi temsil eder.' },
+      { id: 'ev-abfo-scale', name: 'ABFO Ölçeği', src: '/assets/symbols/evidence/abfo_scale.png', type: 'symbol', width: 90, height: 90, description: 'Delil yakın çekim fotoğraflarında kullanılan L harfli fotogrametrik ölçek (ABFO No.2).' },
+    ]
+  },
+  {
+    id: 'evidence-items',
+    name: 'Delil Nesneleri',
+    symbols: [
+      { id: 'ei-syringe', name: 'Şırınga', src: '/assets/symbols/evidence/ei_syringe.png', type: 'symbol', width: 145, height: 70, description: 'Uyuşturucu/tıbbi olaylarında delil olarak bulunan şırınga.' },
+      { id: 'ei-drug-bag', name: 'Uyuşturucu Poşeti', src: '/assets/symbols/evidence/ei_drug_bag.png', type: 'symbol', width: 100, height: 125, description: 'Mühürlü naylon poşet içinde uyuşturucu madde paketi.' },
+      { id: 'ei-body-bag', name: 'Ceset Torbası', src: '/assets/symbols/evidence/ei_body_bag.png', type: 'symbol', width: 210, height: 100, description: 'Fermuarlı ceset torbası (kuşbakışı).' },
+      { id: 'ei-evidence-bag', name: 'Delil Çantası', src: '/assets/symbols/evidence/ei_evidence_bag.png', type: 'symbol', width: 105, height: 130, description: 'DELİL bandlı mühürlü delil poşeti/çantası.' },
+      { id: 'ei-evidence-tag', name: 'Delil Etiketi', src: '/assets/symbols/evidence/ei_evidence_tag.png', type: 'symbol', width: 90, height: 130, description: 'İpli numaralı mühür delil etiketi.' },
+      { id: 'ei-lock-broken', name: 'Kırılmış Asma Kilit', src: '/assets/symbols/evidence/ei_lock_broken.png', type: 'symbol', width: 100, height: 100, description: 'Zorlanmış/kırılmış asma kilit — zorla girme olayları.' },
+      { id: 'ei-hammer', name: 'Çekiç', src: '/assets/symbols/evidence/ei_hammer.png', type: 'symbol', width: 110, height: 110, description: 'Saldırı/kırma aracı olarak kullanılan çekiç.' },
+      { id: 'ei-crowbar', name: 'Levye', src: '/assets/symbols/evidence/ei_crowbar.png', type: 'symbol', width: 55, height: 150, description: 'Kapı/kilit zorlamada kullanılan levye.' },
+      { id: 'ei-brick', name: 'Taş / Tuğla', src: '/assets/symbols/evidence/ei_brick.png', type: 'symbol', width: 120, height: 80, description: 'Fırlatılan veya saldırıda kullanılan taş/tuğla.' },
+      { id: 'ei-bottle', name: 'Şişe', src: '/assets/symbols/evidence/ei_bottle.png', type: 'symbol', width: 50, height: 135, description: 'Cam şişe — saldırı aracı veya delil.' },
+      { id: 'ei-documents', name: 'Belge Yığını', src: '/assets/symbols/evidence/ei_documents.png', type: 'symbol', width: 110, height: 110, description: 'Üst üste belge/dosya kağıtları.' },
+      { id: 'ei-money', name: 'Para Destesi', src: '/assets/symbols/evidence/ei_money.png', type: 'symbol', width: 130, height: 90, description: 'Bantlanmış banknot destesi — ganimet/şüpheli para.' },
+      { id: 'ei-phone', name: 'Cep Telefonu', src: '/assets/symbols/evidence/ei_phone.png', type: 'symbol', width: 85, height: 128, description: 'Delil olarak ele geçirilen cep telefonu.' },
+      { id: 'ei-cigarette', name: 'Sigara İzmariti', src: '/assets/symbols/evidence/ei_cigarette.png', type: 'symbol', width: 130, height: 53, description: 'Olay yerinde bulunan sönmüş sigara izmariti (DNA delili).' },
     ]
   },
   {
@@ -38,6 +60,13 @@ export const SYMBOL_CATEGORIES = [
       { id: 'p-4', name: 'Yerde (Yüzüstü)', src: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><circle cx="50" cy="20" r="12" fill="black"/><path d="M30 40 h40 v40 h-10 v70 h-10 v-70 h-20 Z" fill="black"/></svg>', type: 'symbol', width: 80, height: 180, rotation: 180 },
       { id: 'p-5', name: 'Vücut Haritası (Ön)', src: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 200" width="100" height="200"><path d="M50 10c-5 0-9 4-9 9s4 9 9 9 9-4 9-9-4-9-9-9zm-15 30c-2 0-4 2-4 4v40c0 2 2 4 4 4h4l-2 80c0 4 3 7 7 7s7-3 7-7l3-60 3 60c0 4 3 7 7 7s7-3 7-7l-2-80h4c2 0 4-2 4-4V44c0-2-2-4-4-4H35z" fill="none" stroke="black" stroke-width="2"/></svg>', type: 'symbol', width: 100, height: 200, description: 'Yaralanma bölgelerini işaretlemek için kullanılan teknik insan şeması (Ön).' },
       { id: 'p-6', name: 'Vücut Haritası (Arka)', src: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 200" width="100" height="200"><path d="M50 10c-5 0-9 4-9 9s4 9 9 9 9-4 9-9-4-9-9-9zm-15 30c-2 0-4 2-4 4v40c0 2 2 4 4 4h4l-2 80c0 4 3 7 7 7s7-3 7-7l3-60 3 60c0 4 3 7 7 7s7-3 7-7l-2-80h4c2 0 4-2 4-4V44c0-2-2-4-4-4H35z" fill="gray" opacity="0.2" stroke="black" stroke-width="2"/></svg>', type: 'symbol', width: 100, height: 200, description: 'Yaralanma bölgelerini işaretlemek için kullanılan teknik insan şeması (Arka).' },
+      { id: 'p-7', name: 'Çömelmiş', src: '/assets/symbols/figures/p_crouch.png', type: 'symbol', width: 90, height: 80, description: 'Çömelmiş/eğilmiş kişi silueti.' },
+      { id: 'p-8', name: 'Koşan / Kaçan', src: '/assets/symbols/figures/p_run.png', type: 'symbol', width: 90, height: 90, description: 'Koşan veya kaçan kişi silueti (sağa yönlü).' },
+      { id: 'p-9', name: 'Yatan (Yan Pozisyon)', src: '/assets/symbols/figures/p_lateral.png', type: 'symbol', width: 160, height: 70, description: 'Yan pozisyonda yatan kişi silueti (lateral).' },
+      { id: 'p-10', name: 'Çocuk (Ayakta)', src: '/assets/symbols/figures/p_child_stand.png', type: 'symbol', width: 70, height: 82, description: 'Ayakta duran çocuk figürü.' },
+      { id: 'p-11', name: 'Çocuk (Yatan)', src: '/assets/symbols/figures/p_child_lying.png', type: 'symbol', width: 130, height: 56, description: 'Yerde yatan çocuk figürü.' },
+      { id: 'p-12', name: 'Yaralı (Yarı Kalkmış)', src: '/assets/symbols/figures/p_injured.png', type: 'symbol', width: 105, height: 70, description: 'Dirseği üzerinde yarı kalkmış yaralı kişi silueti.' },
+      { id: 'p-13', name: 'Kolluk Görevlisi', src: '/assets/symbols/figures/p_officer.png', type: 'symbol', width: 70, height: 91, description: 'Şapkalı kolluk (polis/jandarma) görevlisi figürü.' },
     ]
   },
   {
@@ -83,6 +112,7 @@ export const SYMBOL_CATEGORIES = [
       { id: 'v-tram', name: 'Tramvay', src: '/assets/symbols/vehicles/tram.svg', type: 'symbol', width: 355, height: 100 },
       { id: 'v-train', name: 'Lokomotif', src: '/assets/symbols/vehicles/train.svg', type: 'symbol', width: 112, height: 385 },
       { id: 'v-caravan', name: 'Karavan', src: '/assets/symbols/vehicles/caravan.svg', type: 'symbol', width: 225, height: 95 },
+      { id: 'v-burned', name: 'Yanmış Araç', src: '/assets/symbols/vehicles/v_burned.png', type: 'symbol', width: 165, height: 98, description: 'Yangın geçirmiş, isli yanmış araç (kuşbakışı).' },
     ]
   },
   {
@@ -95,6 +125,9 @@ export const SYMBOL_CATEGORIES = [
       { id: 'ts-parking', name: 'Otopark', src: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect x="5" y="5" width="90" height="90" rx="10" fill="%232563eb"/><text x="50" y="70" font-size="65" font-family="Arial" font-weight="bold" fill="white" text-anchor="middle">P</text></svg>', type: 'symbol', width: 40, height: 40 },
       { id: 'ts-cone', name: 'Trafik Dubası', src: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M20 90 L80 90 M35 90 L50 20 L65 90" fill="none" stroke="%23F5C518" stroke-width="8" stroke-linejoin="round"/><rect x="42" y="50" width="16" height="10" fill="%23F5C518"/></svg>', type: 'symbol', width: 25, height: 25 },
       { id: 'ts-barrier', name: 'Güvenlik Bariyeri', src: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect x="5" y="30" width="90" height="20" fill="%23F5C518"/><rect x="20" y="50" width="8" height="30" fill="%23F5C518"/><rect x="72" y="50" width="8" height="30" fill="%23F5C518"/><path d="M10 40 H90" stroke="black" stroke-width="2" stroke-dasharray="10,5"/></svg>', type: 'symbol', width: 100, height: 30 },
+      { id: 'ts-speed', name: 'Hız Sınırı (50)', src: '/assets/symbols/ts_speed.png', type: 'symbol', width: 55, height: 55, description: 'Hız sınırı tabelası (50 km/s).' },
+      { id: 'ts-no-turn', name: 'Dönüş Yasak', src: '/assets/symbols/ts_no_turn.png', type: 'symbol', width: 55, height: 55, description: 'Sağa dönüş yasak tabelası.' },
+      { id: 'ts-roadwork', name: 'Yol Çalışması', src: '/assets/symbols/ts_roadwork.png', type: 'symbol', width: 55, height: 53, description: 'Yol çalışması/şantiye uyarı tabelası.' },
     ]
   },
   {
@@ -184,6 +217,11 @@ export const SYMBOL_CATEGORIES = [
       { id: 'st-4', name: 'Ada (Döner)', src: '/assets/symbols/roads/roundabout.svg?v=3', type: 'symbol', description: 'Döner kavşakları ve trafik adalarını temsil eder.' },
       { id: 'st-overpass', name: 'Üst Geçit', src: '/assets/symbols/roads/ust_gecit.png', type: 'symbol', description: 'Yaya üst geçidi (kuşbakışı, şeffaf PNG). İki merdiveni de aynı yöne iner.' },
       { id: 'st-drain', name: 'Rögar Kapağı', src: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><circle cx="50" cy="50" r="40" fill="none" stroke="black" stroke-width="6"/><line x1="20" y1="50" x2="80" y2="50" stroke="black" stroke-width="4"/><line x1="50" y1="20" x2="50" y2="80" stroke="black" stroke-width="4"/></svg>', type: 'symbol', width: 40, height: 40, fill: '#000000', description: 'Yol üzerindeki kanalizasyon ve altyapı kapaklarını belirtir.' },
+      { id: 'st-crossroad', name: 'Tam Kavşak', src: '/assets/symbols/roads/st_crossroad.png', type: 'symbol', width: 160, height: 160, description: 'Dört yollu çapraz kavşak (kuşbakışı).' },
+      { id: 'st-curve', name: 'Kavisli Dönüş Yolu', src: '/assets/symbols/roads/st_curve.png', type: 'symbol', width: 160, height: 160, description: 'L şeklinde 90 derece dönüş yapan yol segmenti.' },
+      { id: 'st-sidewalk', name: 'Kaldırım', src: '/assets/symbols/roads/st_sidewalk.png', type: 'symbol', width: 170, height: 68, description: 'Karo desenli kaldırım bloğu. Boyutlandırılarak yol kenarları çizilir.' },
+      { id: 'st-median', name: 'Orta Refüj', src: '/assets/symbols/roads/st_median.png', type: 'symbol', width: 170, height: 55, description: 'Çift sarı çizgili, bitkili orta refüj/ada şeridi.' },
+      { id: 'st-parking-lot', name: 'Otopark Alanı', src: '/assets/symbols/roads/st_parking_lot.png', type: 'symbol', width: 155, height: 118, description: 'Numaralanmış park yerleri olan otopark alanı.' },
     ]
   },
   {
@@ -231,6 +269,7 @@ export const SYMBOL_CATEGORIES = [
         height: 25,
         description: 'Duvar ve betonarme yüzeylerdeki mermi çarpma ve oyuk izi.'
       },
+      { id: 'tr-liquid-pool', name: 'Su / Sıvı Birikintisi', src: '/assets/symbols/tr_liquid_pool.png', type: 'symbol', width: 160, height: 100, description: 'Su, yağ veya başka sıvı birikintisi (şeffaf mavi).' },
     ]
   },
   {
@@ -245,6 +284,17 @@ export const SYMBOL_CATEGORIES = [
       { id: 'out-traffic-light', name: 'Trafik Işığı', src: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect x="30" y="5" width="40" height="90" rx="10" fill="black"/><circle cx="50" cy="23" r="10" fill="red"/><circle cx="50" cy="50" r="10" fill="yellow"/><circle cx="50" cy="77" r="10" fill="green"/></svg>', type: 'symbol', width: 30, height: 60, fill: '#000000', description: 'Kavşaklardaki trafik sinyalizasyon sistemlerini belirtir.', isTriangulation: true },
       { id: 'out-zebra', name: 'Yaya Geçidi', src: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100" viewBox="0 0 200 100"><rect x="10" y="10" width="20" height="80" fill="black"/><rect x="40" y="10" width="20" height="80" fill="black"/><rect x="70" y="10" width="20" height="80" fill="black"/><rect x="100" y="10" width="20" height="80" fill="black"/><rect x="130" y="10" width="20" height="80" fill="black"/><rect x="160" y="10" width="20" height="80" fill="black"/></svg>', type: 'symbol', width: 200, height: 100 },
       { id: 'out-bench', name: 'Bank / Oturak', src: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect x="10" y="30" width="80" height="15" fill="%2378350f"/><rect x="15" y="45" width="10" height="30" fill="black"/><rect x="75" y="45" width="10" height="30" fill="black"/></svg>', type: 'symbol', width: 100, height: 40 },
+      { id: 'out-cctv', name: 'Güvenlik Kamerası', src: '/assets/symbols/out_cctv.png', type: 'symbol', width: 75, height: 100, description: 'Direk üzerinde CCTV güvenlik kamerası — kayıt noktalarını gösterir.' },
+      { id: 'out-street-light', name: 'Sokak Lambası', src: '/assets/symbols/out_street_light.png', type: 'symbol', width: 73, height: 100, description: 'Aydınlatma direği ve ışık alanı.' },
+      { id: 'out-container', name: 'Çöp Konteyneri', src: '/assets/symbols/out_container.png', type: 'symbol', width: 150, height: 79, description: 'Kuşbakışı çöp konteyneri (çift kapaklı).' },
+      { id: 'out-fence', name: 'Çit / Tel Örgü', src: '/assets/symbols/out_fence.png', type: 'symbol', width: 160, height: 60, description: 'İki direk arası tel örgü/çit bölümü. Uzatılarak sınır çizilir.' },
+      { id: 'out-bridge', name: 'Köprü', src: '/assets/symbols/out_bridge.png', type: 'symbol', width: 150, height: 98, description: 'Nehir/dere üstünde köprü geçişi (kuşbakışı).' },
+      { id: 'out-rail-crossing', name: 'Hemzemin Geçit', src: '/assets/symbols/out_rail_crossing.png', type: 'symbol', width: 150, height: 105, description: 'Yol-demiryolu kesişimi, hemzemin geçit.' },
+      { id: 'out-bus-stop', name: 'Otobüs Durağı', src: '/assets/symbols/out_bus_stop.png', type: 'symbol', width: 105, height: 112, description: 'Barakası ve D tabelasıyla otobüs durağı.' },
+      { id: 'out-river', name: 'Dere / Nehir', src: '/assets/symbols/out_river.png', type: 'symbol', width: 90, height: 140, description: 'Dalgalı akarsu şeridi. Uzatılarak dere/nehir çizilir.' },
+      { id: 'out-pool', name: 'Özel Havuz', src: '/assets/symbols/out_pool.png', type: 'symbol', width: 140, height: 92, description: 'Bahçe/özel havuz (kuşbakışı, dalgalı su).' },
+      { id: 'out-field', name: 'Tarla / Ekili Alan', src: '/assets/symbols/out_field.png', type: 'symbol', width: 140, height: 101, description: 'Sıra ekili tarla alanı (kırsal olay yerleri).' },
+      { id: 'out-ramp', name: 'Engelli Rampası', src: '/assets/symbols/out_ramp.png', type: 'symbol', width: 100, height: 100, description: 'Eğimli engelli rampası ve erişim ikonu.' },
     ]
   },
   {
@@ -340,6 +390,7 @@ export const SYMBOL_CATEGORIES = [
         height: 80, 
         description: 'Vücudun veya bir nesnenin sürüklenmesi sonucu oluşan kan sürtünme izi.' 
       },
+      { id: 'in-burn', name: 'Yanık İzi', src: '/assets/symbols/in_burn.png', type: 'symbol', width: 120, height: 88, description: 'Kırmızı haleli derin yanık/kömürleşme izi.' },
     ]
   },
   {
@@ -357,6 +408,16 @@ export const SYMBOL_CATEGORIES = [
       { id: 'ex-10', name: 'Tehlike İşareti', src: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><polygon points="50,10 90,85 10,85" fill="%23eab308" stroke="black" stroke-width="4"/><text x="50" y="75" font-size="50" font-family="Arial" font-weight="bold" fill="black" text-anchor="middle">!</text></svg>', type: 'symbol' },
       { id: 'ex-rb-1', name: 'Patlayıcı Blok (Gerçekçi)', src: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect x="10" y="25" width="80" height="50" rx="4" fill="%23dc2626"/><text x="50" y="58" font-size="22" font-family="Arial" font-weight="bold" fill="white" text-anchor="middle">TNT</text></svg>', type: 'symbol', description: 'Kalıp şeklinde plastik patlayıcı veya TNT bloğu.' },
       { id: 'ex-rb-5', name: 'Kablolu Bağlantı Seti', src: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><path d="M10 50 Q30 10 50 50 T90 50" fill="none" stroke="red" stroke-width="4"/><path d="M10 60 Q30 20 50 60 T90 60" fill="none" stroke="blue" stroke-width="4"/></svg>', type: 'symbol', description: 'Bomba düzeneğine ait kablo ve bağlantı parçaları.' },
+    ]
+  },
+  {
+    id: 'animals',
+    name: 'Hayvanlar',
+    symbols: [
+      { id: 'an-dog', name: 'Köpek', src: '/assets/symbols/animals/dog.png', type: 'symbol', width: 115, height: 68, description: 'Köpek silueti (K9, saldırı veya sahipli köpek olayları).' },
+      { id: 'an-horse', name: 'At', src: '/assets/symbols/animals/horse.png', type: 'symbol', width: 130, height: 74, description: 'At silueti (atlı kolluk, hayvan saldırıları).' },
+      { id: 'an-cat', name: 'Kedi', src: '/assets/symbols/animals/cat.png', type: 'symbol', width: 90, height: 64, description: 'Kedi silueti (bahçe/sokak olayları).' },
+      { id: 'an-cow', name: 'İnek', src: '/assets/symbols/animals/cow.png', type: 'symbol', width: 130, height: 74, description: 'İnek silueti (kırsal olay yerleri).' },
     ]
   }
 ] as const;
