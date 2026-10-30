@@ -72,8 +72,10 @@ export const CalculatorIndex: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Dropdown Selector */}
-      <div className="p-3 border-b border-[#2a2a2a] bg-[#111] sticky top-0 z-10">
+      {/* Dropdown Selector — z-30: sonuç kartlarındaki 'relative z-10' içeriklerin
+          ÜSTÜNDE kalmalı; aksi halde açılan menü, sonuç bandı ve butonların altında kalır.
+          (HelpTooltip popup z-100 ve modal'lar z-9999+ hâlâ daha üstte.) */}
+      <div className="p-3 border-b border-[#2a2a2a] bg-[#111] sticky top-0 z-30">
         <div className="relative">
           <button
             onClick={() => setIsMenuOpen(!isMenuOpen)}
