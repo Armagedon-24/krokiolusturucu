@@ -34,19 +34,21 @@ const LINE_CHARS = 46;
 export interface ReportMeta {
   /** KROKİ-YYYYMMDD-HHMMSS biçiminde dosya numarası */
   dosyaNo: string;
-  /** gg.aa.yyyy (tr-TR) */
+  /** gg.aa.yyyy */
   tarih: string;
-  /** ss:dd */
+  /** ss.dd (saat.dakika) */
   saat: string;
 }
 
-/** Rapor numarası ve tarih/saat — metin çıktısı ile PDF aynı numarayı paylaşır. */
+/** Rapor numarası ve tarih/saat — metin çıktısı ile PDF aynı numarayı paylaşır.
+ * Tarih gg.aa.yyyy, saat ss.dd (saat.dakika) biçimindedir. */
 export function reportMeta(now = new Date()): ReportMeta {
   const dosyaNo = `KROKİ-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+  const p2 = (n: number) => String(n).padStart(2, '0');
   return {
     dosyaNo,
-    tarih: now.toLocaleDateString('tr-TR'),
-    saat: now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
+    tarih: `${p2(now.getDate())}.${p2(now.getMonth() + 1)}.${now.getFullYear()}`,
+    saat: `${p2(now.getHours())}.${p2(now.getMinutes())}`,
   };
 }
 

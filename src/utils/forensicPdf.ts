@@ -37,13 +37,15 @@ const TOP_PN = 24; // devam sayfaları içerik başlangıcı
 const FONT_NAME = 'Liberation';
 const FONT_REG = 'LiberationSans-Regular.ttf';
 const FONT_BOLD = 'LiberationSans-Bold.ttf';
+const LOGO_URL = `${import.meta.env.BASE_URL}assets/kurum_logo.png`;
 
 let fontCache: Promise<{ reg: string; bold: string }> | null = null;
+let logoCache: Promise<string> | null = null;
 
-/** TTF'i indirip base64'e çevirir. */
-async function fetchFontB64(url: string): Promise<string> {
+/** TTF / PNG indirip base64'e çevirir. */
+async function fetchB64(url: string, what: string): Promise<string> {
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`Font alınamadı: ${url} (${res.status})`);
+  if (!res.ok) throw new Error(`${what} alınamadı: ${url} (${res.status})`);
   const buf = new Uint8Array(await res.arrayBuffer());
   let bin = '';
   const CHUNK = 0x8000;
@@ -57,11 +59,17 @@ async function fetchFontB64(url: string): Promise<string> {
 function loadFontB64(): Promise<{ reg: string; bold: string }> {
   if (!fontCache) {
     fontCache = Promise.all([
-      fetchFontB64(`${import.meta.env.BASE_URL}assets/fonts/${FONT_REG}`),
-      fetchFontB64(`${import.meta.env.BASE_URL}assets/fonts/${FONT_BOLD}`),
+      fetchB64(`${import.meta.env.BASE_URL}assets/fonts/${FONT_REG}`, 'Font'),
+      fetchB64(`${import.meta.env.BASE_URL}assets/fonts/${FONT_BOLD}`, 'Font'),
     ]).then(([reg, bold]) => ({ reg, bold }));
   }
   return fontCache;
+}
+
+/** Kurum logosunu bir kez indirir (antet). */
+function loadLogoB64(): Promise<string> {
+  if (!logoCache) logoCache = fetchB64(LOGO_URL, 'Logo');
+  return logoCache;
 }
 
 /** Fontları bu dokümana kaydeder. */
@@ -107,6 +115,7 @@ export interface ForensicPdfResult {
 export async function buildForensicPdf(report: ForensicReport): Promise<ForensicPdfResult> {
   const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
   await ensureFonts(doc);
+  const logoB64 = await loadLogoB64();
 
   const meta = reportMeta();
 
@@ -127,16 +136,17 @@ export async function buildForensicPdf(report: ForensicReport): Promise<Forensic
     }
   };
 
-  /** Devam sayfaları için kompakt üst bilgi. */
+  /** Devam sayfaları için kompakt antet. */
   const drawContinuationHeader = () => {
     doc.setFillColor(C_INK);
     doc.rect(0, 0, PW, 14, 'F');
     doc.setFillColor(C_GOLD);
     doc.rect(0, 14, PW, 0.9, 'F');
+    doc.addImage(logoB64, 'PNG', ML, 2.2, 9.6, 9.6);
     doc.setFont(FONT_NAME, 'bold');
     doc.setFontSize(9);
     doc.setTextColor(C_WHITE);
-    doc.text('ADLİ BİLİRKİŞİ ANALİZ RAPORU', ML, 8.6);
+    doc.text('ADLİ BİLİRKİŞİ ANALİZ RAPORU', ML + 12.6, 8.6);
     doc.setFont(FONT_NAME, 'normal');
     doc.setFontSize(8);
     doc.setTextColor('#D8B94A');
@@ -180,24 +190,28 @@ export async function buildForensicPdf(report: ForensicReport): Promise<Forensic
   };
 
   /* ================================================================ */
-  /* 1. SAYFA ÜST BANDI                                                */
+  /* 1. SAYFA ÜST BANDI (ANTET + LOGO)                                */
   /* ================================================================ */
   doc.setFillColor(C_INK);
   doc.rect(0, 0, PW, 30, 'F');
   doc.setFillColor(C_GOLD);
   doc.rect(0, 30, PW, 1.1, 'F');
 
+  // Sol: kurum logosu (antet)
+  doc.addImage(logoB64, 'PNG', ML - 1.5, 4.5, 21.5, 21.5 * (148 / 175));
+  const tx = ML + 24; // logo sonrası metin sütunu
+
   doc.setFont(FONT_NAME, 'bold');
-  doc.setFontSize(17);
+  doc.setFontSize(15.5);
   doc.setTextColor(C_WHITE);
-  doc.text('ADLİ BİLİRKİŞİ ANALİZ RAPORU', ML, 13.5);
+  doc.text('ADLİ BİLİRKİŞİ ANALİZ RAPORU', tx, 13);
   doc.setFont(FONT_NAME, 'normal');
-  doc.setFontSize(9);
+  doc.setFontSize(8.5);
   doc.setTextColor('#D8B94A');
-  doc.text('Kaza Analiz ve Rekonstrüksiyon Birimi', ML, 20.5);
+  doc.text('Kaza Analiz ve Rekonstrüksiyon Birimi', tx, 19.2);
   doc.setFontSize(7.5);
   doc.setTextColor('#9CA3AF');
-  doc.text('Bilimsel yöntemlere dayalı teknik değerlendirme belgesi', ML, 26);
+  doc.text('Bilimsel yöntemlere dayalı teknik değerlendirme belgesi', tx, 24.5);
 
   // Sağda rapor rozeti
   doc.setDrawColor('#4B5563');
@@ -219,10 +233,10 @@ export async function buildForensicPdf(report: ForensicReport): Promise<Forensic
   y = 37.5;
   const infoRows: Array<[string, string]> = [
     ['Rapor No', meta.dosyaNo],
-    ['Rapor Tarihi', `${meta.tarih} — ${meta.saat}`],
+    ['Rapor Tarihi', meta.tarih],
+    ['Rapor Saati', meta.saat],
     ['İnceleme Türü', report.title],
-    ['İncelemeyi Yapan', 'Bilirkişi Adı Soyadı / Unvan : ........................................'],
-    ['İsteyen Makam', '........................................'],
+    ['Adres', '.......................................................................................................'],
   ];
   infoRows.forEach(([k, v], i) => {
     doc.setFont(FONT_NAME, 'normal');

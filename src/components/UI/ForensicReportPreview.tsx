@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { FileText, ChevronDown, Copy, Check, Download, Loader2, AlertTriangle } from 'lucide-react';
 import type { ForensicReport } from '../../utils/forensicReport';
+import { reportMeta } from '../../utils/forensicReport';
 import { downloadForensicPdf } from '../../utils/forensicPdf';
 
 interface Props {
@@ -22,18 +23,47 @@ const SECTIONS: Array<{ no: number; key: keyof ForensicReport; title: string }> 
 ];
 
 /** Belge görünümlü kurumsal önizleme (PDF ile aynı düzen). */
-const PaperView: React.FC<{ report: ForensicReport }> = ({ report }) => (
-  <div className="bg-white text-[#26282E] px-5 py-4">
-    {/* Üst band */}
-    <div className="bg-[#16181D] text-white px-4 py-3 -mx-5 -mt-4">
-      <div className="text-[13px] font-black tracking-wide">ADLİ BİLİRKİŞİ ANALİZ RAPORU</div>
-      <div className="text-[8.5px] text-[#D8B94A] mt-0.5">Kaza Analiz ve Rekonstrüksiyon Birimi</div>
-    </div>
+const PaperView: React.FC<{ report: ForensicReport }> = ({ report }) => {
+  const m = reportMeta();
+  const logoSrc = `${import.meta.env.BASE_URL}assets/kurum_logo.png`;
+  return (
+    <div className="bg-white text-[#26282E] px-5 py-4">
+      {/* Üst band — antet + logo */}
+      <div className="bg-[#16181D] text-white px-4 py-3 -mx-5 -mt-4">
+        <div className="flex items-center gap-3">
+          <img src={logoSrc} alt="Kurum logosu" className="w-9 h-9 object-contain shrink-0" />
+          <div className="min-w-0">
+            <div className="text-[12px] font-black tracking-wide leading-tight">ADLİ BİLİRKİŞİ ANALİZ RAPORU</div>
+            <div className="text-[8px] text-[#D8B94A] mt-0.5">Kaza Analiz ve Rekonstrüksiyon Birimi</div>
+          </div>
+          <div className="ml-auto text-right shrink-0 border border-gray-600 rounded px-2 py-1">
+            <div className="text-[6.5px] font-bold text-gray-400 tracking-wider">RAPOR NO</div>
+            <div className="text-[8.5px] font-bold text-[#E5B94E] leading-tight">{m.dosyaNo}</div>
+            <div className="text-[6.5px] text-gray-400">{m.tarih} · {m.saat}</div>
+          </div>
+        </div>
+      </div>
 
-    {/* Başlık + bölümler */}
-    <div className="mt-3 border border-gray-200 bg-[#FBFBFA] rounded-sm px-3 py-2">
-      <div className="text-[10.5px] font-bold text-[#16181D] leading-snug">{report.title}</div>
-    </div>
+      {/* Bilgi tablosu */}
+      <div className="mt-3 text-[8px] border border-gray-200 rounded-sm overflow-hidden">
+        {([
+          ['RAPOR NO', m.dosyaNo],
+          ['RAPOR TARİHİ', m.tarih],
+          ['RAPOR SAATİ', m.saat],
+          ['İNCELEME TÜRÜ', report.title],
+          ['ADRES', '.....................................................'],
+        ] as Array<[string, string]>).map(([k, v], i) => (
+          <div key={k} className={`flex ${i % 2 === 0 ? 'bg-[#F3F4F6]' : 'bg-white'} px-2.5 py-1`}>
+            <span className="w-24 shrink-0 font-bold text-gray-500 tracking-wide">{k}</span>
+            <span className="text-[#26282E] truncate">{v}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Başlık + bölümler */}
+      <div className="mt-3 border border-gray-200 bg-[#FBFBFA] rounded-sm px-3 py-2">
+        <div className="text-[10.5px] font-bold text-[#16181D] leading-snug">{report.title}</div>
+      </div>
 
     <div className="mt-3 space-y-3.5">
       {SECTIONS.map(({ no, key, title }) => {
@@ -83,7 +113,8 @@ const PaperView: React.FC<{ report: ForensicReport }> = ({ report }) => (
       bütüncül delilleri ile birlikte değerlendirilmelidir.
     </div>
   </div>
-);
+  );
+};
 
 /**
  * Bilirkişi raporu önizlemesi: belge görünümlü kurumsal düzen,
