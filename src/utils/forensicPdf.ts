@@ -218,7 +218,9 @@ export async function buildForensicPdf(report: ForensicReport): Promise<Forensic
 
   // Ana başlık + alt yazı: sayfada ortalanır (RAPOR NO rozeti sağ alt köşededir)
   const badgeW = 46;
-  const badgeLeft = PW - MR - badgeW;
+  // Rozet sayfa kenarına yaklaştırıldı: sağ kenardan 10 mm içeride (içerik MR'ından daha sağda).
+  const badgeRight = 10;
+  const badgeLeft = PW - badgeRight - badgeW;
   doc.setFont(FONT_NAME, 'bold');
   doc.setTextColor(C_WHITE);
   let titleSize = 15.5;

@@ -41,7 +41,7 @@ const PaperView: React.FC<{ report: ForensicReport }> = ({ report }) => {
           <div className="text-[10px] font-black tracking-wide leading-tight">KAZA ANALİZ VE REKONSTRÜKSİYON ANALİZİ</div>
           <div className="text-[7px] text-gray-400 mt-0.5">Bilimsel yöntemlere dayalı teknik değerlendirme belgesi</div>
         </div>
-        <div className="mt-2 flex justify-end">
+        <div className="mt-2 flex justify-end -mr-1.5">
           <div className="text-right border border-gray-600 rounded px-2 py-1">
             <div className="text-[6.5px] font-bold text-gray-400 tracking-wider">RAPOR NO</div>
             <div className="text-[8.5px] font-bold text-[#D1D5DB] leading-tight">{m.dosyaNo}</div>
@@ -153,10 +153,10 @@ export const ForensicPdfButton: React.FC<{ report: ForensicReport }> = ({ report
         if (e.key === 'Enter') handlePdf();
       }}
       title="Kurumsal PDF olarak indir"
-      className={`flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl border transition-all active:scale-95 cursor-pointer select-none ${
+      className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-black text-[9px] uppercase tracking-widest transition-all active:scale-95 cursor-pointer select-none ${
         error
-          ? 'border-red-500/40 bg-red-500/10 text-red-400'
-          : 'border-white/10 bg-white/5 text-gray-400 hover:text-white hover:bg-white/10'
+          ? 'border border-red-500/40 bg-red-500/10 text-red-400'
+          : 'bg-[#F5C518] text-black hover:bg-[#ffcf24]'
       }`}
     >
       {error ? (
