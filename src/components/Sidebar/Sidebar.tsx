@@ -35,6 +35,10 @@ const cleanSymbolName = (raw: string): string =>
     .replace(/\d+$/, '')
     .trim();
 
+/** Düz SVG data-URI ikonlar sarı tint alır; karakalem/foto PNG varlıklar beyaz kağıt üzerinde doğal gösterilir.
+ *  brightness(0) tint'i detaylı çizimleri (karakalem, gerçekçi PNG) düz lekeye çevirdiği için bu ikili ayırım şart. */
+const isFlatSvgIcon = (src: unknown): boolean => String(src || '').startsWith('data:image/svg');
+
 export const Sidebar: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'symbols' | 'uploads' | 'animations' | 'calculators'>('symbols');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -570,7 +574,7 @@ export const Sidebar: React.FC = () => {
                                           // mezarlığa gönderiyordu). Yalnızca kırık görsel durumu gösterilir.
                                           (e.target as HTMLImageElement).style.visibility = 'hidden';
                                         }}
-                                        className="max-w-[95%] max-h-[95%] object-contain transition-transform duration-300 group-hover:scale-110 relative z-10 pointer-events-none sidebar-symbol-filter"
+                                        className={`max-w-[95%] max-h-[95%] object-contain transition-transform duration-300 group-hover:scale-110 relative z-10 pointer-events-none ${isFlatSvgIcon(item.thumbnail || item.src) ? 'sidebar-symbol-filter' : 'sidebar-symbol-photo'}`}
                                       />
                                     </div>
                                     
@@ -701,7 +705,7 @@ export const Sidebar: React.FC = () => {
                             onDragEnd={handleDragEnd}
                             className="w-12 h-12 bg-white/10 rounded border border-[#333] flex-shrink-0 cursor-move overflow-hidden group/thumb"
                           >
-                            <img src={getOptimizedCloudinaryUrl(img.src, 80, 80)} alt={img.name} loading="lazy" width={48} height={48} className="w-full h-full object-contain group-hover/thumb:scale-110 transition-transform sidebar-symbol-filter" />
+                            <img src={getOptimizedCloudinaryUrl(img.src, 80, 80)} alt={img.name} loading="lazy" width={48} height={48} className={`w-full h-full object-contain group-hover/thumb:scale-110 transition-transform ${isFlatSvgIcon(img.src) ? 'sidebar-symbol-filter' : 'sidebar-symbol-photo'}`} />
                           </div>
                           <div className="flex-1 min-w-0 space-y-1">
                             {editingImageId === img.id ? (

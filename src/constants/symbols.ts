@@ -48,6 +48,11 @@ export const SYMBOL_CATEGORIES = [
       { id: 'ei-money', name: 'Para Destesi', src: '/assets/symbols/evidence/ei_money.png', type: 'symbol', width: 130, height: 90, description: 'Bantlanmış banknot destesi — ganimet/şüpheli para.' },
       { id: 'ei-phone', name: 'Cep Telefonu', src: '/assets/symbols/evidence/ei_phone.png', type: 'symbol', width: 85, height: 128, description: 'Delil olarak ele geçirilen cep telefonu.' },
       { id: 'ei-cigarette', name: 'Sigara İzmariti', src: '/assets/symbols/evidence/ei_cigarette.png', type: 'symbol', width: 130, height: 53, description: 'Olay yerinde bulunan sönmüş sigara izmariti (DNA delili).' },
+      { id: 'ei-glasses', name: 'Gözlük', src: '/assets/symbols/evidence/ei_glasses.png', type: 'symbol', width: 135, height: 75, description: 'Olay yerinde bulunan gözlük.' },
+      { id: 'ei-watch', name: 'Kol Saati', src: '/assets/symbols/evidence/ei_watch.png', type: 'symbol', width: 105, height: 105, description: 'Kol saati — değerli eşya/kimlik tespiti.' },
+      { id: 'ei-keys', name: 'Anahtar Takımı', src: '/assets/symbols/evidence/ei_keys.png', type: 'symbol', width: 135, height: 85, description: 'Anahtarlık üzerinde anahtarlar.' },
+      { id: 'ei-id-card', name: 'Künye / Kimlik', src: '/assets/symbols/evidence/ei_id_card.png', type: 'symbol', width: 105, height: 125, description: 'Askılı fotoğraflı kimlik/künye belgesi.' },
+      { id: 'ei-drone', name: 'Drone Fotoğraf Noktası', src: '/assets/symbols/evidence/ei_drone.png', type: 'symbol', width: 135, height: 105, description: 'Hava görüntüleme dronu — havadan olay yeri fotoğraf/koordinat işareti.' },
     ]
   },
   {
@@ -113,6 +118,11 @@ export const SYMBOL_CATEGORIES = [
       { id: 'v-train', name: 'Lokomotif', src: '/assets/symbols/vehicles/train.svg', type: 'symbol', width: 112, height: 385 },
       { id: 'v-caravan', name: 'Karavan', src: '/assets/symbols/vehicles/caravan.svg', type: 'symbol', width: 225, height: 95 },
       { id: 'v-burned', name: 'Yanmış Araç', src: '/assets/symbols/vehicles/v_burned.png', type: 'symbol', width: 165, height: 98, description: 'Yangın geçirmiş, isli yanmış araç (kuşbakışı).' },
+      { id: 'v-overturned', name: 'Devrilmiş Araç (Takla)', src: '/assets/symbols/vehicles/v_overturned.png', type: 'symbol', width: 235, height: 125, description: 'Çatısına devrilmiş/takla atmış araç (yandan).' },
+      { id: 'v-damaged-front', name: 'Ağır Hasarlı Araç', src: '/assets/symbols/vehicles/v_damaged_front.png', type: 'symbol', width: 235, height: 115, description: 'Ön çarpışmada ezilmiş kaputlu ağır hasarlı araç.' },
+      { id: 'v-motor-fallen', name: 'Yatık Motosiklet', src: '/assets/symbols/vehicles/v_motor_fallen.png', type: 'symbol', width: 205, height: 105, description: 'Düşmüş/devrilmiş motosiklet (yandan).' },
+      { id: 'v-bicyclist', name: 'Bisikletli', src: '/assets/symbols/vehicles/v_bicyclist.png', type: 'symbol', width: 135, height: 125, description: 'Kasklı bisiklet kullanan kişi (yandan).' },
+      { id: 'v-trailer-only', name: 'Dorse (Ayrı)', src: '/assets/symbols/vehicles/v_trailer.png', type: 'symbol', width: 110, height: 265, description: 'Çekiciden ayrılmış yarı römork/dorse (yandan).' },
     ]
   },
   {
@@ -128,12 +138,35 @@ export const SYMBOL_CATEGORIES = [
       { id: 'ts-speed', name: 'Hız Sınırı (50)', src: '/assets/symbols/ts_speed.png', type: 'symbol', width: 55, height: 55, description: 'Hız sınırı tabelası (50 km/s).' },
       { id: 'ts-no-turn', name: 'Dönüş Yasak', src: '/assets/symbols/ts_no_turn.png', type: 'symbol', width: 55, height: 55, description: 'Sağa dönüş yasak tabelası.' },
       { id: 'ts-roadwork', name: 'Yol Çalışması', src: '/assets/symbols/ts_roadwork.png', type: 'symbol', width: 55, height: 53, description: 'Yol çalışması/şantiye uyarı tabelası.' },
+      { id: 'ts-speed-30', name: 'Hız Sınırı (30)', src: '/assets/symbols/ts_speed_30.png', type: 'symbol', width: 55, height: 55, description: 'Hız sınırı tabelası (30 km/s).' },
+      { id: 'ts-speed-70', name: 'Hız Sınırı (70)', src: '/assets/symbols/ts_speed_70.png', type: 'symbol', width: 55, height: 55, description: 'Hız sınırı tabelası (70 km/s).' },
+      { id: 'ts-speed-90', name: 'Hız Sınırı (90)', src: '/assets/symbols/ts_speed_90.png', type: 'symbol', width: 55, height: 55, description: 'Hız sınırı tabelası (90 km/s).' },
+      { id: 'ts-speed-110', name: 'Hız Sınırı (110)', src: '/assets/symbols/ts_speed_110.png', type: 'symbol', width: 55, height: 55, description: 'Hız sınırı tabelası (110 km/s).' },
+      { id: 'ts-curve', name: 'Viraj Uyarısı', src: '/assets/symbols/ts_curve.png', type: 'symbol', width: 55, height: 55, description: 'Tehlikeli viraj uyarı tabelası.' },
+      { id: 'ts-slippery', name: 'Kaygan Yol', src: '/assets/symbols/ts_slippery.png', type: 'symbol', width: 55, height: 55, description: 'Kaygan zemin uyarı tabelası.' },
+      { id: 'ts-crossroads', name: 'Kavşak Uyarısı', src: '/assets/symbols/ts_crossroads.png', type: 'symbol', width: 55, height: 55, description: 'Kavşak (ana yol) uyarı tabelası.' },
+      { id: 'ts-pedestrian', name: 'Yaya Geçidi (Tabela)', src: '/assets/symbols/ts_pedestrian.png', type: 'symbol', width: 55, height: 55, description: 'Yaya geçidi uyarı tabelası.' },
+      { id: 'ts-no-parking', name: 'Park Yasak', src: '/assets/symbols/ts_no_parking.png', type: 'symbol', width: 55, height: 55, description: 'Park yasağı tabelası.' },
+      { id: 'ts-one-way', name: 'Tek Yön', src: '/assets/symbols/ts_one_way.png', type: 'symbol', width: 70, height: 48, description: 'Tek yönlü yol tabelası (sağa).' },
+      { id: 'ts-traffic-cone', name: 'Trafik Konisi', src: '/assets/symbols/ts_traffic_cone.png', type: 'symbol', width: 75, height: 90, description: 'Turuncu trafik konisi — güvenlik şeridi/şerit kapatma.' },
+      { id: 'ts-warning-triangle', name: 'Tehlike Üçgeni', src: '/assets/symbols/ts_warning_triangle.png', type: 'symbol', width: 95, height: 75, description: 'Arızalı araç arkasına kurulan katlanır tehlike üçgeni.' },
+      { id: 'ts-km-stone', name: 'Kilometre Taşı', src: '/assets/symbols/ts_km_stone.png', type: 'symbol', width: 80, height: 95, description: 'Yol kenarı kilometre taşı — konum referansı.' },
     ]
   },
   {
     id: 'clothing',
     name: 'Giysi Eşya',
-    symbols: []
+    symbols: [
+      { id: 'cl-shoe', name: 'Ayakkabı', src: '/assets/symbols/clothing/cl_shoe.png', type: 'symbol', width: 110, height: 80, description: 'Klasik deri ayakkabı (yandan). Ayak izi eşleştirmesi ve şüpheli giysi tespitinde kullanılır.' },
+      { id: 'cl-boot', name: 'Bot / İş Ayakkabısı', src: '/assets/symbols/clothing/cl_boot.png', type: 'symbol', width: 120, height: 95, description: 'Rijit tabanlı iş botu (yandan).' },
+      { id: 'cl-helmet', name: 'Kask (Motosiklet)', src: '/assets/symbols/clothing/cl_helmet.png', type: 'symbol', width: 115, height: 90, description: 'Motosiklet kaskı. Kasksız sürüş ve kafa travmalı kazalarda kullanılır.' },
+      { id: 'cl-vest', name: 'Kurşun Geçirmez Yelek', src: '/assets/symbols/clothing/cl_vest.png', type: 'symbol', width: 125, height: 105, description: 'Kurşun geçirmez taktik yelek (ön görünüm).' },
+      { id: 'cl-backpack', name: 'Sırt Çantası', src: '/assets/symbols/clothing/cl_backpack.png', type: 'symbol', width: 115, height: 115, description: 'Sırt çantası. Terk edilmiş/şüpheli eşya olayları.' },
+      { id: 'cl-wallet', name: 'Cüzdan / Kimlik', src: '/assets/symbols/clothing/cl_wallet.png', type: 'symbol', width: 135, height: 105, description: 'Kimlik kartı ve banknotlu açık cüzdan. Hüviyet tespiti ve ganimet.' },
+      { id: 'cl-glove', name: 'Eldiven (Lateks)', src: '/assets/symbols/clothing/cl_glove.png', type: 'symbol', width: 115, height: 95, description: 'Lateks muayene eldiveni. Delil işleme ve koruma.' },
+      { id: 'cl-cap', name: 'Kep / Şapka', src: '/assets/symbols/clothing/cl_cap.png', type: 'symbol', width: 135, height: 95, description: 'Kolluk kep şapkası (yandan).' },
+      { id: 'cl-jacket', name: 'Mont / Ceket', src: '/assets/symbols/clothing/cl_jacket.png', type: 'symbol', width: 125, height: 115, description: 'Katlanmış mont veya kaban.' },
+    ]
   },
   {
     id: 'weapons',
@@ -222,6 +255,10 @@ export const SYMBOL_CATEGORIES = [
       { id: 'st-sidewalk', name: 'Kaldırım', src: '/assets/symbols/roads/st_sidewalk.png', type: 'symbol', width: 170, height: 68, description: 'Karo desenli kaldırım bloğu. Boyutlandırılarak yol kenarları çizilir.' },
       { id: 'st-median', name: 'Orta Refüj', src: '/assets/symbols/roads/st_median.png', type: 'symbol', width: 170, height: 55, description: 'Çift sarı çizgili, bitkili orta refüj/ada şeridi.' },
       { id: 'st-parking-lot', name: 'Otopark Alanı', src: '/assets/symbols/roads/st_parking_lot.png', type: 'symbol', width: 155, height: 118, description: 'Numaralanmış park yerleri olan otopark alanı.' },
+      { id: 'st-wet', name: 'Islak Zemin', src: '/assets/symbols/roads/st_wet.png', type: 'symbol', width: 185, height: 125, description: 'Islak yol yüzeyi — yağmur sonrası kayganlık (kaza nedeni işareti).' },
+      { id: 'st-ice', name: 'Buzlanma', src: '/assets/symbols/roads/st_ice.png', type: 'symbol', width: 185, height: 125, description: 'Buz/kırağı kaplı yol yüzeyi — kaza nedeni işareti.' },
+      { id: 'st-pothole', name: 'Yol Çukuru', src: '/assets/symbols/roads/st_pothole.png', type: 'symbol', width: 185, height: 125, description: 'Hasarlı asfalt üzerinde yol çukuru.' },
+      { id: 'st-fog', name: 'Sis Bandı', src: '/assets/symbols/roads/st_fog.png', type: 'symbol', width: 225, height: 105, description: 'Görüşü düşüren sis bandı (koşul işareti).' },
     ]
   },
   {
@@ -270,6 +307,15 @@ export const SYMBOL_CATEGORIES = [
         description: 'Duvar ve betonarme yüzeylerdeki mermi çarpma ve oyuk izi.'
       },
       { id: 'tr-liquid-pool', name: 'Su / Sıvı Birikintisi', src: '/assets/symbols/tr_liquid_pool.png', type: 'symbol', width: 160, height: 100, description: 'Su, yağ veya başka sıvı birikintisi (şeffaf mavi).' },
+      { id: 'tr-footprint', name: 'Ayak İzi (Taban)', src: '/assets/symbols/tr_footprint.png', type: 'symbol', width: 95, height: 125, description: 'Tozda ayakkabı taban baskısı — adli iz tespiti.' },
+      { id: 'tr-skid-straight', name: 'Fren İzi (Düz)', src: '/assets/symbols/tr_skid_straight.png', type: 'symbol', width: 325, height: 75, description: 'Çift düz lastik fren izi; uzatılarak fren mesafesi ölçümünde kullanılır.' },
+      { id: 'tr-skid-curved', name: 'Fren İzi (Kavisli)', src: '/assets/symbols/tr_skid_curved.png', type: 'symbol', width: 325, height: 75, description: 'Kavisli/izdüşüm fren izi — yanal kayma ve manevra.' },
+      { id: 'tr-casing-pistol', name: 'Kovan (Tabanca)', src: '/assets/symbols/tr_casing_pistol.png', type: 'symbol', width: 115, height: 75, description: 'Atılmış boş tabanca kovanı.' },
+      { id: 'tr-casing-rifle', name: 'Kovan (Tüfek)', src: '/assets/symbols/tr_casing_rifle.png', type: 'symbol', width: 135, height: 65, description: 'Uzun namlulu fişek kovanı.' },
+      { id: 'tr-bullet-deformed', name: 'Deforme Mermi', src: '/assets/symbols/tr_bullet_deformed.png', type: 'symbol', width: 115, height: 95, description: 'Mantarlaşmış/deforme mermi çekirdeği.' },
+      { id: 'tr-magazine', name: 'Şarjör', src: '/assets/symbols/tr_magazine.png', type: 'symbol', width: 85, height: 125, description: 'Dolu tabanca şarjörü.' },
+      { id: 'tr-bloody-footprint', name: 'Kanlı Ayak İzi', src: '/assets/symbols/tr_bloody_footprint.png', type: 'symbol', width: 95, height: 125, description: 'Kan transferli ayakkabı baskısı — olay yeri terk izi.' },
+      { id: 'tr-mud', name: 'Çamur İzi', src: '/assets/symbols/tr_mud.png', type: 'symbol', width: 205, height: 125, description: 'Islak toprak/çamur birikintisi ve sıçrama izi.' },
     ]
   },
   {

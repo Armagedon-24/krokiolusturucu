@@ -126,6 +126,13 @@ img {
   filter: url(#remove-white-svg) brightness(0) saturate(100%) invert(84%) sepia(21%) saturate(3836%) hue-rotate(352deg) brightness(101%) contrast(93%);
 }
 
+/* Karakalem/gerçekçi PNG varlıklar: sarı tint YOK, beyaz kağıt zeminde doğal çizim */
+.sidebar-symbol-photo {
+  background: linear-gradient(#fbfbf9, #efefe9);
+  border-radius: 6px;
+  padding: 3px;
+}
+
 /* Custom Scrollbar */
 .custom-scrollbar::-webkit-scrollbar {
   width: 5px;
