@@ -1,13 +1,18 @@
 {
   "name": "kroki-olusturucu",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
+  "description": "Kroki Oluşturucu - Olay Yeri Dokümantasyon ve Adli Analiz Sistemi (offline masaüstü)",
+  "author": "Armagedon-24",
+  "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "electron:build": "vite build && node scripts/patch-electron-builder-wine.cjs && electron-builder --win",
+    "electron:start": "vite build && electron ."
   },
   "dependencies": {
     "@react-three/drei": "^10.7.7",
@@ -54,10 +59,13 @@
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.58.2",
     "vite": "^8.0.10",
-    "vite-plugin-pwa": "^1.2.0"
+    "vite-plugin-pwa": "^1.2.0",
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
   },
   "allowScripts": {
     "esbuild@0.27.0": true,
-    "core-js@3.49.0": true
+    "core-js@3.49.0": true,
+    "electron@33.4.11": true
   }
 }

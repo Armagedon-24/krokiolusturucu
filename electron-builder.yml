@@ -1,0 +1,44 @@
+# Kroki Oluşturucu — Windows kurulum paketi yapılandırması
+# Üretim: npm run electron:build  →  release/ altında Setup.exe + Portable.exe
+
+appId: com.armagedon24.krokiolusturucu
+productName: Kroki Oluşturucu
+copyright: Copyright © 2026 Kroki Oluşturucu
+
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - dist/**
+  - electron/**
+  - package.json
+
+# Asar içine kapanır; sunucu asar içinden akış okur (createReadStream destekler)
+asar: true
+
+win:
+  icon: build/icon.png
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+  # Linux üzerinde derleme: exe kaynak düzenlemesi (rcedit) wine ister;
+  # kapatıyoruz — pencere/görev çubuğu ikonu çalışma anında setIcon ile verilir,
+  # kurulum ve portable exe ikonu NSIS tarafından build/icon.png'den basılır.
+  signAndEditExecutable: false
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  shortcutName: Kroki Oluşturucu
+  artifactName: Kroki-Olusturucu-Setup-${version}-${arch}
+  deleteAppDataOnUninstall: false
+  # installerIcon/uninstallerIcon BELİRTME — electron-builder win.icon'dan otomatik .ico üretir
+
+portable:
+  artifactName: Kroki-Olusturucu-Portable-${version}-${arch}

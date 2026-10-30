@@ -1,8 +1,12 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import './offline-fonts.css' // Yerel Inter/Roboto (Google Fonts yerine — offline)
 import './index.css'
 import 'leaflet/dist/leaflet.css'
 import App from './App.tsx'
+
+/** Masaüstü (Electron) sürümünde service worker gereksizdir — dosyalar yereldir. */
+const isElectron = /Electron/i.test(navigator.userAgent);
 
 /**
  * PWA service worker güncelleme akışı:
@@ -15,7 +19,7 @@ import App from './App.tsx'
  */
 const hadController = !!navigator.serviceWorker?.controller;
 
-if (navigator.serviceWorker) {
+if (navigator.serviceWorker && !isElectron) {
   const RELOAD_KEY = 'sw-reloaded-at';
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     // İlk kurulumda controller yoktan var olur — döngüye girme.

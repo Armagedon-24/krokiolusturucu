@@ -72,3 +72,6 @@ node_modules
 .playwright-mcp/
 
 .env*
+
+# Electron masaüstü derleme çıktıları
+release/
