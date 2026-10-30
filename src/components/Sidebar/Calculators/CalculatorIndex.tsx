@@ -8,6 +8,13 @@ import {
   ChevronDown,
   GitMerge,
   Flame,
+  Spline,
+  Footprints,
+  Gauge,
+  Hammer,
+  Bike,
+  Eye,
+  Table2,
 } from 'lucide-react';
 import { SkidMarkCalculator } from './SkidMarkCalculator';
 import { BloodstainCalculator } from './BloodstainCalculator';
@@ -16,8 +23,29 @@ import { ShadowCalculator } from './ShadowCalculator';
 import { AlgorMortisCalculator } from './AlgorMortisCalculator';
 import { CollisionSpeedCalculator } from './CollisionSpeedCalculator';
 import { GunshotDistanceCalculator } from './GunshotDistanceCalculator';
+import { YawMarkCalculator } from './YawMarkCalculator';
+import { PedestrianThrowCalculator } from './PedestrianThrowCalculator';
+import { StoppingDistanceCalculator } from './StoppingDistanceCalculator';
+import { CrushEnergyCalculator } from './CrushEnergyCalculator';
+import { MotorcycleSlideCalculator } from './MotorcycleSlideCalculator';
+import { SightDistanceCalculator } from './SightDistanceCalculator';
+import { FrictionTableCalculator } from './FrictionTableCalculator';
 
-type CalculatorType = 'skid' | 'collision' | 'bloodstain' | 'bullet' | 'gunshot' | 'shadow' | 'algor';
+type CalculatorType =
+  | 'skid'
+  | 'collision'
+  | 'bloodstain'
+  | 'bullet'
+  | 'gunshot'
+  | 'shadow'
+  | 'algor'
+  | 'yaw'
+  | 'pedestrian'
+  | 'stopping'
+  | 'crush'
+  | 'moto'
+  | 'sight'
+  | 'friction';
 
 export const CalculatorIndex: React.FC = () => {
   const [activeCalc, setActiveCalc] = useState<CalculatorType>('skid');
@@ -26,6 +54,13 @@ export const CalculatorIndex: React.FC = () => {
   const calculators = [
     { id: 'skid', name: 'Fren İzi / Hız', icon: <Zap size={14} />, component: <SkidMarkCalculator /> },
     { id: 'collision', name: 'Çarpışma Hızı (Momentum)', icon: <GitMerge size={14} />, component: <CollisionSpeedCalculator /> },
+    { id: 'yaw', name: 'Yayılma İzi (Kritik Hız)', icon: <Spline size={14} />, component: <YawMarkCalculator /> },
+    { id: 'pedestrian', name: 'Yaya Fırlatma (Searle)', icon: <Footprints size={14} />, component: <PedestrianThrowCalculator /> },
+    { id: 'stopping', name: 'Toplam Durma Mesafesi', icon: <Gauge size={14} />, component: <StoppingDistanceCalculator /> },
+    { id: 'crush', name: 'Deformasyon Enerjisi (CRASH3)', icon: <Hammer size={14} />, component: <CrushEnergyCalculator /> },
+    { id: 'moto', name: 'Motosiklet Kayma Analizi', icon: <Bike size={14} />, component: <MotorcycleSlideCalculator /> },
+    { id: 'sight', name: 'Görüş Üçgeni / Kavşak', icon: <Eye size={14} />, component: <SightDistanceCalculator /> },
+    { id: 'friction', name: 'Zemin μ Referans Tablosu', icon: <Table2 size={14} />, component: <FrictionTableCalculator /> },
     { id: 'bloodstain', name: 'Kan Sıçrama (BPA)', icon: <Droplets size={14} />, component: <BloodstainCalculator /> },
     { id: 'bullet', name: 'Atış Yönü / Atış Mesafesi', icon: <Target size={14} />, component: <BulletTrajectoryCalculator /> },
     { id: 'gunshot', name: 'Atış Mesafesi (Barut İzi)', icon: <Flame size={14} />, component: <GunshotDistanceCalculator /> },
