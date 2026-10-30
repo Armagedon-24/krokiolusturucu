@@ -1246,10 +1246,24 @@ export const useStore = create<StoreState>()(
           const localPlacementWins = localSavedAt > syncedAt;
           const persistedCats: Record<string, string[]> = state.symbolPlacements?.cats || {};
 
+          // Varsayılan (hardcoded) kategori haritası — admin taşmalarını tanımlamak için
+          const originCat = new Map<string, string>();
+          SYMBOL_CATEGORIES.forEach(cat => cat.symbols.forEach(s => {
+            if (!originCat.has(s.id)) originCat.set(s.id, cat.id);
+          }));
+
           const placedIn = new Map<string, string>();
           state.allSymbols.forEach(cat => {
             cat.symbols.forEach((s: any) => {
-              if (!placedIn.has(s.id)) placedIn.set(s.id, cat.id);
+              const prev = placedIn.get(s.id);
+              if (prev === undefined) {
+                placedIn.set(s.id, cat.id);
+                return;
+              }
+              // Aynı sembol birden çok kategoride kayıtlıysa (eski sürüm hata kalıntısı):
+              // varsayılan kategori DIŞINDAKI kopya adminin taşıdığı yerdir ve o kazanır.
+              const origin = originCat.get(s.id);
+              if (prev === origin && cat.id !== origin) placedIn.set(s.id, cat.id);
             });
           });
 
@@ -1327,10 +1341,6 @@ export const useStore = create<StoreState>()(
 
           // 5. Küresel mükerrer temizliği: her sembol kimliği yalnızca BİR kategoride bulunur.
           //    Hem varsayılan hem admin kategorisinde görünen eski kayıtlarda admin yerleşimi kazanır.
-          const originCat = new Map<string, string>();
-          SYMBOL_CATEGORIES.forEach(cat => cat.symbols.forEach(s => {
-            if (!originCat.has(s.id)) originCat.set(s.id, cat.id);
-          }));
           const seenCat = new Map<string, string>(); // sembol kimliği -> ilk görüldüğü kategori
           categoryMap.forEach((cat: any) => {
             const kept: any[] = [];
