@@ -1,0 +1,367 @@
+/**
+ * Adli bilirkişi analiz raporunun kurumsal PDF üretimi (jsPDF).
+ *
+ * Tasarım: A4 dikey, koyu kurumsal başlık bandı, altın vurgu çizgisi,
+ * numaralı bölüm başlıkları, asılı girintili maddeler, sonuç kutusu,
+ * bilirkişi imza alanı ve her sayfada rapor no + sayfa numarası altbilgisi.
+ *
+ * Türkçe karakterler (ğ ş ı İ ç ö ü) için Liberation Sans gömülür
+ * (public/assets/fonts/). jsPDF standart Helvetica'sı Türkçe desteklemez.
+ */
+
+import { jsPDF } from 'jspdf';
+import type { ForensicReport } from './forensicReport';
+import { reportMeta } from './forensicReport';
+
+/* ------------------------------------------------------------------ */
+/* Renk paleti — kurumsal koyu + altın vurgu (uygulama kimliğiyle uyumlu) */
+/* ------------------------------------------------------------------ */
+const C_INK = '#16181D'; // başlık bandı / ana metin başlıkları
+const C_BODY = '#26282E'; // gövde metni
+const C_GRAY = '#6B7280'; // ikincil metin
+const C_GOLD = '#C9A227'; // vurgu (koyu altın — baskıda okunur)
+const C_GOLD_SOFT = '#FBF6E3'; // sonuç kutusu dolgusu
+const C_LINE = '#C9CDD4'; // ince çizgiler
+const C_ZEBRA = '#F3F4F6'; // bilgi tablosu dolgusu
+const C_WHITE = '#FFFFFF';
+
+/* Sayfa geometrisi (mm) — A4 210×297 */
+const PW = 210;
+const PH = 297;
+const ML = 20; // sol kenar boşluğu
+const MR = 18; // sağ kenar boşluğu
+const CW = PW - ML - MR; // içerik genişliği = 172
+const BOTTOM = 268; // içerik alt sınırı (altbilgi bölgesi öncesi)
+const TOP_PN = 24; // devam sayfaları içerik başlangıcı
+
+const FONT_NAME = 'Liberation';
+const FONT_REG = 'LiberationSans-Regular.ttf';
+const FONT_BOLD = 'LiberationSans-Bold.ttf';
+
+let fontCache: Promise<{ reg: string; bold: string }> | null = null;
+
+/** TTF'i indirip base64'e çevirir. */
+async function fetchFontB64(url: string): Promise<string> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Font alınamadı: ${url} (${res.status})`);
+  const buf = new Uint8Array(await res.arrayBuffer());
+  let bin = '';
+  const CHUNK = 0x8000;
+  for (let i = 0; i < buf.length; i += CHUNK) {
+    bin += String.fromCharCode(...buf.subarray(i, i + CHUNK));
+  }
+  return btoa(bin);
+}
+
+/** Font bayt'larını bir kez indirir; her yeni dokümana ayrıca kaydeder. */
+function loadFontB64(): Promise<{ reg: string; bold: string }> {
+  if (!fontCache) {
+    fontCache = Promise.all([
+      fetchFontB64(`${import.meta.env.BASE_URL}assets/fonts/${FONT_REG}`),
+      fetchFontB64(`${import.meta.env.BASE_URL}assets/fonts/${FONT_BOLD}`),
+    ]).then(([reg, bold]) => ({ reg, bold }));
+  }
+  return fontCache;
+}
+
+/** Fontları bu dokümana kaydeder. */
+async function ensureFonts(doc: jsPDF): Promise<void> {
+  const { reg, bold } = await loadFontB64();
+  doc.addFileToVFS(FONT_REG, reg);
+  doc.addFont(FONT_REG, FONT_NAME, 'normal');
+  doc.addFileToVFS(FONT_BOLD, bold);
+  doc.addFont(FONT_BOLD, FONT_NAME, 'bold');
+}
+
+/* ------------------------------------------------------------------ */
+/* Yardımcılar                                                         */
+/* ------------------------------------------------------------------ */
+
+function hairline(doc: jsPDF, x: number, y: number, w: number, color = C_LINE, thick = 0.25) {
+  doc.setDrawColor(color);
+  doc.setLineWidth(thick);
+  doc.line(x, y, x + w, y);
+}
+
+/** Yerelleştirilmiş büyük harf (i→İ, ı→I). */
+function trUpper(s: string): string {
+  return s.toLocaleUpperCase('tr-TR');
+}
+
+/** Dosya adında güvenli ASCII: Türkçe karakterleri sadeleştirir. */
+function asciiSafe(s: string): string {
+  const map: Record<string, string> = { 'İ': 'I', 'ı': 'i', 'ğ': 'g', 'Ğ': 'G', 'ş': 's', 'Ş': 'S', 'ç': 'c', 'Ç': 'C', 'ö': 'o', 'Ö': 'O', 'ü': 'u', 'Ü': 'U' };
+  return s.replace(/[İığĞşŞçÇöÖüÜ]/g, (c) => map[c] ?? c).replace(/[^A-Za-z0-9._-]+/g, '_');
+}
+
+/* ------------------------------------------------------------------ */
+/* Ana üretici                                                         */
+/* ------------------------------------------------------------------ */
+
+export interface ForensicPdfResult {
+  fileName: string;
+  blob: Blob;
+}
+
+/** Rapor nesnesinden kurumsal PDF üretip Blob olarak döndürür. */
+export async function buildForensicPdf(report: ForensicReport): Promise<ForensicPdfResult> {
+  const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
+  await ensureFonts(doc);
+
+  const meta = reportMeta();
+
+  /* --- imleç durumu ---------------------------------------------- */
+  let y = 0;
+  let pageNo = 1;
+
+  const setBody = () => { doc.setFont(FONT_NAME, 'normal'); doc.setFontSize(9.5); doc.setTextColor(C_BODY); };
+  const setItemNo = () => { doc.setFont(FONT_NAME, 'bold'); doc.setFontSize(9.5); doc.setTextColor(C_GOLD); };
+
+  /** Sayfa sonuna sığmıyorsa yeni sayfa aç, devam üst bilgisini bas. */
+  const ensure = (need: number) => {
+    if (y + need > BOTTOM) {
+      doc.addPage();
+      pageNo += 1;
+      drawContinuationHeader();
+      y = TOP_PN;
+    }
+  };
+
+  /** Devam sayfaları için kompakt üst bilgi. */
+  const drawContinuationHeader = () => {
+    doc.setFillColor(C_INK);
+    doc.rect(0, 0, PW, 14, 'F');
+    doc.setFillColor(C_GOLD);
+    doc.rect(0, 14, PW, 0.9, 'F');
+    doc.setFont(FONT_NAME, 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(C_WHITE);
+    doc.text('ADLİ BİLİRKİŞİ ANALİZ RAPORU', ML, 8.6);
+    doc.setFont(FONT_NAME, 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor('#D8B94A');
+    doc.text(meta.dosyaNo, PW - MR, 8.6, { align: 'right' });
+  };
+
+  /** Bölüm başlığı: altın numara rozeti + koyu büyük harf başlık + ince çizgi. */
+  const sectionHeading = (no: number, title: string) => {
+    ensure(16);
+    doc.setFillColor(C_GOLD);
+    doc.rect(ML, y, 6.5, 6.5, 'F');
+    doc.setFont(FONT_NAME, 'bold');
+    doc.setFontSize(9.5);
+    doc.setTextColor(C_WHITE);
+    doc.text(String(no), ML + 3.25, y + 4.6, { align: 'center' });
+    doc.setFontSize(10.5);
+    doc.setTextColor(C_INK);
+    doc.text(trUpper(title), ML + 9.5, y + 4.6);
+    y += 8.6;
+    hairline(doc, ML, y, CW);
+    y += 4;
+  };
+
+  /** Numaralı madde: "4.2  metin" — asılı girinti. */
+  const item = (sec: number, idx: number, text: string) => {
+    setBody();
+    const lines = doc.splitTextToSize(text, CW - 12) as string[];
+    ensure(lines.length * 4.35 + 2);
+    setItemNo();
+    doc.text(`${sec}.${idx + 1}`, ML + 1.5, y + 3.4);
+    setBody();
+    doc.text(lines, ML + 12, y + 3.4);
+    y += lines.length * 4.35 + 1.7;
+  };
+
+  const emptyNote = () => {
+    setBody();
+    doc.setTextColor(C_GRAY);
+    doc.text('(Veri bulunamadı)', ML + 1.5, y + 3.4);
+    y += 6;
+  };
+
+  /* ================================================================ */
+  /* 1. SAYFA ÜST BANDI                                                */
+  /* ================================================================ */
+  doc.setFillColor(C_INK);
+  doc.rect(0, 0, PW, 30, 'F');
+  doc.setFillColor(C_GOLD);
+  doc.rect(0, 30, PW, 1.1, 'F');
+
+  doc.setFont(FONT_NAME, 'bold');
+  doc.setFontSize(17);
+  doc.setTextColor(C_WHITE);
+  doc.text('ADLİ BİLİRKİŞİ ANALİZ RAPORU', ML, 13.5);
+  doc.setFont(FONT_NAME, 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor('#D8B94A');
+  doc.text('Kaza Analiz ve Rekonstrüksiyon Birimi', ML, 20.5);
+  doc.setFontSize(7.5);
+  doc.setTextColor('#9CA3AF');
+  doc.text('Bilimsel yöntemlere dayalı teknik değerlendirme belgesi', ML, 26);
+
+  // Sağda rapor rozeti
+  doc.setDrawColor('#4B5563');
+  doc.setLineWidth(0.3);
+  doc.roundedRect(PW - MR - 52, 7, 52, 17, 1.5, 1.5, 'S');
+  doc.setFont(FONT_NAME, 'bold');
+  doc.setFontSize(6.5);
+  doc.setTextColor('#9CA3AF');
+  doc.text('RAPOR NO', PW - MR - 48, 11.5);
+  doc.setFontSize(9.5);
+  doc.setTextColor('#E5B94E');
+  doc.text(meta.dosyaNo, PW - MR - 48, 17.5);
+  doc.setFont(FONT_NAME, 'normal');
+  doc.setFontSize(7);
+  doc.setTextColor('#9CA3AF');
+  doc.text(`${meta.tarih} · ${meta.saat}`, PW - MR - 48, 21.8);
+
+  /* --- Bilgi tablosu ---------------------------------------------- */
+  y = 37.5;
+  const infoRows: Array<[string, string]> = [
+    ['Rapor No', meta.dosyaNo],
+    ['Rapor Tarihi', `${meta.tarih} — ${meta.saat}`],
+    ['İnceleme Türü', report.title],
+    ['İncelemeyi Yapan', 'Bilirkişi Adı Soyadı / Unvan : ........................................'],
+    ['İsteyen Makam', '........................................'],
+  ];
+  infoRows.forEach(([k, v], i) => {
+    doc.setFont(FONT_NAME, 'normal');
+    doc.setFontSize(9);
+    const vLines = doc.splitTextToSize(v, CW - 52 - 4) as string[];
+    const rh = Math.max(6.6, vLines.length * 4.4 + 2.4);
+    if (i % 2 === 0) {
+      doc.setFillColor(C_ZEBRA);
+      doc.rect(ML, y, CW, rh, 'F');
+    }
+    doc.setFont(FONT_NAME, 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(C_GRAY);
+    doc.text(trUpper(k), ML + 3, y + 4.5);
+    doc.setFont(FONT_NAME, 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(C_BODY);
+    doc.text(vLines, ML + 52, y + 4.5);
+    y += rh;
+  });
+  hairline(doc, ML, y, CW);
+  y += 8;
+
+  /* ================================================================ */
+  /* BÖLÜMLER                                                          */
+  /* ================================================================ */
+  const drawSections = () => {
+    sectionHeading(1, 'İnceleme Konusu');
+    item(1, 0, report.topic);
+
+    sectionHeading(2, 'İncelenen Deliller ve Girdiler');
+    if (report.evidence.length) report.evidence.forEach((e, i) => item(2, i, e)); else emptyNote();
+
+    sectionHeading(3, 'Uygulanan Yöntem');
+    if (report.method.length) report.method.forEach((m, i) => item(3, i, m)); else emptyNote();
+
+    sectionHeading(4, 'Bulgular');
+    if (report.findings.length) report.findings.forEach((f, i) => item(4, i, f)); else emptyNote();
+
+    sectionHeading(5, 'Değerlendirme — Tüm İhtimaller');
+    if (report.scenarios.length) report.scenarios.forEach((s, i) => item(5, i, s)); else emptyNote();
+  };
+
+  const drawConclusion = () => {
+    sectionHeading(6, 'Sonuç ve Kanaat');
+    setBody();
+    const blocks = (report.conclusion.length ? report.conclusion : ['(Veri bulunamadı)'])
+      .map((c) => doc.splitTextToSize(c, CW - 16) as string[]);
+    const totalH = blocks.reduce((a, b) => a + b.length * 4.35, 0) + 9;
+    ensure(totalH + 4);
+    // Altın vurgu çubuğu + yumuşak dolgu
+    const boxTop = y;
+    doc.setFillColor(C_GOLD_SOFT);
+    doc.rect(ML, boxTop, CW, totalH, 'F');
+    doc.setFillColor(C_GOLD);
+    doc.rect(ML, boxTop, 1.6, totalH, 'F');
+    let ty = boxTop + 5.5;
+    blocks.forEach((b) => {
+      doc.setFont(FONT_NAME, 'normal');
+      doc.setFontSize(9.5);
+      doc.setTextColor('#3B3418');
+      doc.text(b, ML + 6, ty);
+      ty += b.length * 4.35;
+    });
+    y = boxTop + totalH + 4;
+  };
+
+  const drawCaveats = () => {
+    sectionHeading(7, 'Şerhler ve Limitasyonlar');
+    if (report.caveats.length) report.caveats.forEach((c, i) => item(7, i, c)); else emptyNote();
+  };
+
+  /** Bilirkişi imza bloğu (sağa hizalı). */
+  const drawSignature = () => {
+    ensure(52);
+    y += 6;
+    const bw = 78;
+    const bh = 40;
+    const bx = PW - MR - bw;
+    hairline(doc, ML, y + bh / 2, CW - bw - 8, C_LINE);
+    doc.setDrawColor(C_LINE);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(bx, y, bw, bh, 1.5, 1.5, 'S');
+    doc.setFillColor(C_INK);
+    doc.roundedRect(bx, y, bw, 7, 1.5, 1.5, 'F');
+    doc.setFont(FONT_NAME, 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(C_WHITE);
+    doc.text('BİLİRKİŞİ', bx + bw / 2, y + 4.8, { align: 'center' });
+    doc.setFont(FONT_NAME, 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(C_GRAY);
+    doc.text('Adı Soyadı : ............................', bx + 5, y + 14);
+    doc.text('Unvan / Sicil No : ....................', bx + 5, y + 20);
+    doc.text('İmza / Paraf :', bx + 5, y + 34);
+    y += bh + 8;
+  };
+
+  drawSections();
+  drawConclusion();
+  drawCaveats();
+  drawSignature();
+
+  /* ================================================================ */
+  /* ALTBİLGİ — tüm sayfalara sonradan damgalanır                      */
+  /* ================================================================ */
+  const total = doc.getNumberOfPages();
+  for (let p = 1; p <= total; p++) {
+    doc.setPage(p);
+    hairline(doc, ML, PH - 16, CW, C_LINE, 0.2);
+    doc.setFont(FONT_NAME, 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(C_GRAY);
+    doc.text(`${meta.dosyaNo} · Adli Bilirkişi Analiz Raporu`, ML, PH - 12);
+    doc.setFont(FONT_NAME, 'bold');
+    doc.text(`Sayfa ${p} / ${total}`, PW - MR, PH - 12, { align: 'right' });
+    doc.setFont(FONT_NAME, 'normal');
+    doc.setFontSize(6.3);
+    doc.text(
+      'Bu rapor bilimsel yöntemlere dayalı bilirkişi görüşü niteliğindedir; nihai kanaat, dosyanın bütüncül delilleri ile birlikte değerlendirilmelidir.',
+      ML,
+      PH - 8.5,
+    );
+  }
+
+  const blob = doc.output('blob');
+  return { fileName: `Bilirkisi_Analiz_Raporu_${asciiSafe(meta.dosyaNo)}.pdf`, blob };
+}
+
+/** PDF'i üretip tarayıcı indirmesini tetikler. */
+export async function downloadForensicPdf(report: ForensicReport): Promise<string> {
+  const { fileName, blob } = await buildForensicPdf(report);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+  return fileName;
+}

@@ -39,7 +39,7 @@ export const ShadowCalculator: React.FC = () => {
     }
   }, [shadowLength, sunAngle]);
 
-  const reportText = useMemo(() => formatForensicReport({
+  const report = useMemo(() => ({
     title: 'GÖLGE VE ZAMAN İNCELEMESİ',
     topic: 'Fotoğraf/kroki üzerinde ölçülen gölge boyu ve güneş yükseklik açısından hareketle, nesne boyunun ve olayın gerçekleştiği zaman diliminin adli teknik yönden değerlendirilmesi.',
     evidence: [
@@ -73,6 +73,7 @@ export const ShadowCalculator: React.FC = () => {
       'Sadece güneş açısıyla saat tahmini tek başına kesin değildir; doğrultu bilgisi olmadan sabah/akşam ayrımı yapılamaz.',
     ],
   }), [shadowLength, sunAngle, objectHeight, heightMin, heightMax, timeEstimate]);
+  const reportText = useMemo(() => formatForensicReport(report), [report]);
 
   const handleAddToCanvas = () => {
     addObject({
@@ -184,7 +185,7 @@ export const ShadowCalculator: React.FC = () => {
           </div>
         </div>
 
-        <ForensicReportPreview text={reportText} />
+        <ForensicReportPreview text={reportText} report={report} />
       </div>
     </div>
   );

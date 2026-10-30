@@ -60,7 +60,7 @@ export const BulletTrajectoryCalculator: React.FC = () => {
     }
   }, [distance, angle, ammo]);
 
-  const reportText = useMemo(() => formatForensicReport({
+  const report = useMemo(() => ({
     title: 'BALİSTİK TRAJEKTÖR İNCELEMESİ',
     topic: 'Vuruş açısı ve mermi karakteristiklerinden hareketle, atışın kaynak (namlu çıkış) konumunun adli balistik yönünden değerlendirilmesi.',
     evidence: [
@@ -98,6 +98,7 @@ export const BulletTrajectoryCalculator: React.FC = () => {
       'Sonuç gösterge niteliğindedir; nihai kanaat saha incelemesi ve laboratuvar bulgularıyla desteklenmelidir.',
     ],
   }), [ammo, angle, distance, height, heightMin, heightMax, bulletDrop]);
+  const reportText = useMemo(() => formatForensicReport(report), [report]);
 
   const handleAddToCanvas = () => {
     addObject({
@@ -219,7 +220,7 @@ export const BulletTrajectoryCalculator: React.FC = () => {
           </div>
         </div>
 
-        <ForensicReportPreview text={reportText} />
+        <ForensicReportPreview text={reportText} report={report} />
 
         <div className="p-4 bg-red-500/5 border border-red-500/10 rounded-2xl flex gap-3 items-start shadow-inner">
           <Info size={16} className="text-red-900 mt-0.5 flex-shrink-0" />

@@ -63,7 +63,7 @@ export const GunshotDistanceCalculator: React.FC = () => {
     }
   }, [weaponType, spread, choke, hasBurn, hasSoot, hasStippling, hasWipe]);
 
-  const reportText = useMemo(() => {
+  const report = useMemo(() => {
     const weaponName = weaponType === 'handgun' ? 'Tabanca' : weaponType === 'rifle' ? 'Yivli Tüfek' : 'Yivsiz Av Tüfeği';
     const bulgular: string[] = weaponType === 'shotgun'
       ? [`Saçma dağılım çapı: ${spread} cm`, `Namlu şoku (choke): ${choke.name}`]
@@ -73,7 +73,7 @@ export const GunshotDistanceCalculator: React.FC = () => {
         hasStippling ? 'Barut dövmesi (stippling) mevcut' : 'Barut dövmesi yok',
         hasWipe ? 'Giriş halkası/mermi sıyrığı mevcut' : 'Giriş halkası yok',
       ]);
-    return formatForensicReport({
+    return ({
       title: 'ATIŞ MESAFESİ İNCELEMESİ (BARUT ARTIĞI)',
       topic: 'Ateşli silah yaralanmasında hedefte tespit edilen barut artığı bulgularından hareketle, atış mesafesinin adli balistik yönünden tahmini ve değerlendirilmesi.',
       evidence: [`Silah tipi: ${weaponName}`, ...bulgular],
@@ -110,6 +110,7 @@ export const GunshotDistanceCalculator: React.FC = () => {
       ],
     });
   }, [weaponType, spread, choke, hasBurn, hasSoot, hasStippling, hasWipe, classification, estimatedDistance]);
+  const reportText = useMemo(() => formatForensicReport(report), [report]);
 
   const handleAddToCanvas = () => {
     addObject({
@@ -294,7 +295,7 @@ export const GunshotDistanceCalculator: React.FC = () => {
           </div>
         </div>
 
-        <ForensicReportPreview text={reportText} />
+        <ForensicReportPreview text={reportText} report={report} />
 
         {/* Info Box */}
         <div className="p-4 bg-orange-500/5 border border-orange-500/10 rounded-2xl flex gap-3 items-start shadow-inner">

@@ -31,6 +31,25 @@ const RULER = '\u2500'.repeat(46);
 const DOUBLE = '\u2550'.repeat(46);
 const LINE_CHARS = 46;
 
+export interface ReportMeta {
+  /** KROKİ-YYYYMMDD-HHMMSS biçiminde dosya numarası */
+  dosyaNo: string;
+  /** gg.aa.yyyy (tr-TR) */
+  tarih: string;
+  /** ss:dd */
+  saat: string;
+}
+
+/** Rapor numarası ve tarih/saat — metin çıktısı ile PDF aynı numarayı paylaşır. */
+export function reportMeta(now = new Date()): ReportMeta {
+  const dosyaNo = `KROKİ-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+  return {
+    dosyaNo,
+    tarih: now.toLocaleDateString('tr-TR'),
+    saat: now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
+  };
+}
+
 /** Metni verilen karakter sayısında sarar; devam satırlarını girintiler. */
 export function wrapText(text: string, max = LINE_CHARS, indent = '    '): string[] {
   const out: string[] = [];
@@ -76,17 +95,14 @@ function section(no: number, heading: string, items: string[]): string[] {
 
 /** Raporu canvas'a uygun düz metne dönüştürür. */
 export function formatForensicReport(r: ForensicReport): string {
-  const now = new Date();
-  const tarih = now.toLocaleDateString('tr-TR');
-  const saat = now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
-  const dosya = `KROKİ-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+  const { dosyaNo, tarih, saat } = reportMeta();
 
   const lines: string[] = [];
   lines.push(DOUBLE);
   wrapText(r.title, LINE_CHARS).forEach((l) => lines.push(`  ${l}`));
   lines.push('     ADLİ BİLİRKİŞİ ANALİZ RAPORU');
   lines.push(DOUBLE);
-  lines.push(`Dosya No : ${dosya}`);
+  lines.push(`Dosya No : ${dosyaNo}`);
   lines.push(`Tarih    : ${tarih} - ${saat}`);
   lines.push(RULER);
 

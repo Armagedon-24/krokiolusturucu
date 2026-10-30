@@ -53,7 +53,7 @@ export const AlgorMortisCalculator: React.FC = () => {
       ? 'ORTA — 24 saati aşan sürelerde livor/rigor mortis ve entomolojik bulgularla desteklenmelidir'
       : 'YÜKSEK';
 
-  const reportText = useMemo(() => formatForensicReport({
+  const report = useMemo(() => ({
     title: 'ÖLÜM ZAMANI İNCELEMESİ (ALGOR MORTİS)',
     topic: 'Ceset vücut ısısı ve çevre koşullarından hareketle, ölümün üzerinden geçen sürenin (PMI) adli tıp teknik yönünden tahmin edilmesi.',
     evidence: [
@@ -93,6 +93,7 @@ export const AlgorMortisCalculator: React.FC = () => {
       'Rapor, muayene anında bildirilen ölçümlerin doğruluğuna bağlıdır.',
     ],
   }), [bodyTemp, ambientTemp, condition, hours, hoursMin, hoursMax, reliability]);
+  const reportText = useMemo(() => formatForensicReport(report), [report]);
 
   const handleAddToCanvas = () => {
     addObject({
@@ -206,7 +207,7 @@ export const AlgorMortisCalculator: React.FC = () => {
           </div>
         </div>
 
-        <ForensicReportPreview text={reportText} />
+        <ForensicReportPreview text={reportText} report={report} />
 
         <div className="p-4 bg-blue-500/5 border border-blue-500/10 rounded-2xl flex gap-3 items-start shadow-inner">
           <Info size={16} className="text-blue-900 mt-0.5 flex-shrink-0" />

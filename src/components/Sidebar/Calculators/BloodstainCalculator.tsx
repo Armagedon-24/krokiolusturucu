@@ -58,7 +58,7 @@ export const BloodstainCalculator: React.FC = () => {
         : 'Yüksek hız — ateşli silah veya mekanik spütrasyon' // genişlik < 1 mm
     : 'Belirsiz';
 
-  const reportText = useMemo(() => formatForensicReport({
+  const report = useMemo(() => ({
     title: 'KAN SIÇRAMA DESENİ İNCELEMESİ (BPA)',
     topic: 'Olay yerinde tespit edilen kan lekesinin boyut ölçümlerinden hareketle çarpma açısının ve kaynağın (yara/darbe noktası) konumunun adli teknik yönden değerlendirilmesi.',
     evidence: [
@@ -95,6 +95,7 @@ export const BloodstainCalculator: React.FC = () => {
       'Rapor gösterge niteliğinde olup nihai kanaat adli tıp/kriminal uzmanı değerlendirmesiyle birlikte oluşmalıdır.',
     ],
   }), [width, length, distanceToSource, angle, angleMin, angleMax, originHeight, heightMin, heightMax, velocityClass]);
+  const reportText = useMemo(() => formatForensicReport(report), [report]);
 
   const handleAddToCanvas = () => {
     addObject({
@@ -224,7 +225,7 @@ export const BloodstainCalculator: React.FC = () => {
           </div>
         </div>
 
-        <ForensicReportPreview text={reportText} />
+        <ForensicReportPreview text={reportText} report={report} />
 
         <div className="p-4 bg-[#111]/80 border border-red-500/10 rounded-2xl flex gap-3 items-start shadow-inner">
           <Info size={16} className="text-red-900 mt-0.5 flex-shrink-0" />

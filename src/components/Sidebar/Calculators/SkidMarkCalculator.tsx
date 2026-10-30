@@ -76,7 +76,7 @@ export const SkidMarkCalculator: React.FC = () => {
     }
   }, [distance, mu, efficiency, vehicleType]);
 
-  const reportText = useMemo(() => formatForensicReport({
+  const report = useMemo(() => ({
     title: 'FREN İZİ (SKID MARK) İNCELEMESİ',
     topic: 'Kaza yerinde tespit edilen fren izi uzunluğu ile zemin sürtünme katsayısı ve araç fren karakteristiğinden hareketle, aracın frenleme başlangıcındaki hızının adli teknik yönden değerlendirilmesi.',
     evidence: [
@@ -115,6 +115,7 @@ export const SkidMarkCalculator: React.FC = () => {
       'Eğim, yük durumu ve lastik durumu için verim/katsayı manuel düzeltmesi yapılmadıkça sonuç yerel doğruluk taşır.',
     ],
   }), [speed, speedMin, speedMax, gradeSpeed, distance, mu, efficiency, vehicleType]);
+  const reportText = useMemo(() => formatForensicReport(report), [report]);
 
   const handleAddToCanvas = () => {
     addObject({
@@ -262,7 +263,7 @@ export const SkidMarkCalculator: React.FC = () => {
           </div>
         </div>
 
-        <ForensicReportPreview text={reportText} />
+        <ForensicReportPreview text={reportText} report={report} />
 
         <div className="p-4 bg-orange-500/5 border border-orange-500/10 rounded-2xl flex gap-3 items-start">
           <AlertTriangle size={16} className="text-orange-500 mt-0.5 flex-shrink-0" />

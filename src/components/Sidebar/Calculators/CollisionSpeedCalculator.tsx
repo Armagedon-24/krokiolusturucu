@@ -102,7 +102,7 @@ export const CollisionSpeedCalculator: React.FC = () => {
     ? 'Açılı / dik çarpışma (2D momentum)'
     : 'Cephe/cırtan veya aks yönü çarpışma (1D yaklaşım)';
 
-  const reportText = useMemo(() => formatForensicReport({
+  const report = useMemo(() => ({
     title: 'ARAÇ ÇARPIŞMA HIZI İNCELEMESİ (MOMENTUM)',
     topic: 'Çarpışma sonrası araçların sürüklenme mesafeleri, kütleleri ve ayrılma açılarından hareketle, çarpışma anındaki hızların momentum korunumu ile adli teknik yönden değerlendirilmesi.',
     evidence: [
@@ -142,6 +142,7 @@ export const CollisionSpeedCalculator: React.FC = () => {
       'Rapor gösterge niteliğinde olup nihai kanaat bilirkişi değerlendirmesiyle birlikte oluşmalıdır.',
     ],
   }), [mass1, mass2, distance1, distance2, mu, phi, theta1, theta2, postSpeed1, postSpeed2, preSpeed1, preSpeed2, preSpeed1Min, preSpeed1Max, preSpeed2Min, preSpeed2Max, impactType]);
+  const reportText = useMemo(() => formatForensicReport(report), [report]);
 
   const handleAddToCanvas = () => {
     addObject({
@@ -325,7 +326,7 @@ export const CollisionSpeedCalculator: React.FC = () => {
           </button>
         </div>
 
-        <ForensicReportPreview text={reportText} />
+        <ForensicReportPreview text={reportText} report={report} />
 
         {/* Warning Alert */}
         <div className="p-3 bg-red-500/5 border border-red-500/10 rounded-2xl flex gap-3 items-start">
