@@ -30,6 +30,10 @@ export const BulletTrajectoryCalculator: React.FC = () => {
       setBulletDrop(drop);
       const linearHeight = distance * Math.tan(radians);
       setHeight(linearHeight + drop);
+    } else {
+      // Mesafe sıfırlanınca eski sonuçlar ekranda kalmasın
+      setBulletDrop(0);
+      setHeight(0);
     }
   }, [distance, angle, ammo]);
 

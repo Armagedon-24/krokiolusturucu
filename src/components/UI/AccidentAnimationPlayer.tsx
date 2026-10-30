@@ -115,6 +115,12 @@ export const AccidentAnimationPlayer: React.FC<AccidentAnimationPlayerProps> = (
   const activeVehicles = vehicles.filter((v): v is VehicleData => !!v);
   const { isPlaying, currentTime, speed, loop } = accidentAnimation;
 
+  // Modal açıkken tuval animasyon döngüsünü kilitle (çift döngü önlemi)
+  useEffect(() => {
+    if (isOpen) setAccidentAnimation({ playerOpen: true });
+    return () => setAccidentAnimation({ playerOpen: false });
+  }, [isOpen, setAccidentAnimation]);
+
   const handlePlay = useCallback(() => {
     setAccidentData({ enabled: true });
     setAccidentAnimation({ isPlaying: true, currentTime: 0 });
@@ -211,14 +217,16 @@ export const AccidentAnimationPlayer: React.FC<AccidentAnimationPlayerProps> = (
 
     timeRef.current = currentTime;
 
-    const duration = accidentReconstruction.animationDuration / speed;
+    const duration = Math.max(accidentReconstruction.animationDuration, 0.1);
 
     const animate = (timestamp: number) => {
       if (!lastTimeRef.current) lastTimeRef.current = timestamp;
       const deltaMs = timestamp - lastTimeRef.current;
       lastTimeRef.current = timestamp;
 
-      const deltaSec = deltaMs / 1000;
+      // Hız çarpanı delta'ya uygulanır; duration sabit kalır (aksi halde
+      // speed!=1 iken ilerleme yarıda takılı kalıyordu).
+      const deltaSec = (deltaMs / 1000) * speed;
       const prevTime = timeRef.current;
       const newTime = Math.min(prevTime + deltaSec, duration);
       timeRef.current = newTime;

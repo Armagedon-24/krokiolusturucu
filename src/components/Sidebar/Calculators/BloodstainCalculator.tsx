@@ -22,6 +22,8 @@ export const BloodstainCalculator: React.FC = () => {
       if (distanceToSource > 0) {
         const h = distanceToSource * Math.tan(radians);
         setOriginHeight(h);
+      } else {
+        setOriginHeight(0); // mesafe sıfırlanınca eski değer kalmasın
       }
     } else {
       setAngle(0);

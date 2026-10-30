@@ -18,19 +18,29 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, onClose, ima
     }
   }, [isOpen]);
 
+  // Ctrl+tekerlek ile yakınlaştırma: React wheel listener'ı passive olduğu için
+  // preventDefault orada çalışmaz; non-passive dinleyici ref üzerinden eklenir.
+  // HOOK KURALI: tüm hook'lar erken return'den ÖNCE çağrılmalı.
+  const scrollAreaRef = React.useRef<HTMLDivElement | null>(null);
+  React.useEffect(() => {
+    const el = scrollAreaRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if (e.ctrlKey) {
+        e.preventDefault();
+        if (e.deltaY < 0) setScale(prev => Math.min(prev + 0.1, 2.5));
+        else setScale(prev => Math.max(prev - 0.1, 0.4));
+      }
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, []);
+
   if (!isOpen) return null;
 
   const handleZoomIn = () => setScale(prev => Math.min(prev + 0.1, 2.5));
   const handleZoomOut = () => setScale(prev => Math.max(prev - 0.1, 0.4));
   const handleResetZoom = () => setScale(0.85);
-
-  const handleWheel = (e: React.WheelEvent) => {
-    if (e.ctrlKey) {
-      e.preventDefault();
-      if (e.deltaY < 0) handleZoomIn();
-      else handleZoomOut();
-    }
-  };
 
   return createPortal(
     <div className="fixed inset-0 z-[9999] flex flex-col bg-[#0a0a0a] animate-in fade-in duration-300">
@@ -88,8 +98,8 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, onClose, ima
 
       {/* Main Preview Area */}
       <div 
+        ref={scrollAreaRef}
         className="flex-1 overflow-auto bg-[#0a0a0a] flex items-start justify-center custom-scrollbar relative py-12 px-12"
-        onWheel={handleWheel}
       >
         {/* Subtle decorative background pattern */}
         <div className="absolute inset-0 opacity-[0.03] pointer-events-none" 

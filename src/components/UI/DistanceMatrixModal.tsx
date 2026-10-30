@@ -234,10 +234,13 @@ export const DistanceMatrixModal: React.FC<DistanceMatrixModalProps> = ({
           {allTargets.length >= 2 && (
             <button 
               onClick={() => {
+                // Buton daha önce hiçbir şey yapmıyordu (başarı bildirimi misleading).
+                // Gerçek eylem: çizimdeki ölçüm oklarıyla birlikte rapor PDF'ini üret.
+                useStore.getState().triggerExportPDF();
                 addNotification({
                   type: 'success',
-                  message: 'Rapor Güncellendi',
-                  description: 'Mesafe verileri rapor dökümüne eklendi.'
+                  message: 'Rapor Oluşturuluyor',
+                  description: 'Mesafe verileri çizimle birlikte PDF rapora aktarılıyor.'
                 });
               }}
               className="flex items-center gap-2 px-5 py-2 bg-[#F5C518] hover:bg-[#E2B616] text-black text-xs font-black rounded-md transition-all shadow-lg active:scale-95"

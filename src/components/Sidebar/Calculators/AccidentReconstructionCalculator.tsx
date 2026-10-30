@@ -675,7 +675,7 @@ export const AccidentReconstructionCalculator: React.FC = () => {
                       <label className={LABEL_CLASS}>Animasyon Süresi (sn)</label>
                       <input type="number" step="0.5" min="1" max="30" className={INPUT_CLASS}
                         value={accidentReconstruction.animationDuration}
-                        onChange={e => setAccidentData({ animationDuration: Number(e.target.value) })} />
+                        onChange={e => setAccidentData({ animationDuration: Math.max(1, Number(e.target.value) || 5) })} />
                     </div>
                     <div>
                       <label className={LABEL_CLASS}>Oynatma Hızı</label>

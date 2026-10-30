@@ -66,14 +66,15 @@ export const ShotDirectionCalculator: React.FC = () => {
       const length = Math.sqrt(dx * dx + dy * dy + dz * dz);
       setTrajectoryLength(Math.round(length * 10) / 10);
 
-      // Estimate shooter distance based on trajectory and bullet type
+      // Estimate shooter distance based on trajectory and bullet type (METRE cinsinden;
+      // koordinat girişleri cm olduğu için /100 ile dönüştürülür)
       // In real forensics this uses more complex ballistic coefficients
-      const estDist = Math.round(horizDist * 1.2 + 5);
+      const estDist = Math.round((horizDist / 100) * 1.2 + 5);
       setShooterDistance(estDist);
 
-      // Estimate shooter height (extrapolate trajectory backwards)
-      // Using similar triangles: shooterHeight = entryZ - estDist * tan(impactAngle)
-      const estimatedHeight = entryZ - (estDist * Math.tan(vAngle * Math.PI / 180));
+      // Estimate shooter height (extrapolate trajectory backwards, METRE)
+      // Using similar triangles: shooterHeight = entryZ(m) - estDist * tan(impactAngle)
+      const estimatedHeight = (entryZ / 100) - (estDist * Math.tan(vAngle * Math.PI / 180));
       setShooterHeight(Math.round(Math.max(0, estimatedHeight) * 10) / 10);
 
       // Deflection based on surface type

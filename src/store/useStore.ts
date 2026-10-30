@@ -322,6 +322,7 @@ export const useStore = create<StoreState>()(
       backgroundImage: null,
       backgroundOpacity: 1,
       backgroundGrayscale: false,
+      backgroundTransform: { x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0 },
       selectedId: null,
       canvasBgColor: '#ffffff',
       canvasOrientation: 'portrait',
@@ -772,7 +773,8 @@ export const useStore = create<StoreState>()(
       setSelectedId: (id) => set({ selectedId: id }),
 
       setBackgroundImage: (src) => {
-        set({ backgroundImage: src });
+        // Yeni arka plan gelince eski transform anlamsızlaşır — sıfırla
+        set({ backgroundImage: src, backgroundTransform: { x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0 } });
         get().saveHistory();
       },
 
@@ -875,6 +877,7 @@ export const useStore = create<StoreState>()(
         set({
           objects: data.objects || [],
           backgroundImage: data.backgroundImage || null,
+          backgroundTransform: { x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0 },
           backgroundOpacity: data.backgroundOpacity ?? 1,
           backgroundGrayscale: data.backgroundGrayscale ?? false,
           canvasBgColor: data.canvasBgColor || '#ffffff',
@@ -905,6 +908,7 @@ export const useStore = create<StoreState>()(
           activeSceneId: null,
           objects: [],
           backgroundImage: null,
+          backgroundTransform: { x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0 },
           selectedId: null,
       drawingArea: DEFAULT_DRAWING_AREA,
           projectInfo: {
@@ -1314,6 +1318,8 @@ export const useStore = create<StoreState>()(
                 }
                 if (activeScene.backgroundImage !== undefined) {
                   updates.backgroundImage = activeScene.backgroundImage;
+                  // Sahne arka planı değişiyor — eski transform sıfırlanır
+                  updates.backgroundTransform = { x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0 };
                 }
                 if (activeScene.drawingArea) {
                   updates.drawingArea = activeScene.drawingArea;
@@ -1777,6 +1783,7 @@ export const useStore = create<StoreState>()(
               activeSceneId: id,
               objects: [...targetScene.objects],
               backgroundImage: targetScene.backgroundImage,
+              backgroundTransform: { x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0 },
               projectInfo: { ...targetScene.projectInfo },
               drawingArea: targetScene.drawingArea || DEFAULT_DRAWING_AREA,
               history: [[...targetScene.objects]],
@@ -1794,6 +1801,7 @@ export const useStore = create<StoreState>()(
             activeSceneId: id,
             objects: [...targetScene.objects],
             backgroundImage: targetScene.backgroundImage,
+            backgroundTransform: { x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0 },
             projectInfo: { ...targetScene.projectInfo },
             drawingArea: targetScene.drawingArea || DEFAULT_DRAWING_AREA,
             history: [[...targetScene.objects]],
@@ -1909,6 +1917,7 @@ export const useStore = create<StoreState>()(
           activeSceneId: id,
           objects: result.objects,
           backgroundImage: null,
+          backgroundTransform: { x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0 },
           projectInfo: newProjectInfo,
           drawingArea: result.drawingArea,
           history: [result.objects],

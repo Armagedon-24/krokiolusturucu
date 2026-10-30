@@ -149,7 +149,8 @@ export const CollisionSpeedCalculator: React.FC = () => {
                 type="number"
                 step="50"
                 value={mass1}
-                onChange={(e) => setMass1(Math.max(100, Number(e.target.value)))}
+                onChange={(e) => setMass1(Number(e.target.value))}
+                onBlur={() => setMass1(m => Math.max(100, Number(m) || 1000))}
                 className="w-full bg-[#111] border border-[#333] rounded-lg px-2 py-1.5 text-xs text-white outline-none font-mono"
               />
             </div>
@@ -167,7 +168,8 @@ export const CollisionSpeedCalculator: React.FC = () => {
               <input
                 type="number"
                 value={distance1}
-                onChange={(e) => setDistance1(Math.max(0.1, Number(e.target.value)))}
+                onChange={(e) => setDistance1(Number(e.target.value))}
+                onBlur={() => setDistance1(d => Math.max(0.1, Number(d) || 10))}
                 className="w-full bg-[#111] border border-[#333] rounded-lg px-2 py-1.5 text-xs text-white outline-none font-mono"
               />
             </div>
@@ -188,7 +190,8 @@ export const CollisionSpeedCalculator: React.FC = () => {
                 type="number"
                 step="50"
                 value={mass2}
-                onChange={(e) => setMass2(Math.max(100, Number(e.target.value)))}
+                onChange={(e) => setMass2(Number(e.target.value))}
+                onBlur={() => setMass2(m => Math.max(100, Number(m) || 1000))}
                 className="w-full bg-[#111] border border-[#333] rounded-lg px-2 py-1.5 text-xs text-white outline-none font-mono"
               />
             </div>

@@ -22,20 +22,8 @@ export const PedestrianLaunchCanvas: React.FC = () => {
   const timeRef = useRef<number>(0);
   const [impactFlash, setImpactFlash] = useState(false);
 
-  if (!launchData) return null;
-
-  // Compute scene bounds dynamically
-  const groundY = 350;
-  const maxDistPx = Math.min(500, launchData.throwDistance * 15);
-  const maxHeightPx = Math.min(200, launchData.maxHeight * 30);
-  const startX = 200;
-  const endX = startX + maxDistPx;
-
-  const totalW = Math.max(endX + 100, 500);
-
-  const launchState = getLaunchState(currentTime, duration, startX, groundY, endX, maxHeightPx);
-
-  // Animation loop
+  // Animation loop — MUST run before any early return (React hooks kuralı:
+  // koşullu hook sırası değişimi tüm uygulamayı çökertir).
   useEffect(() => {
     if (!isPlaying) {
       lastTimeRef.current = 0;
@@ -51,11 +39,11 @@ export const PedestrianLaunchCanvas: React.FC = () => {
       lastTimeRef.current = timestamp;
 
       const deltaSec = (deltaMs / 1000) * speed;
-      const newTime = Math.min(timeRef.current + deltaSec, duration);
+      const newTime = Math.min(timeRef.current + deltaSec, Math.max(duration, 0.1));
       timeRef.current = newTime;
 
-      const wasUnderImpact = currentTime / duration <= 0.9;
-      const isUnderImpact = newTime / duration > 0.9;
+      const wasUnderImpact = currentTime / Math.max(duration, 0.1) <= 0.9;
+      const isUnderImpact = newTime / Math.max(duration, 0.1) > 0.9;
       if (!wasUnderImpact && isUnderImpact) {
         setImpactFlash(true);
         setTimeout(() => setImpactFlash(false), 150);
@@ -63,7 +51,7 @@ export const PedestrianLaunchCanvas: React.FC = () => {
 
       setPedestrianLaunch({ currentTime: newTime });
 
-      if (newTime >= duration) {
+      if (newTime >= Math.max(duration, 0.1)) {
         if (loop) {
           timeRef.current = 0;
           lastTimeRef.current = 0;
@@ -84,6 +72,19 @@ export const PedestrianLaunchCanvas: React.FC = () => {
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
   }, [isPlaying, speed, loop, duration, setPedestrianLaunch, currentTime]);
+
+  if (!launchData) return null;
+
+  // Compute scene bounds dynamically
+  const groundY = 350;
+  const maxDistPx = Math.min(500, launchData.throwDistance * 15);
+  const maxHeightPx = Math.min(200, launchData.maxHeight * 30);
+  const startX = 200;
+  const endX = startX + maxDistPx;
+
+  const totalW = Math.max(endX + 100, 500);
+
+  const launchState = getLaunchState(currentTime, duration, startX, groundY, endX, maxHeightPx);
 
   return (
     <Group>
@@ -128,8 +129,8 @@ export const PedestrianLaunchCanvas: React.FC = () => {
       <Group>
         <Rect x={startX - 100} y={groundY - 20} width={60} height={22} fill="#E53935" stroke="#b71c1c" strokeWidth={2} cornerRadius={3} />
         <Rect x={startX - 100 + 40} y={groundY - 18} width={14} height={16} fill="rgba(200,230,255,0.4)" cornerRadius={1} />
-        <Circle cx={startX - 100 + 10} cy={groundY + 2} r={4} fill="#1a1a1a" />
-        <Circle cx={startX - 100 + 52} cy={groundY + 2} r={4} fill="#1a1a1a" />
+        <Circle x={startX - 100 + 10} y={groundY + 2} radius={4} fill="#1a1a1a" />
+        <Circle x={startX - 100 + 52} y={groundY + 2} radius={4} fill="#1a1a1a" />
         <Text x={startX - 100} y={groundY - 32} width={60} text={`${launchData.vehicleSpeed} km/h`} fontSize={9} fontStyle="bold" fill="#E53935" align="center" />
       </Group>
 

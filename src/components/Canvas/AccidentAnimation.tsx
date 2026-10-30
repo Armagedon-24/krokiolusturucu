@@ -141,19 +141,23 @@ export const AccidentAnimation: React.FC = () => {
 
   // Animation loop
   useEffect(() => {
-    if (!isPlaying || !enabled) {
+    // Modal oynatıcı (AccidentAnimationPlayer) açıkken tuval döngüsü çalışmaz;
+    // iki döngünün aynı store alanına yazışması kare titremesine yol açıyordu.
+    if (!isPlaying || !enabled || accidentAnimation.playerOpen) {
       lastTimeRef.current = 0;
       return;
     }
 
-    const duration = accidentReconstruction.animationDuration / speed;
+    const duration = Math.max(accidentReconstruction.animationDuration, 0.1);
 
     const animate = (timestamp: number) => {
       if (!lastTimeRef.current) lastTimeRef.current = timestamp;
       const deltaMs = timestamp - lastTimeRef.current;
       lastTimeRef.current = timestamp;
 
-      const deltaSec = deltaMs / 1000;
+      // Hız çarpanı delta'ya uygulanır (duration'a bölünmesi ilerlemenin
+      // speed!=1 iken yarında donmasına yol açıyordu).
+      const deltaSec = (deltaMs / 1000) * speed;
       const newTime = Math.min(currentTime + deltaSec, duration);
 
       const wasUnderCollision = currentTime / duration < 0.55;
@@ -186,7 +190,7 @@ export const AccidentAnimation: React.FC = () => {
         cancelAnimationFrame(animFrameRef.current);
       }
     };
-  }, [isPlaying, enabled, speed, loop, currentTime, accidentReconstruction.animationDuration, setAccidentAnimation]);
+  }, [isPlaying, enabled, speed, loop, currentTime, accidentReconstruction.animationDuration, accidentAnimation.playerOpen, setAccidentAnimation]);
 
   if (!enabled) return null;
 
@@ -519,19 +523,19 @@ export const AccidentAnimation: React.FC = () => {
                     <Circle x={-hw*0.55} y={-hh - mirW} radius={mirW} fill={dark} />
                     <Circle x={-hw*0.55} y={hh + mirW} radius={mirW} fill={dark} />
                     
-                    <Circle cx={hw*0.3} cy={-hh - wr*0.3} r={wr} fill={tireC} stroke="#444" strokeWidth={1} />
-                    <Circle cx={hw*0.3} cy={hh + wr*0.3} r={wr} fill={tireC} stroke="#444" strokeWidth={1} />
-                    <Circle cx={-hw*0.3} cy={-hh - wr*0.3} r={wr} fill={tireC} stroke="#444" strokeWidth={1} />
-                    <Circle cx={-hw*0.3} cy={hh + wr*0.3} r={wr} fill={tireC} stroke="#444" strokeWidth={1} />
+                    <Circle x={hw*0.3} y={-hh - wr*0.3} radius={wr} fill={tireC} stroke="#444" strokeWidth={1} />
+                    <Circle x={hw*0.3} y={hh + wr*0.3} radius={wr} fill={tireC} stroke="#444" strokeWidth={1} />
+                    <Circle x={-hw*0.3} y={-hh - wr*0.3} radius={wr} fill={tireC} stroke="#444" strokeWidth={1} />
+                    <Circle x={-hw*0.3} y={hh + wr*0.3} radius={wr} fill={tireC} stroke="#444" strokeWidth={1} />
                     
                     {vehicle.type === 'truck' && (
                       <>
-                        <Circle cx={0} cy={-hh - wr*0.3} r={wr} fill={tireC} stroke="#444" strokeWidth={1} />
-                        <Circle cx={0} cy={hh + wr*0.3} r={wr} fill={tireC} stroke="#444" strokeWidth={1} />
+                        <Circle x={0} y={-hh - wr*0.3} radius={wr} fill={tireC} stroke="#444" strokeWidth={1} />
+                        <Circle x={0} y={hh + wr*0.3} radius={wr} fill={tireC} stroke="#444" strokeWidth={1} />
                       </>
                     )}
                     
-                    <Circle cx={hw*0.1} cy={0} r={Math.max(5, H*0.12)} fill="rgba(245,197,24,0.5)" />
+                    <Circle x={hw*0.1} y={0} radius={Math.max(5, H*0.12)} fill="rgba(245,197,24,0.5)" />
                     <Wedge
                       x={hw*0.4}
                       y={0}
