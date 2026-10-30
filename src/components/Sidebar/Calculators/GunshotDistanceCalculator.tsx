@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Target, PlusCircle, Flame, Droplet, Shield, Info, AlertTriangle } from 'lucide-react';
 import { useStore } from '../../../store/useStore';
 import { HelpTooltip } from '../../UI/HelpTooltip';
+import { formatForensicReport } from '../../../utils/forensicReport';
+import { ForensicReportPreview } from '../../UI/ForensicReportPreview';
 
 const CHOKE_TYPES = [
   { id: 'full', name: 'Full Choke (Dar)', factor: 1.0 },
@@ -61,27 +63,62 @@ export const GunshotDistanceCalculator: React.FC = () => {
     }
   }, [weaponType, spread, choke, hasBurn, hasSoot, hasStippling, hasWipe]);
 
-  const handleAddToCanvas = () => {
+  const reportText = useMemo(() => {
     const weaponName = weaponType === 'handgun' ? 'Tabanca' : weaponType === 'rifle' ? 'Yivli Tüfek' : 'Yivsiz Av Tüfeği';
-    let findingsText = '';
-    if (weaponType === 'shotgun') {
-      findingsText = `Saçma Dağılım Çapı: ${spread} cm | Şok Tipi: ${choke.name}`;
-    } else {
-      findingsText = `Bulgular: ${[
-        hasBurn ? 'Doku Yanığı/Alev İzi' : null,
-        hasSoot ? 'İs Lekesi' : null,
-        hasStippling ? 'Barut Dövmesi (Stippling)' : null,
-        hasWipe ? 'Mermi Sıyrığı (Bullet Wipe)' : null
-      ].filter(Boolean).join(', ')}`;
-    }
+    const bulgular: string[] = weaponType === 'shotgun'
+      ? [`Saçma dağılım çapı: ${spread} cm`, `Namlu şoku (choke): ${choke.name}`]
+      : ([
+        hasBurn ? 'Alev/sıcaklık yanığı mevcut' : 'Alev yanığı yok',
+        hasSoot ? 'İs (kurum) lekesi mevcut' : 'İs lekesi yok',
+        hasStippling ? 'Barut dövmesi (stippling) mevcut' : 'Barut dövmesi yok',
+        hasWipe ? 'Giriş halkası/mermi sıyrığı mevcut' : 'Giriş halkası yok',
+      ]);
+    return formatForensicReport({
+      title: 'ATIŞ MESAFESİ İNCELEMESİ (BARUT ARTIĞI)',
+      topic: 'Ateşli silah yaralanmasında hedefte tespit edilen barut artığı bulgularından hareketle, atış mesafesinin adli balistik yönünden tahmini ve değerlendirilmesi.',
+      evidence: [`Silah tipi: ${weaponName}`, ...bulgular],
+      method: [
+        'Bulguların mesafe-bağımlı dağılım şablonlarıyla karşılaştırılması (sınıflar: bitişik/ yakın/ orta/ uzak atış sınıflaması).',
+        'Yivsiz silahta saçma dağılımı ölçütü: mesafe ≈ çap / (2.5 × şok faktörü) [metre]; ±%10 saçma varyansı uygulanmıştır.',
+        'Sınıflama, kriminal laboratuvar karşılaştırma standartlarına dayalı genel aralıklardır.',
+      ],
+      findings: [
+        `Atış tipi (sınıflama): ${classification}`,
+        `Tahmini atış mesafesi: ${estimatedDistance}`,
+        weaponType === 'shotgun'
+          ? 'Not: dağılım çapı tek eksende ölçülmüşse en uzun ve en kısa ekseni ayrıca ölçmek aralığı iyileştirir.'
+          : 'Not: bulgu yokluğu da bilgidir; hiçbir patlama bulgusu yoksa uzak atış (100 cm+) ihtimali güçlenir.',
+      ],
+      scenarios: [
+        'Kıyafet/ara katman: kalın giysi is ve dövmeyi emebilir → gerçek mesafe tahminden DAHA UZUN olabilir; kıyafet incelenmelidir.',
+        'Ara hedef (cam, kapı): artıkları saptırır veya delikten geçen merminin davranışını değiştirir → sınıflama güvenilmez hale gelir.',
+        'Bitişik atışta kemik üzeri delik yıldız şeklini alır; yumuşak dokuda görünmeyebilir → tip yanlış sınıflanabilir.',
+        'Namlu uzunluğu ve mühimmat markası dağılımı değiştirir; tablolar ortalama namlu/kartuş içindir → laboratuvar karşılaştırması önerilir.',
+        'Yüksek nem/yağmur yanmamış barutun menzilini kısaltır → dövme mesafe eşiği kayar.',
+        'Açılı (tangansiyel) atışta bulgular tek tarafa yoğunlaşır; mesafe tahmini yanıltıcı olabilir.',
+        'Sahada rüzgar/açık hava: is ve hafif dövmeye ilişkin bulgular zayıflayabilir → üst mesafe sınırı kullanılmalıdır.',
+        'Laboratuvar (SEM-EDX, parafin (dermo) testi, GSR) analizi yapılmadıysa mesafe tahmini gösterge niteliğindedir.',
+      ],
+      conclusion: [
+        `İnceleme sonucunda atışın “${classification}” sınıfına girdiği ve mesafenin yaklaşık ${estimatedDistance} olduğu kanaatine varılmıştır.`,
+        'Kesinleştirme için kıyafet/GSR laboratuvar incelemesi ve silah-mühimmat karşılaştırma atışları önerilir.',
+      ],
+      caveats: [
+        'Aralıklar; mühimmat, namlu ve hedef yüzeye göre değişebilir; tablo değerleri genel ortalama içindir.',
+        'Birden fazla atış varsa bulgular karışabilir; giriş çıkış delikleri ayrıştırılmalıdır.',
+        'Rapor, muayene anındaki görsel bulgulara dayanır; nihai kanaat adli tıp/kriminal değerlendirmesiyle birlikte oluşmalıdır.',
+      ],
+    });
+  }, [weaponType, spread, choke, hasBurn, hasSoot, hasStippling, hasWipe, classification, estimatedDistance]);
 
+  const handleAddToCanvas = () => {
     addObject({
       type: 'text',
-      text: `ATIŞ MESAFESİ ANALİZİ\n-------------------\nSilah Tipi: ${weaponName}\n${findingsText}\n-------------------\nTİP: ${classification}\nTAHMİNİ MESAFE: ${estimatedDistance}`,
+      text: reportText,
       x: 300,
       y: 300,
-      width: 250,
-      fontSize: 12,
+      width: 360,
+      fontSize: 11,
       fill: '#000000',
       fontFamily: 'Inter',
       fontStyle: 'bold'
@@ -256,6 +293,8 @@ export const GunshotDistanceCalculator: React.FC = () => {
             </button>
           </div>
         </div>
+
+        <ForensicReportPreview text={reportText} />
 
         {/* Info Box */}
         <div className="p-4 bg-orange-500/5 border border-orange-500/10 rounded-2xl flex gap-3 items-start shadow-inner">

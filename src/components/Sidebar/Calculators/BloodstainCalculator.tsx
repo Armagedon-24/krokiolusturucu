@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Droplets, Ruler, Info, PlusCircle, Target, ArrowUpCircle } from 'lucide-react';
 import { useStore } from '../../../store/useStore';
 import { HelpTooltip } from '../../UI/HelpTooltip';
+import { formatForensicReport, trNum } from '../../../utils/forensicReport';
+import { ForensicReportPreview } from '../../UI/ForensicReportPreview';
 
 export const BloodstainCalculator: React.FC = () => {
   const [width, setWidth] = useState<number>(5);
@@ -9,6 +11,10 @@ export const BloodstainCalculator: React.FC = () => {
   const [distanceToSource, setDistanceToSource] = useState<number>(1.5);
   const [angle, setAngle] = useState<number>(0);
   const [originHeight, setOriginHeight] = useState<number>(0);
+  const [angleMin, setAngleMin] = useState<number>(0);
+  const [angleMax, setAngleMax] = useState<number>(0);
+  const [heightMin, setHeightMin] = useState<number>(0);
+  const [heightMax, setHeightMax] = useState<number>(0);
   
   const { addObject } = useStore();
 
@@ -22,8 +28,21 @@ export const BloodstainCalculator: React.FC = () => {
       if (distanceToSource > 0) {
         const h = distanceToSource * Math.tan(radians);
         setOriginHeight(h);
+
+        // Belirsizlik: ölçüm ±0.5 mm, mesafe ±0.05 m
+        const ang = (w: number, l: number) => Math.asin(Math.min(1, Math.max(0, w / l))) * (180 / Math.PI);
+        const aMin = ang(width - 0.5, length + 0.5);
+        const aMax = ang(width + 0.5, Math.max(width + 0.5, length - 0.5));
+        setAngleMin(aMin);
+        setAngleMax(aMax);
+        setHeightMin((distanceToSource - 0.05) * Math.tan(aMin * Math.PI / 180));
+        setHeightMax((distanceToSource + 0.05) * Math.tan(aMax * Math.PI / 180));
       } else {
         setOriginHeight(0); // mesafe sıfırlanınca eski değer kalmasın
+        setAngleMin(0);
+        setAngleMax(0);
+        setHeightMin(0);
+        setHeightMax(0);
       }
     } else {
       setAngle(0);
@@ -31,14 +50,60 @@ export const BloodstainCalculator: React.FC = () => {
     }
   }, [width, length, distanceToSource]);
 
+  const velocityClass = angle > 0
+    ? width >= 4
+      ? 'Düşük hız — damla/sıçrantı (yerçekimi damlası, damla damla akıntı)'
+      : width >= 1 && width < 4
+        ? 'Orta hız — darbe/sıçratma spatter (bıçak, yumruk, devrilme)'
+        : 'Yüksek hız — ateşli silah veya mekanik spütrasyon' // genişlik < 1 mm
+    : 'Belirsiz';
+
+  const reportText = useMemo(() => formatForensicReport({
+    title: 'KAN SIÇRAMA DESENİ İNCELEMESİ (BPA)',
+    topic: 'Olay yerinde tespit edilen kan lekesinin boyut ölçümlerinden hareketle çarpma açısının ve kaynağın (yara/darbe noktası) konumunun adli teknik yönden değerlendirilmesi.',
+    evidence: [
+      `Lekenin genişliği (W): ${trNum(width, 1)} mm (ölçüm ±0.5 mm)`,
+      `Lekenin uzunluğu (L): ${trNum(length, 1)} mm (ölçüm ±0.5 mm)`,
+      `Yakınsama noktasına yatay mesafe (D): ${trNum(distanceToSource, 2)} m (±0.05 m)`,
+    ],
+    method: [
+      'Çarpma açısı: sin(α) = W/L → α = arcsin(W/L) (eliptik leke geometrisi).',
+      'Kaynak yüksekliği: H = D × tan(α) (yakınsama noktası trigonometrisi).',
+      'Belirsizlik analizi: W±0.5 mm, L±0.5 mm ve D±0.05 m uç değerleriyle min–max açı ve yükseklik hesaplanmıştır.',
+    ],
+    findings: [
+      `Çarpma açısı (α): ${trNum(angle, 1)}° — muhtemel aralık ${trNum(angleMin, 1)}° – ${trNum(angleMax, 1)}°`,
+      `Kaynak yüksekliği (H): ${trNum(originHeight, 2)} m — muhtemel aralık ${trNum(heightMin, 2)} – ${trNum(heightMax, 2)} m`,
+      `Hız sınıflaması (leke morfolojisine göre): ${velocityClass}`,
+    ],
+    scenarios: [
+      'Lekenin kuyruğu (tail/spine) uzunluk ölçümüne dâhil edilmişse açı DÜŞÜK hesaplanır; kuyruk hariç çekirdek ölçülmelidir.',
+      '20° altı dar açılarda elips neredeyse çizgiye yakınlaşır; W/L hassasiyeti düşer → açı aralığının alt sınırı güvenilirdir.',
+      'Islak, poröz veya parlak zeminde damla yayılarak genişler → W artar, açı DÜŞÜK çıkar; zemin dokusu not edilmelidir.',
+      'İkincil sıçrama (satellite/splash) damlaları ana desenle karışabilir; ana damla ile küçük yancıkları ayırmak gerekir.',
+      'Tek damladan kaynak yüksekliği tahmini gösterge niteliğindedir; kesin konum için aynı desenden çoklu damla ve iplikleme (stringing) analizi yapılmalıdır.',
+      'Kaynak yüksekliği tahmini, D mesafesinin doğru ölçülmesine bağlıdır; lekenin bulunduğu yüzey eğimliyse düzeltme gerekir.',
+      'Hareket eden kaynak (taşınan vücut, damlayan yara) oluşturduğu desende yol boyu damlalar kaynak yüksekliği hesabını yanıltır.',
+    ],
+    conclusion: [
+      `İnceleme sonucunda kanın hedef yüzeye ${trNum(angle, 1)}° açıyla (muhtemel aralık ${trNum(angleMin, 1)}° – ${trNum(angleMax, 1)}°) çarptığı, kaynağın ise ölçülen noktadan yaklaşık ${trNum(originHeight, 2)} m (${trNum(heightMin, 2)} – ${trNum(heightMax, 2)} m) konumda bulunduğu kanaatine varılmıştır.`,
+      'Kesin olay rekonstrüksiyonu için tüm leke deseni, yönü ve çakışma sırası birlikte değerlendirilmelidir.',
+    ],
+    caveats: [
+      'Sonuç tekil leke ölçümüne dayanır; desen bazlı analiz için saha fotoğrafları ve ölçekli çizimler gereklidir.',
+      'Zemin dokusu, kan viskozitesi ve damla yaşı ölçüm belirsizliğini artırır.',
+      'Rapor gösterge niteliğinde olup nihai kanaat adli tıp/kriminal uzmanı değerlendirmesiyle birlikte oluşmalıdır.',
+    ],
+  }), [width, length, distanceToSource, angle, angleMin, angleMax, originHeight, heightMin, heightMax, velocityClass]);
+
   const handleAddToCanvas = () => {
     addObject({
       type: 'text',
-      text: `KAN SIÇRAMA ANALİZİ (BPA)\n-------------------\nDamla Genişliği: ${width}mm\nDamla Uzunluğu: ${length}mm\nÇarpma Açısı (α): ${angle.toFixed(1)}°\nKaynak Mesafesi: ${distanceToSource}m\nKAYNAK YÜKSEKLİĞİ: ${originHeight.toFixed(2)}m`,
+      text: reportText,
       x: 300,
       y: 300,
-      width: 220,
-      fontSize: 12,
+      width: 360,
+      fontSize: 11,
       fill: '#000000',
       fontFamily: 'Inter',
       fontStyle: 'bold'
@@ -140,6 +205,13 @@ export const BloodstainCalculator: React.FC = () => {
                 </span>
                 <span className="text-sm font-bold text-gray-600 uppercase">Metre</span>
               </div>
+              <div className="flex items-center gap-1.5 text-[9px] font-mono font-bold text-gray-500">
+                <span className="text-gray-600">ARALIK</span>
+                <span>{heightMin.toFixed(2)}</span>
+                <span className="text-gray-600">—</span>
+                <span>{heightMax.toFixed(2)}</span>
+                <span className="text-gray-600">M</span>
+              </div>
             </div>
 
             <button
@@ -151,6 +223,8 @@ export const BloodstainCalculator: React.FC = () => {
             </button>
           </div>
         </div>
+
+        <ForensicReportPreview text={reportText} />
 
         <div className="p-4 bg-[#111]/80 border border-red-500/10 rounded-2xl flex gap-3 items-start shadow-inner">
           <Info size={16} className="text-red-900 mt-0.5 flex-shrink-0" />

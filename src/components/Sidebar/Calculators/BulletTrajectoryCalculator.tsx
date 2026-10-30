@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Target, Ruler, Info, PlusCircle, Crosshair, Zap } from 'lucide-react';
 import { useStore } from '../../../store/useStore';
 import { HelpTooltip } from '../../UI/HelpTooltip';
+import { formatForensicReport, trNum } from '../../../utils/forensicReport';
+import { ForensicReportPreview } from '../../UI/ForensicReportPreview';
 
 const AMMO_TYPES = [
   { id: '9mm', name: '9mm Tabanca', v0: 380, icon: '🔫' },
@@ -16,6 +18,8 @@ export const BulletTrajectoryCalculator: React.FC = () => {
   const [ammo, setAmmo] = useState(AMMO_TYPES[0]);
   const [height, setHeight] = useState<number>(0);
   const [bulletDrop, setBulletDrop] = useState<number>(0);
+  const [heightMin, setHeightMin] = useState<number>(0);
+  const [heightMax, setHeightMax] = useState<number>(0);
   
   const { addObject } = useStore();
 
@@ -30,21 +34,79 @@ export const BulletTrajectoryCalculator: React.FC = () => {
       setBulletDrop(drop);
       const linearHeight = distance * Math.tan(radians);
       setHeight(linearHeight + drop);
+
+      // Belirsizlik: açı ±1°, mesafe ±%2
+      const calc = (d: number, a: number) => {
+        const r = a * (Math.PI / 180);
+        const t = d / (v0 * Math.cos(r));
+        return { h: d * Math.tan(r) + 0.5 * g * t * t, drop: 0.5 * g * t * t };
+      };
+      const dMin = distance * 0.98;
+      const dMax = distance * 1.02;
+      const aMin = Math.max(0, angle - 1);
+      const aMax = Math.min(89, angle + 1);
+      const c1 = calc(dMin, aMin);
+      const c2 = calc(dMax, aMax);
+      const c3 = calc(dMin, aMax);
+      const c4 = calc(dMax, aMin);
+      setHeightMin(Math.min(c1.h, c2.h, c3.h, c4.h));
+      setHeightMax(Math.max(c1.h, c2.h, c3.h, c4.h));
     } else {
       // Mesafe sıfırlanınca eski sonuçlar ekranda kalmasın
       setBulletDrop(0);
       setHeight(0);
+      setHeightMin(0);
+      setHeightMax(0);
     }
   }, [distance, angle, ammo]);
+
+  const reportText = useMemo(() => formatForensicReport({
+    title: 'BALİSTİK TRAJEKTÖR İNCELEMESİ',
+    topic: 'Vuruş açısı ve mermi karakteristiklerinden hareketle, atışın kaynak (namlu çıkış) konumunun adli balistik yönünden değerlendirilmesi.',
+    evidence: [
+      `Mühimmat: ${ammo.name} (v₀=${ammo.v0} m/s — fabrika varyasyonu ±%5)`,
+      `Vuruş (trajektör) açısı: ${angle}° (ölçüm ±1°)`,
+      `Hedef-izdüşüm mesafesi: ${distance} m (ölçüm ±%2)`,
+    ],
+    method: [
+      'Doğrusal yol: H_lin = D × tan(θ).',
+      'Yerçekimi düşmesi: h = ½·g·t², uçuş süresi t = D / (v₀·cos θ).',
+      'Kaynak yüksekliği: H = D·tan(θ) + ½·g·(D/(v₀·cosθ))².',
+      'Belirsizlik analizi: açı ±1° ve mesafe ±%2 uç kombinasyonlarıyla min–max kaynak yüksekliği hesaplanmıştır.',
+    ],
+    findings: [
+      `Kaynak yüksekliği: ${trNum(height, 2)} m — muhtemel aralık ${trNum(heightMin, 2)} – ${trNum(heightMax, 2)} m`,
+      `Balistik düşme (bullet drop): ${trNum(bulletDrop * 100, 1)} cm`,
+      `Uçuş süresi: ${distance > 0 ? trNum(distance / ammo.v0, 3) : '0,000'} sn`,
+    ],
+    scenarios: [
+      'Açı ölçümü giriş deliğinin eliptikliğiyle yapılıyorsa ±2° hata mümkündür; 3D lazer tarama veya probe yöntemi hassasiyeti artırır.',
+      'Ara hedef (cam, kapı, dal) veya sekmeye uğrayan mermide ölçülen açı gerçek atış yönünü yansıtmaz → sonuç geçersizdir.',
+      'Hava direnci ihmal edilmiştir: uzun mesafede (>100 m) gerçek düşme daha fazla → kaynak, hesaplanandan daha yakın ve daha yüksek olabilir.',
+      'Yüksek hızlı mermilerde jiroskopik stabilizasyon ve rüzgar sapması yatay yönü değiştirebilir; dikey yüksekliğe etkisi sınırlıdır.',
+      'Vuruş noktası ile namlu çıkışı arasındaki açı, mermi deformasyonu veya yalpalamadan (yaw) etkilenebilir → kısa mesafede küçük, uzun mesafede büyüyen hata.',
+      'Hedef hareketliyse (taşınan vücut, araç) ölçülen açı anlık konumu yansıtır → kaynak konumu dinamik değerlendirilmelidir.',
+      'Kesin kaynak konumu için en az iki farklı yüzeydeki delik/izden üç boyutlu kesişim analizi önerilir.',
+    ],
+    conclusion: [
+      `İnceleme sonucunda atışın kaynak noktasının, hedefe göre yaklaşık ${trNum(height, 2)} m yükseklikte (${trNum(heightMin, 2)} – ${trNum(heightMax, 2)} m aralığında) bulunduğu kanaatine varılmıştır.`,
+      'Atış yönünün kesin tespiti için saha rekonstrüksiyonu, delik/iz fotoğrafları ve mümkünse GSR/paraketon analizleriyle birlikte değerlendirme yapılmalıdır.',
+    ],
+    caveats: [
+      'Hesap vakum ortamı ve sabit v₀ varsayımıyla tek boyutlu düzlemde yapılmıştır.',
+      'Sekme, ara hedef veya mermi parçalanması saptanmışsa bu hesap kullanılmamalıdır.',
+      'Sonuç gösterge niteliğindedir; nihai kanaat saha incelemesi ve laboratuvar bulgularıyla desteklenmelidir.',
+    ],
+  }), [ammo, angle, distance, height, heightMin, heightMax, bulletDrop]);
 
   const handleAddToCanvas = () => {
     addObject({
       type: 'text',
-      text: `BALİSTİK TRAJEKTÖR ANALİZİ\n-------------------\nMühimmat: ${ammo.name}\nMesafe: ${distance}m\nVuruş Açısı: ${angle}°\nBalistik Düşme: ${(bulletDrop * 100).toFixed(1)} cm\nKAYNAK YÜKSEKLİĞİ: ${height.toFixed(2)}m`,
+      text: reportText,
       x: 300,
       y: 300,
-      width: 220,
-      fontSize: 12,
+      width: 360,
+      fontSize: 11,
       fill: '#000000',
       fontFamily: 'Inter',
       fontStyle: 'bold'
@@ -125,6 +187,13 @@ export const BulletTrajectoryCalculator: React.FC = () => {
                 <span className="text-6xl font-black text-white tracking-tighter">{height.toFixed(2)}</span>
                 <span className="text-xl font-bold text-[#F5C518]">M</span>
               </div>
+              <div className="flex items-center justify-center gap-1.5 text-[9px] font-mono font-bold text-gray-400">
+                <span className="text-gray-600">ARALIK</span>
+                <span>{heightMin.toFixed(2)}</span>
+                <span className="text-gray-600">—</span>
+                <span>{heightMax.toFixed(2)}</span>
+                <span className="text-gray-600">M</span>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3 pt-4 border-t border-white/5">
@@ -149,6 +218,8 @@ export const BulletTrajectoryCalculator: React.FC = () => {
             </button>
           </div>
         </div>
+
+        <ForensicReportPreview text={reportText} />
 
         <div className="p-4 bg-red-500/5 border border-red-500/10 rounded-2xl flex gap-3 items-start shadow-inner">
           <Info size={16} className="text-red-900 mt-0.5 flex-shrink-0" />

@@ -3,6 +3,7 @@ import { Ruler, Activity, Info, Weight, Zap, TrendingUp, Eye } from 'lucide-reac
 import { useStore } from '../../store/useStore';
 import { HelpTooltip } from '../UI/HelpTooltip';
 import { FallAnimationPlayer } from '../UI/FallAnimationPlayer';
+import { formatForensicReport, trNum } from '../../utils/forensicReport';
 
 export const FallCalculator: React.FC = () => {
   const [height, setHeight] = useState<number>(10);
@@ -169,10 +170,47 @@ export const FallCalculator: React.FC = () => {
 
     addObject({
       type: 'text',
-      text: `DÜŞME ANALİZİ\nYükseklik: ${height}m | Hız: ${velocity}m/s\nAğırlık: ${weight}kg | Süre: ${time.toFixed(2)}sn\nÇarpma Enerjisi: ${Math.round(impactEnergy)} Joule\n${useDrag ? 'Hava Direnci: Dahil' : 'Hava Direnci: Hariç'}`,
+      text: formatForensicReport({
+        title: 'YÜKSEKTEN DÜŞME İNCELEMESİ',
+        topic: 'Yüksekten düşme olayında düşme süresi, çarpma hızı ve enerjisinin adli teknik yönünden değerlendirilmesi.',
+        evidence: [
+          `Düşme yüksekliği: ${height} m`,
+          `Ayrılma (yatay) hızı: ${velocity} m/s`,
+          `Vücut ağırlığı: ${weight} kg`,
+          `Hava direnci modeli: ${useDrag ? 'Dahil (terminal hız ~54 m/s)' : 'Hariç (vakum modeli)'}`,
+        ],
+        method: [
+          'Vakum modeli: t=√(2h/g), v=g·t. Hava direnci modeli: terminal hız asimptotlu (vterm=54 m/s) hiperbolik çözüm.',
+          'Çarpma enerjisi: E = ½·m·v² (Joule).',
+        ],
+        findings: [
+          `Düşme süresi: ${trNum(time, 2)} sn`,
+          `Yatay (izdüşüm) mesafe: ${trNum(distance, 2)} m`,
+          `Çarpma (dikey) hızı: ${trNum(impactVelocity, 0)} km/s`,
+          `Çarpma enerjisi: ${trNum(impactEnergy, 0)} J (≈ ${trNum(impactEnergy / weight, 0)} J/kg)`,
+        ],
+        scenarios: [
+          'Ayrılma hızı; adım atma/zıplama/koşu senaryolarında farklıdır: fırlatma mesafesi, ayrılma şeklinin ayırt edici göstergesidir.',
+          'İtilme/atılma ihtimalinde başlangıç hızı vektörü ve gövde konumu kendiliğinden düşmeden farklıdır; bulunduğu yer ve duruş analizi gerekir.',
+          '30 m üzeri düşüşlerde hava direnci belirginleşir: hız terminal değere (~195 km/s) yakınsar → vakum modeli gerçekçi değildir.',
+          'Ara temas (balkon, ağaç, saçak) enerjinin bir kısmını absorbe eder → çarpma enerjisi hesaptan düşük çıkar.',
+          'Çarpma yüzeyi (beton/asfalt/toprak) yaralanma şiddetini değiştirir; enerji değerleri yüzeyle birlikte yorumlanmalıdır.',
+          'İlk temas bölgesi (ayak, kafa, gövde) sonucu belirler; ölümcül yaralanma eşiği kişi başına enerji yoğunluğuyla ilgilidir.',
+          'Yer değiştirme (düşme sonrası savrulma/sıçrama) ölçülen mesafeyle hesaplanan izdüşümü farklılaştırabilir.',
+        ],
+        conclusion: [
+          `İnceleme sonucunda ${height} m yükseklikten düşen vücudun ${trNum(time, 2)} sn sürede ${trNum(distance, 2)} m ilerleyerek ${trNum(impactVelocity, 0)} km/s hızla ve yaklaşık ${trNum(impactEnergy, 0)} J kinetik enerjiyle zemine çarptığı hesaplanmıştır.`,
+          'Düşmenin kendiliğinden mi yoksa dış etkiyle mi gerçekleştiği; ayrılma hızı, duruş ve yaralanma paterni birlikte değerlendirilerek yorumlanmalıdır.',
+        ],
+        caveats: [
+          'Hesaplar; ideal vücut ağırlığı, dik/düz düşme ve bilinen yükseklik varsayımlarına dayanır.',
+          'Vücut duruşu (gerdirilmiş/kıvırılmış) hava direncini değiştirir; sonuçlar yaklaşık değerlerdir.',
+          'Rapor gösterge niteliğinde olup nihai kanaat otopsi ve saha bulgularıyla birlikte oluşmalıdır.',
+        ],
+      }),
       x: baseX - 20,
       y: baseY + 50,
-      width: 220,
+      width: 320,
       fontSize: 10,
       fill: '#000',
       fontFamily: 'Inter',

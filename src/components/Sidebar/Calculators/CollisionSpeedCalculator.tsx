@@ -1,7 +1,29 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Scale, PlusCircle, Compass, ShieldAlert } from 'lucide-react';
 import { useStore } from '../../../store/useStore';
 import { HelpTooltip } from '../../UI/HelpTooltip';
+import { formatForensicReport, trNum } from '../../../utils/forensicReport';
+import { ForensicReportPreview } from '../../UI/ForensicReportPreview';
+
+// 2D momentum çözücüsü (saf fonksiyon — bileşen dışında)
+const solveMomentum = (m1: number, m2: number, d1: number, d2: number, m: number,
+                 pPhi: number, pTheta1: number, pTheta2: number) => {
+  const vPrime1 = 15.94 * Math.sqrt(m * d1);
+  const vPrime2 = 15.94 * Math.sqrt(m * d2);
+  const rp = (pPhi * Math.PI) / 180;
+  const rt1 = (pTheta1 * Math.PI) / 180;
+  const rt2 = (pTheta2 * Math.PI) / 180;
+  let v2: number;
+  let v1: number;
+  if (Math.abs(Math.sin(rp)) > 0.001) {
+    v2 = (m1 * vPrime1 * Math.sin(rt1) + m2 * vPrime2 * Math.sin(rt2)) / (m2 * Math.sin(rp));
+    v1 = (m1 * vPrime1 * Math.cos(rt1) + m2 * vPrime2 * Math.cos(rt2) - m2 * v2 * Math.cos(rp)) / m1;
+  } else {
+    v2 = vPrime2;
+    v1 = (m1 * vPrime1 + m2 * vPrime2 - m2 * v2) / m1;
+  }
+  return { v1: Math.max(0, v1), v2: Math.max(0, v2) };
+};
 
 export const CollisionSpeedCalculator: React.FC = () => {
   const [mass1, setMass1] = useState<number>(1500);
@@ -17,6 +39,10 @@ export const CollisionSpeedCalculator: React.FC = () => {
   const [postSpeed2, setPostSpeed2] = useState<number>(0);
   const [preSpeed1, setPreSpeed1] = useState<number>(0);
   const [preSpeed2, setPreSpeed2] = useState<number>(0);
+  const [preSpeed1Min, setPreSpeed1Min] = useState<number>(0);
+  const [preSpeed1Max, setPreSpeed1Max] = useState<number>(0);
+  const [preSpeed2Min, setPreSpeed2Min] = useState<number>(0);
+  const [preSpeed2Max, setPreSpeed2Max] = useState<number>(0);
 
   const { addObject } = useStore();
 
@@ -58,26 +84,72 @@ export const CollisionSpeedCalculator: React.FC = () => {
 
     setPreSpeed1(Math.max(0, calculatedV1));
     setPreSpeed2(Math.max(0, calculatedV2));
+
+    // Belirsizlik: μ±0.05, sürüklenme ±%10 (4 uç kombinasyon)
+    const combos = [
+      solveMomentum(mass1, mass2, distance1 * 0.9, distance2 * 0.9, Math.max(0.05, mu - 0.05), phi, theta1, theta2),
+      solveMomentum(mass1, mass2, distance1 * 1.1, distance2 * 1.1, Math.min(1, mu + 0.05), phi, theta1, theta2),
+      solveMomentum(mass1, mass2, distance1 * 0.9, distance2 * 1.1, mu, phi, theta1, theta2),
+      solveMomentum(mass1, mass2, distance1 * 1.1, distance2 * 0.9, mu, phi, theta1, theta2),
+    ];
+    setPreSpeed1Min(Math.min(...combos.map((c) => c.v1)));
+    setPreSpeed1Max(Math.max(...combos.map((c) => c.v1)));
+    setPreSpeed2Min(Math.min(...combos.map((c) => c.v2)));
+    setPreSpeed2Max(Math.max(...combos.map((c) => c.v2)));
   }, [mass1, mass2, distance1, distance2, mu, phi, theta1, theta2]);
+
+  const impactType = Math.abs(Math.sin((phi * Math.PI) / 180)) > 0.001
+    ? 'Açılı / dik çarpışma (2D momentum)'
+    : 'Cephe/cırtan veya aks yönü çarpışma (1D yaklaşım)';
+
+  const reportText = useMemo(() => formatForensicReport({
+    title: 'ARAÇ ÇARPIŞMA HIZI İNCELEMESİ (MOMENTUM)',
+    topic: 'Çarpışma sonrası araçların sürüklenme mesafeleri, kütleleri ve ayrılma açılarından hareketle, çarpışma anındaki hızların momentum korunumu ile adli teknik yönden değerlendirilmesi.',
+    evidence: [
+      `Araç 1: kütle ${mass1} kg, ayrılma açısı θ₁=${theta1}°, sürüklenme ${distance1} m (±%10)`,
+      `Araç 2: kütle ${mass2} kg, ayrılma açısı θ₂=${theta2}°, sürüklenme ${distance2} m (±%10)`,
+      `Çarpışma açısı φ=${phi}° — zemin sürtünmesi μ=${mu.toFixed(2)} (±0.05)`,
+      `İnceleme tipi: ${impactType}`,
+    ],
+    method: [
+      "Çarpışma sonrası süratler fren izi denklemiyle: v' = 15.94·√(μ·d) [km/s].",
+"Momentum korunumu (x-y bileşenleri): m₁v₁ + m₂v₂cosφ = m₁v'₁cosθ₁ + m₂v'₂cosθ₂ ve y-ekseni dengesi.'",
+      'Belirsizlik analizi: μ±0.05 ve sürüklenme ±%10 uç kombinasyonlarıyla her araç için min–max hız hesaplanmıştır.',
+    ],
+    findings: [
+      `Araç 1 çarpışma sonrası (v'₁): ${trNum(postSpeed1, 0)} km/s`,
+      `Araç 2 çarpışma sonrası (v'₂): ${trNum(postSpeed2, 0)} km/s`,
+      `Araç 1 çarpışma anı (v₁): ${trNum(preSpeed1, 0)} km/s — aralık ${trNum(preSpeed1Min, 0)} – ${trNum(preSpeed1Max, 0)} km/s`,
+      `Araç 2 çarpışma anı (v₂): ${trNum(preSpeed2, 0)} km/s — aralık ${trNum(preSpeed2Min, 0)} – ${trNum(preSpeed2Max, 0)} km/s`,
+    ],
+    scenarios: [
+      'Çarpışma sonrası bariyer/üçlü-obje teması veya takla varsa ek enerji kaybı ihmal edilmiştir → gerçek ön-çarpışma hızları hesaplanandan DAHA YÜKSEK olabilir.',
+      'Araçların dönerken (rotasyon) sürüklenmesi durumunda sadece öteleme enerjisi hesaba katılmıştır → hızlar alt sınır olarak okunmalıdır.',
+      'Kütle değerleri boş ağırlık olarak girildiyse yük/yolcu eklenmemiştir; her %5 kütle değişimi sonuçları orantılı etkiler.',
+      'Sürüklenme mesafesi, araçların SON dinlenme pozisyonuna göre ölçüldüyse frenle duran araçlarda gerçek iz daha uzundur → hız düşük çıkar.',
+      'ABS ile yavaşlayan araçta sürtünme katsayısı kilitli fren izine göre farklıdır; μ değerinin kaynağı (drag test/tablo) belirtilmelidir.',
+      'Farklı zeminler üzerinde sürüklenme (asfalt+toprak karışımı) bileşik μ gerektirir; tek μ kullanımı aralığı genişletir.',
+      'Cephe/cırtan (φ≈0° veya 180°) çarpışmalarda 2D çözüm 1D’ye düşer; ayrılma açılarındaki küçük hatalar sonucu duyarlı etkiler.',
+      'Elastikiyet (restitution) ihmal edilmiştir; çarpışma sonrası araçların ayrılması tam plastik varsayılmıştır.',
+    ],
+    conclusion: [
+      `İnceleme sonucunda çarpışma anında Araç 1 hızının ${trNum(preSpeed1, 0)} km/s (${trNum(preSpeed1Min, 0)} – ${trNum(preSpeed1Max, 0)} km/s), Araç 2 hızının ise ${trNum(preSpeed2, 0)} km/s (${trNum(preSpeed2Min, 0)} – ${trNum(preSpeed2Max, 0)} km/s) aralığında bulunma ihtimali güçlüdür.`,
+      'Kesin kanaat; saha ölçüm krokisi, EDR verisi ve deformasyon (crush) analizi ile birlikte değerlendirilmelidir.',
+    ],
+    caveats: [
+      'Hesap, momentum korunumunun ideal 2D uygulamasıdır; üçüncü araç veya yaya etkileşimi modele dâhil değildir.',
+      'Değerler, girilen kütle/açı/mesafe ölçümlerinin doğruluğuna bağımlıdır.',
+      'Rapor gösterge niteliğinde olup nihai kanaat bilirkişi değerlendirmesiyle birlikte oluşmalıdır.',
+    ],
+  }), [mass1, mass2, distance1, distance2, mu, phi, theta1, theta2, postSpeed1, postSpeed2, preSpeed1, preSpeed2, preSpeed1Min, preSpeed1Max, preSpeed2Min, preSpeed2Max, impactType]);
 
   const handleAddToCanvas = () => {
     addObject({
       type: 'text',
-      text: `ARAÇ ÇARPIŞMA HIZI ANALİZİ (2D MOMENTUM)\n----------------------------------------\n` +
-            `Zemin Sürtünmesi (μ): ${mu.toFixed(2)}\n` +
-            `Araç 1 (Mavi) Ağırlık: ${mass1} kg | Çıkış Açısı: ${theta1}° | Sürüklenme: ${distance1}m\n` +
-            `Araç 2 (Sarı) Ağırlık: ${mass2} kg | Çıkış Açısı: ${theta2}° | Sürüklenme: ${distance2}m\n` +
-            `Çarpışma Açısı (φ): ${phi}°\n` +
-            `----------------------------------------\n` +
-            `Çarpışma Sonrası Süratler:\n` +
-            `  * Araç 1 (v'1): ${Math.round(postSpeed1)} km/s\n` +
-            `  * Araç 2 (v'2): ${Math.round(postSpeed2)} km/s\n` +
-            `ÇARPIŞMA ANINDAKİ TAHMİNİ HIZLAR:\n` +
-            `  * ARAÇ 1 HIZI (v1): ${Math.round(preSpeed1)} km/s\n` +
-            `  * ARAÇ 2 HIZI (v2): ${Math.round(preSpeed2)} km/s`,
+      text: reportText,
       x: 300,
       y: 300,
-      width: 320,
+      width: 360,
       fontSize: 11,
       fill: '#000000',
       fontFamily: 'Inter',
@@ -229,6 +301,7 @@ export const CollisionSpeedCalculator: React.FC = () => {
                 <span className="text-[10px] font-bold text-[#F5C518] ml-1 italic">KM/S</span>
               </div>
               <span className="text-[8px] text-gray-600 block">Çarpışma Sonrası: {Math.round(postSpeed1)} km/s</span>
+              <span className="text-[8px] text-gray-500 font-mono block">{Math.round(preSpeed1Min)}–{Math.round(preSpeed1Max)} km/s</span>
             </div>
 
             {/* Vehicle 2 Speed */}
@@ -239,6 +312,7 @@ export const CollisionSpeedCalculator: React.FC = () => {
                 <span className="text-[10px] font-bold text-[#F5C518] ml-1 italic">KM/S</span>
               </div>
               <span className="text-[8px] text-gray-600 block">Çarpışma Sonrası: {Math.round(postSpeed2)} km/s</span>
+              <span className="text-[8px] text-gray-500 font-mono block">{Math.round(preSpeed2Min)}–{Math.round(preSpeed2Max)} km/s</span>
             </div>
           </div>
 
@@ -250,6 +324,8 @@ export const CollisionSpeedCalculator: React.FC = () => {
             HIZ ANALİZİNİ KROKİYE EKLE
           </button>
         </div>
+
+        <ForensicReportPreview text={reportText} />
 
         {/* Warning Alert */}
         <div className="p-3 bg-red-500/5 border border-red-500/10 rounded-2xl flex gap-3 items-start">

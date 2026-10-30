@@ -3,6 +3,7 @@ import { Ruler, Info, Weight, Zap, TrendingUp, Eye, Footprints, Gauge } from 'lu
 import { useStore } from '../../../store/useStore';
 import { HelpTooltip } from '../../UI/HelpTooltip';
 import { PedestrianLaunchAnimationPlayer } from '../../UI/PedestrianLaunchAnimationPlayer';
+import { formatForensicReport, trNum } from '../../../utils/forensicReport';
 import type { PedestrianLaunchData } from '../../../types';
 
 const G = 9.81;
@@ -181,10 +182,49 @@ export const PedestrianLaunchCalculator: React.FC = () => {
 
     addObject({
       type: 'text',
-      text: `Hesaplanan Araç Hızı: ${Math.round(calculatedSpeed)} km/h\nYükseklik: ${pedestrianHeight}cm | Ağırlık: ${pedestrianWeight}kg\nUçuş: ${flightDistance.toFixed(2)}m | Savrulma: ${slideDistance.toFixed(2)}m`,
+      text: formatForensicReport({
+        title: 'YAYA FIRLATMA İNCELEMESİ (SEARLE)',
+        topic: 'Yaya çarpması sonrası fırlatma/savrulma mesafesinden hareketle, aracın çarpışma anındaki hızının adli teknik yönden tahmin edilmesi.',
+        evidence: [
+          `Fırlatma-savrulma mesafesi: ${trNum(throwDistInput, 1)} m`,
+          `Yaya boyu: ${pedestrianHeight} cm — ağırlık: ${pedestrianWeight} kg`,
+          `Yaya durumu: ${pedestrianState === 'stationary' ? 'Duran' : pedestrianState === 'walking_same' ? 'Aynı yönde yürüyen (+5 km/s)' : pedestrianState === 'walking_opposite' ? 'Ters yönde yürüyen (−5 km/s)' : pedestrianState === 'running_same' ? 'Aynı yönde koşan (+10 km/s)' : 'Ters yönde koşan (−10 km/s)'}`,
+          `Savrulma sürtünme katsayısı: μ=${MU} (kuru asfalt varsayımı)`,
+        ],
+        method: [
+          'Searle denklemi (ters çözüm): d = v·√(2h/g) + v²/(2μg) → v = μg·[√(2h/g + 2d/μg) − √(2h/g)].',
+          'Araç hızı = kapanış (çarpma) hızı ± yaya hareket hızı bileşeni.',
+          'Uçuş ve savrulma bileşenleri ayrı ayrı hesaplanmıştır (uçuş: v·√(2h/g), savrulma: v²/2μg).',
+        ],
+        findings: [
+          `Araç hızı (çarpışma anı): ${trNum(calculatedSpeed, 0)} km/s`,
+          `Uçuş mesafesi: ${trNum(flightDistance, 2)} m — savrulma: ${trNum(slideDistance, 2)} m`,
+          `Uçuş süresi: ${trNum(flightTime, 2)} sn — iniş hızı: ${trNum(landingSpeed, 0)} km/s`,
+          `Toplam fırlatma mesafesi: ${trNum(throwDistance, 2)} m`,
+        ],
+        scenarios: [
+          'μ=0.7 varsayımı kuru asfalt içindir: ıslak/buzlu/karlı zeminde μ düşer → araç hızı tahmini DÜŞÜK çıkar (μ=0.5 için hız ~%20 artar).',
+          'Araç frenlemesi yapılmışsa fırlatma mesafesi kısalır → Searle sonucu gerçek hızın alt sınırını verir; frenlemesizse üst sınıra yakınsır.',
+          'Fırlatma mesafesi İLK TEMAS noktasına göre ölçülmeli; son dinlenme konumu kullanılırsa yaya savrulması eklendiğinden hız fazla çıkar.',
+          'Kaput/ön cam teması (yüksek önü araçlar dahil) fırlatma dinamiklerini değiştirir; klasik Searle düşük önü araçlar için geçerlidir.',
+          'Yaya duruşu bilgisi (duran/yürüyen/koşan) kapanış hızını ±5–10 km/s kaydırır; tanık ifadeleriyle doğrulanmalıdır.',
+          'Çift temas (ikinci çarpma) veya araç üstünde taşınma toplam mesafeyi uzatır → hız yüksek çıkar.',
+          'Eğimli zeminde savrulma boyu değişir; rampa aşağı savrulmada mesafe uzar → hız fazla hesaplanır.',
+          'Boyu/ağırlığı bilinmeyen yaya için h değeri varsayımsaldır; sonucun duyarlılığı h’ye bağlıdır.',
+        ],
+        conclusion: [
+          `İnceleme sonucunda aracın çarpışma anındaki hızının yaklaşık ${trNum(calculatedSpeed, 0)} km/s bulunduğu; savrulma sürtünmesi ve yaya durumu belirsizlikleri hesaba katıldığında sonucun gösterge niteliğinde olduğu kanaatine varılmıştır.`,
+          'Kesin hız tespiti için araç hasar paterni, EDR verisi ve yol üzerindeki kan/iz bulgularıyla birlikte değerlendirme yapılmalıdır.',
+        ],
+        caveats: [
+          'Searle modeli; tek temas, düz zemin ve sabit μ varsayımına dayanan ampirik bir yöntemdir.',
+          'Sonuç; fırlatma mesafesi ölçümü, yaya boyu ve zemin koşulları bilgisinin doğruluğuna bağımlıdır.',
+          'Rapor gösterge niteliğinde olup nihai kanaat kaza rekonstrüksiyon uzmanı değerlendirmesiyle birlikte oluşmalıdır.',
+        ],
+      }),
       x: baseX - 20,
       y: baseY + 40,
-      width: 300,
+      width: 320,
       fontSize: 10,
       fill: '#000',
       fontFamily: 'Inter',

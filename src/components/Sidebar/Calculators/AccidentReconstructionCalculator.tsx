@@ -3,6 +3,7 @@ import { Car, RotateCcw, Settings, ChevronDown, ChevronUp, AlertTriangle, Eye, U
 import { useStore } from '../../../store/useStore';
 import type { VehicleType, VehicleData } from '../../../types';
 import { AccidentAnimationPlayer } from '../../UI/AccidentAnimationPlayer';
+import { formatForensicReport } from '../../../utils/forensicReport';
 
 const VEHICLE_TYPES: { value: VehicleType; label: string }[] = [
   { value: 'car', label: 'Otomobil' },
@@ -225,10 +226,49 @@ export const AccidentReconstructionCalculator: React.FC = () => {
     };
     addObject({
       type: 'text',
-      text: `KAZA YENİDEN CANLANDIRMA\nYol: ${surfaceLabels[accidentReconstruction.roadSurface] || accidentReconstruction.roadSurface}\nμ: ${accidentReconstruction.frictionCoefficient} | Hız Limiti: ${accidentReconstruction.speedLimit} km/h\nHava: ${accidentReconstruction.weather} | Aydınlatma: ${accidentReconstruction.lighting}`,
+      text: formatForensicReport({
+        title: 'KAZA YENİDEN CANLANDIRMA İNCELEMESİ',
+        topic: 'Yol/zemin koşulları ve araç hareket verileri üzerinden kaza öncesi ve sonrası araç hareketlerinin adli teknik yönden yeniden canlandırılması ve değerlendirilmesi.',
+        evidence: [
+          `Yol yüzeyi: ${surfaceLabels[accidentReconstruction.roadSurface] || accidentReconstruction.roadSurface}`, 
+          `Sürtünme katsayısı: μ=${accidentReconstruction.frictionCoefficient}`, 
+          `Hava durumu: ${accidentReconstruction.weather} — aydınlatma: ${accidentReconstruction.lighting}`, 
+          `Hız limiti: ${accidentReconstruction.speedLimit} km/h`, 
+          ...accidentReconstruction.vehicles.filter((v): v is VehicleData => !!v).map((v) =>
+            `${v.name}: başlangıç hızı ${v.initialSpeed} km/s — çarpışma ${v.impactSpeed} km/s (${v.impactAngle}°)`),
+        ],
+        method: [
+          'Fren izi-enerji ilişkisi ve kinematik modellerle araç yörüngeleri yeniden oluşturulmuştur.',
+          'Yüzey μ ve hava/aydınlatma koşulları rekonstrüksiyon girdisi olarak kullanılmıştır.',
+          'Çarpışma öncesi/sonrası hızlar ve yön açıları animasyon verisiyle tutarlıdır.',
+        ],
+        findings: [
+          ...accidentReconstruction.vehicles.filter((v): v is VehicleData => !!v).map((v) =>
+            `${v.name}: çarpışma anında yaklaşık ${v.impactSpeed} km/s (hız limiti ${accidentReconstruction.speedLimit} km/s; ${v.initialSpeed > accidentReconstruction.speedLimit ? 'LİMİT ÜSTÜ' : 'limit uyumlu'})`),
+          'Yol yüzeyi ve μ değeri, frenleme performansını doğrudan etkiler.',
+        ],
+        scenarios: [
+          'Islak/karlı zeminde μ ölçülen değerden %10-30 farklı olabilir → frenleme mesafeleri ve hızlar buna göre kayar.',
+          'Gece/karanlık ve yağmur aydınlatma koşullarında görüş mesafesi kısalır → tepki mesafesi ve sürücü algısı yeniden değerlendirilmelidir.',
+          'Araç ABS’li ise tekerlek kilitlemesi olmaz; fren izleri kısa/kesik kalır → hız tahmini alt sınır verir.',
+          'Hız limiti aşımı; tepki süresi (1-2.5 sn) ve yol tutuşu dikkate alınarak kaçınma imkânı analiziyle birlikte değerlendirilmelidir.',
+          'Yol kamberi/süper devrilme, yük kayması veya patlama gibi ikincil olaylar varsa yörüngeler ek enerji kayıpları içerir.',
+          'Yaya/Yolcu etkileşimi varsa ayrıca yaya fırlatma analizi ile birlikte değerlendirilmelidir.',
+          'Rekonstrüksiyon; başlangıç konum/hız girdilerinin doğruluğuna bağlıdır; tanık ifadesi ve kamera kaydı ile çapraz doğrulama önerilir.',
+        ],
+        conclusion: [
+          `İnceleme sonucunda kaza öncesi hareketler, mevcut yol/zemin koşulları (μ=${accidentReconstruction.frictionCoefficient}, ${accidentReconstruction.weather}) göz önünde bulundurularak yeniden canlandırılmış; araç hızlarının yukarıda belirtilen değerlerde olduğu hesaplanmıştır.`,
+          'Kesin kanaat; saha ölçümleri, araç hasar analizi ve varsa kamera/EDR kayıtlarıyla birlikte oluşturulmalıdır.',
+        ],
+        caveats: [
+          'Animasyon göstergesel yeniden canlandırmadır; fiziksel hassasiyet iddiası taşımaz.',
+          'Sonuçlar; girilen başlangıç konum/hız ve μ değerlerinin saha doğruluğuna bağımlıdır.',
+          'Rapor gösterge niteliğinde olup nihai kanaat bilirkişi değerlendirmesiyle birlikte oluşmalıdır.',
+        ],
+      }),
       x: baseX + 10,
       y: baseY - 80,
-      width: 260,
+      width: 320,
       fontSize: 10,
       fill: '#000',
       fontFamily: 'Inter',

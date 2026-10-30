@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Zap, Activity, Info, PlusCircle, TrendingUp, AlertTriangle, Truck, Car, Bike } from 'lucide-react';
 import { useStore } from '../../../store/useStore';
 import { HelpTooltip } from '../../UI/HelpTooltip';
+import { formatForensicReport, trNum } from '../../../utils/forensicReport';
+import { ForensicReportPreview } from '../../UI/ForensicReportPreview';
 
 const SURFACE_TYPES = [
   { name: 'Asfalt (Kuru)', default: 0.75 },
@@ -26,6 +28,9 @@ export const SkidMarkCalculator: React.FC = () => {
   const [vehicleType, setVehicleType] = useState(VEHICLE_TYPES[0]);
   const [efficiency, setEfficiency] = useState<number>(100);
   const [speed, setSpeed] = useState<number>(0);
+  const [speedMin, setSpeedMin] = useState<number>(0);
+  const [speedMax, setSpeedMax] = useState<number>(0);
+  const [gradeSpeed, setGradeSpeed] = useState<{ up: number; down: number }>({ up: 0, down: 0 });
   
   const { addObject } = useStore();
 
@@ -38,19 +43,87 @@ export const SkidMarkCalculator: React.FC = () => {
       const effectiveMu = mu * vehicleType.muMultiplier;
       const calculatedSpeed = 15.94 * Math.sqrt(effectiveMu * distance * (efficiency / 100));
       setSpeed(calculatedSpeed);
+
+      // Belirsizlik aralığı: μ±0.05, iz boyu ±%5, verim ±%10
+      const calc = (m: number, d: number, eff: number) =>
+        15.94 * Math.sqrt(m * vehicleType.muMultiplier * d * (eff / 100));
+      const muMin = Math.max(0.05, mu - 0.05);
+      const muMax = Math.min(1.0, mu + 0.05);
+      const dMin = distance * 0.95;
+      const dMax = distance * 1.05;
+      const effMin = Math.max(30, efficiency - 10);
+      const effMax = Math.min(100, efficiency + 10);
+      const candidates = [
+        calc(muMin, dMin, effMin),
+        calc(muMin, dMin, effMax),
+        calc(muMax, dMax, effMin),
+        calc(muMax, dMax, effMax),
+      ];
+      setSpeedMin(Math.min(...candidates));
+      setSpeedMax(Math.max(...candidates));
+
+      // Eğim senaryoları (±%10 eğim: μetkin = μ ± tan10° ≈ ±0.176)
+      const tan10 = Math.tan((10 * Math.PI) / 180);
+      setGradeSpeed({
+        up: 15.94 * Math.sqrt(Math.min(1.0, mu + tan10) * vehicleType.muMultiplier * distance * (efficiency / 100)),
+        down: 15.94 * Math.sqrt(Math.max(0.05, mu - tan10) * vehicleType.muMultiplier * distance * (efficiency / 100)),
+      });
     } else {
       setSpeed(0);
+      setSpeedMin(0);
+      setSpeedMax(0);
+      setGradeSpeed({ up: 0, down: 0 });
     }
   }, [distance, mu, efficiency, vehicleType]);
+
+  const reportText = useMemo(() => formatForensicReport({
+    title: 'FREN İZİ (SKID MARK) İNCELEMESİ',
+    topic: 'Kaza yerinde tespit edilen fren izi uzunluğu ile zemin sürtünme katsayısı ve araç fren karakteristiğinden hareketle, aracın frenleme başlangıcındaki hızının adli teknik yönden değerlendirilmesi.',
+    evidence: [
+      `Fren izi uzunluğu: ${distance} m (ölçüm hata payı ±%5)`,
+      `Zemin tipi/katsayısı: μ=${mu.toFixed(2)} (katsayı belirsizliği ±0.05)`,
+      `Araç tipi: ${vehicleType.name} — fren verimi %${efficiency} (±10 puan)`,
+    ],
+    method: [
+      'Kinetik enerji-iş denklemi: v = √(2·μ·g·d·η), pratik form: v = 15.94·√(μ·d·η) [km/s, d metre].',
+      'Tüm tekerleklerin kilitli olduğu ve iz boyunca tam frenlemenin sürdüğü varsayılmıştır.',
+      'Belirsizlik analizi: μ±0.05, iz boyu ±%5 ve verim ±%10 uç değerlerinin tüm kombinasyonlarıyla min–max hız hesaplanmıştır.',
+    ],
+    findings: [
+      `Hesaplanan nokta hız: ${trNum(speed, 0)} km/s`,
+      `Muhtemel hız aralığı: ${trNum(speedMin, 0)} – ${trNum(speedMax, 0)} km/s`,
+      `Bu hız fren izinin BAŞLANGIÇ noktasına aittir; çarpma anındaki hız, frenleme sürdüyse bu değerin altındadır.`,
+      `Eğim düzeltmeli alternatifler: %10 rampa yukarı ${trNum(gradeSpeed.up, 0)} km/s, %10 rampa aşağı ${trNum(gradeSpeed.down, 0)} km/s.`,
+    ],
+    scenarios: [
+      'ABS aktif ise tekerlek kilitlenmez, iz kısa/kesik kalır → gerçek hız hesaplanandan DAHA YÜKSEK olabilir (alt sınır yorumu).',
+      'Kısmi (tam olmayan) frenlemede enerji kaybı azalır → hesaplanan hız gerçek hızın alt sınırını verir.',
+      'Motor freni ve hava direnci ek yavaşlatma sağlar → minimum hız yorumunu destekler.',
+      'Yokuş yukarı frenlemede eğim ek yavaşlatma yapar → gerçek hız hesaplanandan düşük çıkabilir (eğim düzeltmesi gerekir).',
+      'Yokuş aşağı frenlemede hesap gerçek hızdan YÜKSEK çıkabilir → eğim düzeltmesi yapılmadan sonuç kullanılmamalıdır.',
+      'İz çarpma anından önce sona ermişse sürücü freni bırakmış olabilir → çarpma anı hızı ayrı değerlendirilmelidir.',
+      'Islak/karlı zeminde yer yer kayganlık iz boyunu uzatır → üst aralık sınırı daha temsili olabilir.',
+      'Ağır vasıtada yük kayması veya fren fade (ısınma) verimi düşürür → gerçek hız alt aralığa yakın olur.',
+    ],
+    conclusion: [
+      `İnceleme sonucunda aracın fren izinin başladığı andaki hızının en az ${trNum(speed, 0)} km/s, ölçüm belirsizlikleri hesaba katıldığında ${trNum(speedMin, 0)} – ${trNum(speedMax, 0)} km/s aralığında bulunduğu kanaatine varılmıştır.`,
+      'Kesin değere ilişkin sağlam kanıt, zeminde yapılacak çekme (drag) testi veya araç EDR verisidir.',
+    ],
+    caveats: [
+      'Sonuç; iz boyu, μ ve fren verimi ölçümlerinin saha doğruluğuna bağımlıdır.',
+      'ABS/kilitlenmesiz frenlemede formül yalnızca alt sınır verir; mutlak hız olarak okunmamalıdır.',
+      'Eğim, yük durumu ve lastik durumu için verim/katsayı manuel düzeltmesi yapılmadıkça sonuç yerel doğruluk taşır.',
+    ],
+  }), [speed, speedMin, speedMax, gradeSpeed, distance, mu, efficiency, vehicleType]);
 
   const handleAddToCanvas = () => {
     addObject({
       type: 'text',
-      text: `FREN İZİ ANALİZİ\n-------------------\nAraç: ${vehicleType.name}\nFren İzi: ${distance}m\nSürtünme (μ): ${mu}\nVerim: %${efficiency}\nTahmini Hız: ${Math.round(speed)} km/s`,
+      text: reportText,
       x: 300,
       y: 300,
-      width: 200,
-      fontSize: 12,
+      width: 360,
+      fontSize: 11,
       fill: '#000000',
       fontFamily: 'Inter',
       fontStyle: 'bold'
@@ -171,6 +244,13 @@ export const SkidMarkCalculator: React.FC = () => {
               <span className="text-6xl font-black text-white tracking-tighter">{Math.round(speed)}</span>
               <span className="text-sm font-bold text-[#F5C518] ml-2 italic">KM/S</span>
             </div>
+            <div className="flex items-center justify-center gap-1.5 text-[9px] font-mono font-bold text-gray-400">
+              <span className="text-gray-600">MİN</span>
+              <span>{Math.round(speedMin)}</span>
+              <span className="text-gray-600">—</span>
+              <span>{Math.round(speedMax)}</span>
+              <span className="text-gray-600">MAKS KM/S</span>
+            </div>
 
             <button
               onClick={handleAddToCanvas}
@@ -181,6 +261,8 @@ export const SkidMarkCalculator: React.FC = () => {
             </button>
           </div>
         </div>
+
+        <ForensicReportPreview text={reportText} />
 
         <div className="p-4 bg-orange-500/5 border border-orange-500/10 rounded-2xl flex gap-3 items-start">
           <AlertTriangle size={16} className="text-orange-500 mt-0.5 flex-shrink-0" />

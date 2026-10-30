@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Sun, Ruler, PlusCircle, Clock, Calendar } from 'lucide-react';
 import { useStore } from '../../../store/useStore';
 import { HelpTooltip } from '../../UI/HelpTooltip';
+import { formatForensicReport, trNum } from '../../../utils/forensicReport';
+import { ForensicReportPreview } from '../../UI/ForensicReportPreview';
 
 const SEASONAL_PRESETS = [
   { id: 'summer', name: 'Yaz Gündönümü', maxAngle: 73, icon: '☀️' },
@@ -14,6 +16,8 @@ export const ShadowCalculator: React.FC = () => {
   const [sunAngle, setSunAngle] = useState<number>(45);
   const [objectHeight, setObjectHeight] = useState<number>(0);
   const [timeEstimate, setTimeEstimate] = useState<string>('');
+  const [heightMin, setHeightMin] = useState<number>(0);
+  const [heightMax, setHeightMax] = useState<number>(0);
   
   const { addObject } = useStore();
 
@@ -22,6 +26,11 @@ export const ShadowCalculator: React.FC = () => {
       const radians = sunAngle * (Math.PI / 180);
       const calculatedHeight = shadowLength * Math.tan(radians);
       setObjectHeight(calculatedHeight);
+      // Belirsizlik: gölge ucu ölçümü ±5 cm, güneş açısı ±2°
+      const hMin = Math.max(0, shadowLength - 0.05) * Math.tan(Math.max(0.01, sunAngle - 2) * Math.PI / 180);
+      const hMax = (shadowLength + 0.05) * Math.tan(Math.min(89, sunAngle + 2) * Math.PI / 180);
+      setHeightMin(hMin);
+      setHeightMax(hMax);
 
       if (sunAngle > 70) setTimeEstimate('Öğle (12:00 - 13:30)');
       else if (sunAngle > 45) setTimeEstimate('Kuşluk / İkindi (10:00-11:30 veya 14:30-16:00)');
@@ -30,14 +39,49 @@ export const ShadowCalculator: React.FC = () => {
     }
   }, [shadowLength, sunAngle]);
 
+  const reportText = useMemo(() => formatForensicReport({
+    title: 'GÖLGE VE ZAMAN İNCELEMESİ',
+    topic: 'Fotoğraf/kroki üzerinde ölçülen gölge boyu ve güneş yükseklik açısından hareketle, nesne boyunun ve olayın gerçekleştiği zaman diliminin adli teknik yönden değerlendirilmesi.',
+    evidence: [
+      `Gölge boyu: ${shadowLength} m (uç ölçümü ±5 cm)`,
+      `Güneş yükseklik açısı: ${sunAngle}° (ölçüm ±2°)`,
+      `Mevsimsel referans (Türkiye): güneş açısı ayarlanmıştır`,
+    ],
+    method: [
+      'Nesne boyu: H = S × tan(θ) (gölge boyu × tanjant ilişkisi).',
+      'Zaman dilimi; güneş yükseklik açısının Türkiye (36–42°N enlem) gündüz eğrisine göre sınıflandırılmasıyla verilmiştir.',
+      'Belirsizlik analizi: gölge ucu ±5 cm ve açı ±2° uç değerleriyle min–max nesne boyu hesaplanmıştır.',
+    ],
+    findings: [
+      `Hesaplanan nesne boyu: ${trNum(objectHeight, 2)} m — muhtemel aralık ${trNum(heightMin, 2)} – ${trNum(heightMax, 2)} m`,
+      `Tahmini zaman dilimi: ${timeEstimate || 'Belirsiz'}`,
+    ],
+    scenarios: [
+      'Aynı güneş açısı günde iki kez oluşur (sabah + öğleden sonra); kesin ayırım gölgenin DOĞU-BATI doğrultusu ile yapılır.',
+      'Mevsime göre aynı açı farklı saatlere denk gelir (yaz gündönümünde öğle açısı ~73°, kışta ~26°, Türkiye ortalaması); mevsim seçimi netleştirilmelidir.',
+      'Zemin eğimli veya engebeli ise gölge boyu kısalır/uzar → nesne boyu ve saat tahmini kayar; düz zemin varsayılmıştır.',
+      'Bulutlu/kapalı hava da gölge kenarı bulanık (penumbra) ölçülür → uç hata payı büyür.',
+      'Yapay ışık kaynaklarında (sokak lambası) güneş açısı varsayımı geçersizdir; ışık yüksekliği ve mesafesi ayrıca hesaplanmalıdır.',
+      'Yaz saati uygulaması (TSİ +1) ve boylam farkı (doğu illeri ~+40 dk) saat çevirisinde dikkate alınmalıdır.',
+    ],
+    conclusion: [
+      `İnceleme sonucunda gölgenin ait olduğu nesnenin boyunun yaklaşık ${trNum(objectHeight, 2)} m (${trNum(heightMin, 2)} – ${trNum(heightMax, 2)} m aralığında) olduğu, olayın ise “${timeEstimate || 'belirsiz'}” zaman diliminde gerçekleşme ihtimalinin güçlü olduğu kanaatine varılmıştır.`,
+      'Saat tespitinin kesinleştirilmesi için gölge doğrultusu (pusula yönü) ve gün bilgisi ile astronomik yeniden hesap önerilir.',
+    ],
+    caveats: [
+      'Sonuç, gölge ölçümünün fotoğraf/kroki üzerinden doğru alınmış olmasına bağlıdır; kamera eğikliği perspektif hatası yaratır.',
+      'Sadece güneş açısıyla saat tahmini tek başına kesin değildir; doğrultu bilgisi olmadan sabah/akşam ayrımı yapılamaz.',
+    ],
+  }), [shadowLength, sunAngle, objectHeight, heightMin, heightMax, timeEstimate]);
+
   const handleAddToCanvas = () => {
     addObject({
       type: 'text',
-      text: `GÖLGE ANALİZİ\n-------------------\nGölge Boyu: ${shadowLength}m\nGüneş Açısı: ${sunAngle}°\nNesne Yüksekliği: ${objectHeight.toFixed(2)}m\nTahmini Zaman Dilimi: ${timeEstimate}`,
+      text: reportText,
       x: 300,
       y: 300,
-      width: 220,
-      fontSize: 12,
+      width: 360,
+      fontSize: 11,
       fill: '#000000',
       fontFamily: 'Inter',
       fontStyle: 'bold'
@@ -111,6 +155,13 @@ export const ShadowCalculator: React.FC = () => {
                 <span className="text-6xl font-black text-white tracking-tighter">{objectHeight.toFixed(2)}</span>
                 <span className="text-xl font-bold text-[#F5C518]">M</span>
               </div>
+              <div className="flex items-center justify-center gap-1.5 text-[9px] font-mono font-bold text-gray-400">
+                <span className="text-gray-600">ARALIK</span>
+                <span>{heightMin.toFixed(2)}</span>
+                <span className="text-gray-600">—</span>
+                <span>{heightMax.toFixed(2)}</span>
+                <span className="text-gray-600">M</span>
+              </div>
             </div>
 
             <div className="p-4 bg-white/5 rounded-2xl border border-white/5 space-y-2">
@@ -132,6 +183,8 @@ export const ShadowCalculator: React.FC = () => {
             </button>
           </div>
         </div>
+
+        <ForensicReportPreview text={reportText} />
       </div>
     </div>
   );
