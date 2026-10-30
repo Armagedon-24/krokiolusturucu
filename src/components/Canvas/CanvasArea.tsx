@@ -42,13 +42,17 @@ const RemoveWhiteFilter = (imageData: any) => {
 import { v4 as uuidv4 } from 'uuid';
 import { jsPDF } from 'jspdf';
 
-import { calculateCalloutSize, getEffectiveZIndex, compressAndResizeImage } from '../../utils/canvasUtils';
+import { calculateCalloutSize, getEffectiveZIndex, compressAndResizeImage, processUploadedSymbolImage } from '../../utils/canvasUtils';
 
 const useSmartImage = (src: string | undefined) => {
-  // Load without crossOrigin - works for data:, blob:, and most external URLs.
-  // crossOrigin='anonymous' can cause issues when the image is cached without CORS headers.
-  const [image] = useImage(src || '');
-  return image;
+  // CORS dostu yükleme ('anonymous'): kanvası lekelemez → toDataURL (PDF/önizleme
+  // yedek yolu) SecurityError atmaz. Kullanılan tüm dış hostlar (Cloudinary, Yandex
+  // static-maps, Esri World_Imagery) Access-Control-Allow-Origin: * gönderir.
+  // ACAO göndermeyen nadir bir kaynakta yükleme 'failed' olursa CORS'suz yeniden
+  // denenir — görsel görünür kalır ama kanvas lekelenebilir (eski davranış).
+  const [corsImage, corsStatus] = useImage(src || '', 'anonymous');
+  const [plainImage] = useImage(corsStatus === 'failed' ? (src || '') : '');
+  return corsImage || plainImage;
 };
 
 const IndividualObject = ({ 
@@ -2445,11 +2449,22 @@ export const CanvasArea: React.FC = () => {
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    // Aynı dosya tekrar seçilince onChange tetiklensin diye input her zaman sıfırlanır
+    e.target.value = '';
     if (file && isAdmin) {
-      const reader = new FileReader();
-      reader.onload = async (event) => {
-        const src = event.target?.result as string;
-        
+      // SIKIŞTIRMA: Logo ham base64 olarak depolanıyordu (2.5MB PNG → 2.2MB data URI);
+      // projectInfo her sahneye kopyalandığından localStorage kotası ve bulut payload'ı
+      // katlanarak şişiyordu. Artık 512px şeffaf PNG'e işlenir (ondolarca KB).
+      processUploadedSymbolImage(file, 512, 512).then((src) => {
+        if (!src) {
+          addNotification({
+            type: 'error',
+            message: 'Logo Okunamadı',
+            description: 'Seçilen dosya işlenemedi. Lütfen PNG/JPG formatında bir logo deneyin.'
+          });
+          return;
+        }
+
         // Yeni bir Image nesnesi oluşturup boyutlarını alalım ki kutuya tam otursun
         const img = new Image();
         img.onload = () => {
@@ -2484,12 +2499,18 @@ export const CanvasArea: React.FC = () => {
           addNotification({
             type: 'success',
             message: 'Logo Yerleştirildi',
-            description: 'Logo, alanın içerisine oranları korunarak tam sığacak şekilde yerleştirildi.'
+            description: 'Logo sıkıştırılıp alanın içerisine oranları korunarak tam sığacak şekilde yerleştirildi.'
+          });
+        };
+        img.onerror = () => {
+          addNotification({
+            type: 'error',
+            message: 'Logo Yüklenemedi',
+            description: 'İşlenen görsel gösterilemedi. Lütfen başka bir dosya deneyin.'
           });
         };
         img.src = src;
-      };
-      reader.readAsDataURL(file);
+      });
     }
   };
   const [promptState, setPromptState] = useState<{
@@ -2938,7 +2959,9 @@ export const CanvasArea: React.FC = () => {
         let pageWidth = 1000;
         let pageHeight = 1400;
 
-        // Helper: load an image to HTMLImageElement, resolves null on error
+        // Helper: load an image to HTMLImageElement, resolves null on error.
+        // CORS'suz yeniden deneme YOK: lekelmiş kanvas toDataURL'i SecurityError ile
+        // öldürür ve tüm PDF dışa aktarımı çöker. ACAO'suz kaynak → görsel atlanır.
         const loadImg = (src: string): Promise<HTMLImageElement | null> => new Promise(resolve => {
           if (!src) return resolve(null);
           // data: and blob: URLs don't need crossOrigin
@@ -2946,22 +2969,12 @@ export const CanvasArea: React.FC = () => {
           const img = new Image();
           if (!isDataOrBlob) img.crossOrigin = 'Anonymous';
           img.onload = () => resolve(img);
-          img.onerror = () => {
-            if (!isDataOrBlob) {
-              // Retry without crossOrigin as fallback
-              const img2 = new Image();
-              img2.onload = () => resolve(img2);
-              img2.onerror = () => resolve(null);
-              img2.src = src;
-            } else {
-              resolve(null);
-            }
-          };
+          img.onerror = () => resolve(null);
           img.src = src;
         });
 
         // Helper: draw a single scene to an off-screen canvas and return dataURL
-        const renderSceneToDataURL = async (scene: any, bgColorVal: string): Promise<string> => {
+        const renderSceneToDataURL = async (scene: any, bgColorVal: string): Promise<string | null> => {
           const sceneObjects: any[] = scene.objects || [];
           const W = canvasOrientation === 'landscape' ? 1400 : 1000;
           const H = canvasOrientation === 'landscape' ? 1000 : 1400;
@@ -3098,11 +3111,21 @@ export const CanvasArea: React.FC = () => {
             return offCanvas.toDataURL('image/jpeg', 0.92);
           } catch (err) {
             console.warn('offCanvas toDataURL failed, using stage fallback if active scene:', err);
-            if (scene.id === currentActiveId && stageRef.current) {
-              const fallbackUrl = stageRef.current.toDataURL({ pixelRatio: 2 });
-              if (fallbackUrl) return fallbackUrl;
+            // Yedek yollar da lekeleme nedeniyle SecurityError atabilir — her biri korunur.
+            try {
+              if (scene.id === currentActiveId && stageRef.current) {
+                const fallbackUrl = stageRef.current.toDataURL({ pixelRatio: 2 });
+                if (fallbackUrl) return fallbackUrl;
+              }
+            } catch (stageErr) {
+              console.warn('Stage fallback de başarısız (lekeleme):', stageErr);
             }
-            return offCanvas.toDataURL('image/png');
+            try {
+              return offCanvas.toDataURL('image/png');
+            } catch (pngErr) {
+              console.error('Sahne veri URL\'si üretilemedi (kanvas lekeleşmiş):', pngErr);
+              return null;
+            }
           }
         };
 
@@ -3111,18 +3134,23 @@ export const CanvasArea: React.FC = () => {
           const scene = scenesToExport[i];
 
           const dataURL = await renderSceneToDataURL(scene, canvasBgColor);
+          // Lekeleme vb. nedeniyle render edilemeyen sahne PDF'i bozmadan atlanır
+          if (!dataURL) {
+            console.warn('PDF: sahne render edilemedi, atlanıyor:', scene?.id);
+            continue;
+          }
           const W = canvasOrientation === 'landscape' ? 1400 : 1000;
           const H = canvasOrientation === 'landscape' ? 1000 : 1400;
           pageWidth = W;
           pageHeight = H;
 
-          if (i === 0) {
+          if (!pdf) {
             pdf = new jsPDF({
               orientation: orientation,
               unit: 'px',
               format: [pageWidth, pageHeight]
             });
-          } else if (pdf) {
+          } else {
             pdf.addPage([pageWidth, pageHeight], orientation);
           }
 
@@ -3150,18 +3178,14 @@ export const CanvasArea: React.FC = () => {
         });
 
         if (allFindingsWithPhotos.length > 0) {
-          const loadImage = (url: string): Promise<HTMLImageElement> => {
+          const loadImage = (url: string): Promise<HTMLImageElement | null> => {
             return new Promise((resolve) => {
               const isDataOrBlob = url.startsWith('data:') || url.startsWith('blob:');
               const img = new Image();
               if (!isDataOrBlob) img.crossOrigin = 'Anonymous';
               img.onload = () => resolve(img);
-              img.onerror = () => {
-                const img2 = new Image();
-                img2.onload = () => resolve(img2);
-                img2.onerror = () => resolve(img);
-                img2.src = url;
-              };
+              // CORS'suz yeniden deneme YOK — lekelemiş fotoğraf toDataURL'i çökertir.
+              img.onerror = () => resolve(null);
               img.src = url;
             });
           };
@@ -3176,6 +3200,11 @@ export const CanvasArea: React.FC = () => {
               const photoUrl = photos[i];
               try {
                 const img = await loadImage(photoUrl);
+                // Yüklenemeyen fotoğraf (CORS/ağ hatası) boş sayfa eklemadan atlanır
+                if (!img) {
+                  console.warn('PDF eki: fotoğraf yüklenemedi, atlanıyor:', photoUrl);
+                  continue;
+                }
                 
                 pdf.addPage([pageWidth, pageHeight], orientation);
                 
@@ -3248,7 +3277,7 @@ export const CanvasArea: React.FC = () => {
         // Format the report number cleanly, replacing backslashes and forwardslashes with dashes
         // so that Windows doesn't reject the filename and fall back to Blob UUIDs.
         const cleanReportNo = (state.projectInfo.reportNo || '')
-          .replace(/[\/\\]/g, '-') // Replace both '/' and '\' with '-'
+          .replace(/[/\\]/g, '-') // Replace both '/' and '\' with '-'
           .replace(/[:*?"<>|]/g, '_') // Replace other invalid Windows characters with '_'
           .trim();
 
@@ -3265,6 +3294,8 @@ export const CanvasArea: React.FC = () => {
           const pdfBlob = pdf.output('blob');
           const pdfUrl = URL.createObjectURL(pdfBlob);
           window.open(pdfUrl, '_blank');
+          // Blob URL sızıntısını önle (sekme açıldıktan sonra geri alınabilir)
+          setTimeout(() => URL.revokeObjectURL(pdfUrl), 60000);
         } catch (openErr) {
           console.error('Error opening PDF in new tab:', openErr);
         }
@@ -3418,14 +3449,9 @@ export const CanvasArea: React.FC = () => {
           const img = new Image();
           if (!isLocal) img.crossOrigin = 'Anonymous';
           img.onload = () => resolve(img);
-          img.onerror = () => {
-            if (!isLocal) {
-              const img2 = new Image();
-              img2.onload = () => resolve(img2);
-              img2.onerror = () => resolve(null);
-              img2.src = src;
-            } else resolve(null);
-          };
+          // CORS'suz yeniden deneme YOK — lekelemiş görsel toDataURL'i SecurityError ile
+          // çökertir. Başarısız kaynak null döner ve çizimde atlanır.
+          img.onerror = () => resolve(null);
           img.src = src;
         });
 
@@ -3525,10 +3551,26 @@ export const CanvasArea: React.FC = () => {
         window.dispatchEvent(new CustomEvent('preview-ready', { detail: dataURL }));
       } catch (err) {
         console.error('Preview generation failed, falling back to stage capture:', err);
-        // Fallback: use stage directly
+        // Fallback: use stage directly (lekeleme nedeniyle bu da atabilir — korunur)
         await new Promise(resolve => setTimeout(resolve, 150));
-        const dataURL = stageRef.current?.toDataURL({ pixelRatio: 2 });
-        if (dataURL) window.dispatchEvent(new CustomEvent('preview-ready', { detail: dataURL }));
+        try {
+          const dataURL = stageRef.current?.toDataURL({ pixelRatio: 2 });
+          if (dataURL) window.dispatchEvent(new CustomEvent('preview-ready', { detail: dataURL }));
+          else {
+            addNotification({
+              type: 'error',
+              message: 'Önizleme Oluşturulamadı',
+              description: 'Kanvastaki dış görseller güvenlik kısıtı nedeniyle önizlemeye alınamadı.'
+            });
+          }
+        } catch (stageErr) {
+          console.error('Stage preview fallback failed:', stageErr);
+          addNotification({
+            type: 'error',
+            message: 'Önizleme Oluşturulamadı',
+            description: 'Kanvastaki dış görseller güvenlik kısıtı nedeniyle önizlemeye alınamadı.'
+          });
+        }
       } finally {
         setGridVisible(true);
       }

@@ -521,11 +521,11 @@ export const Sidebar: React.FC = () => {
                                         width={48}
                                         height={48}
                                         onError={(e) => {
-                                          if (item.isUpload) {
-                                            removeUploadedImage(item.id);
-                                          } else {
-                                            (e.target as HTMLImageElement).style.display = 'none';
-                                          }
+                                          // KRİTİK DÜZELTME: Geçici CDN/ağ hatasında görsel
+                                          // SİLİNMEZ (eskiden burada removeUploadedImage çağrılıyordu —
+                                          // tek bir kısa bağlantı kesintisi görseli kalıcı olarak
+                                          // mezarlığa gönderiyordu). Yalnızca kırık görsel durumu gösterilir.
+                                          (e.target as HTMLImageElement).style.visibility = 'hidden';
                                         }}
                                         className="max-w-[95%] max-h-[95%] object-contain transition-transform duration-300 group-hover:scale-110 relative z-10 pointer-events-none sidebar-symbol-filter"
                                       />

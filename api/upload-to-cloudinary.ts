@@ -7,6 +7,13 @@ import { verifyAuth } from './_auth.js';
  * Gövde: { publicId: string, dataUri: "data:image/...;base64,...", tag?: string }
  * Uygulama sembollerinin buluta aynı kategori/isimle yedeklenmesi için kullanılır.
  */
+
+/** public_id karakter beyaz listesi: harf, rakam, boşluk, tire, alt çizgi, nokta, slash (.. ve başında / yok) */
+function isValidPublicId(pid: string): boolean {
+  if (!pid || pid.includes('..') || pid.startsWith('/') || pid.length > 256) return false;
+  return /^[A-Za-z0-9 _\-./]+$/.test(pid);
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -17,13 +24,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return;
     }
 
-    const { publicId, dataUri, tag } = req.body || {};
+    // Platform HTML 413 yerine temiz JSON hatası
+    const contentLength = Number(req.headers['content-length'] || 0);
+    if (contentLength > 4_000_000) {
+      return res.status(413).json({ error: 'Görsel çok büyük (>4MB). Lütfen daha küçük bir görsel kullanın.' });
+    }
 
-    if (!publicId || typeof publicId !== 'string') {
-      return res.status(400).json({ error: 'publicId gerekli' });
+    const body = (req.body && typeof req.body === 'object') ? req.body : {};
+    const { publicId, dataUri, tag } = body as { publicId?: unknown; dataUri?: unknown; tag?: unknown };
+
+    if (!publicId || typeof publicId !== 'string' || !isValidPublicId(publicId)) {
+      return res.status(400).json({ error: 'Geçersiz publicId' });
     }
     if (!dataUri || typeof dataUri !== 'string' || !dataUri.startsWith('data:')) {
       return res.status(400).json({ error: 'dataUri (data:...) gerekli' });
+    }
+    if (tag !== undefined && typeof tag !== 'string') {
+      return res.status(400).json({ error: 'Geçersiz tag' });
     }
 
     const CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME || 'dzen3qvgp';
@@ -62,19 +79,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       body: form.toString(),
     });
 
-    const data = await resp.json();
+    const data = await resp.json().catch(() => null);
 
-    if (data.error) {
-      return res.status(500).json({ error: data.error.message || 'Cloudinary yükleme hatası' });
+    if (!resp.ok || !data || (data as { error?: { message?: string } }).error) {
+      const msg = (data as { error?: { message?: string } })?.error?.message || 'Cloudinary yükleme hatası';
+      console.error('Upload To Cloudinary Error:', msg);
+      return res.status(resp.ok ? 502 : (resp.status || 502)).json({ error: msg });
     }
 
+    const d = data as { public_id?: string; secure_url?: string; format?: string };
     return res.status(200).json({
-      public_id: data.public_id,
-      secure_url: data.secure_url,
-      format: data.format,
+      public_id: d.public_id,
+      secure_url: d.secure_url,
+      format: d.format,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Upload To Cloudinary Error:', error);
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: 'Sunucu hatası' });
   }
 }

@@ -26,8 +26,9 @@ function App() {
     const init = async () => {
       try {
         refreshSymbols();
-        // Always restore cloud symbols/settings, but start with a blank canvas
-        await restoreFromCloud();
+        // Always restore cloud symbols/settings, but start with a blank canvas.
+        // Sessiz mod: her sayfa açılışında "Geri Yükleme Başarılı" bildirimi basılmasın.
+        await restoreFromCloud(true);
         // Always clear to blank canvas on page load — user must open a file from Case Manager
         clearCanvas();
       } catch (error) {

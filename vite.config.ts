@@ -83,7 +83,11 @@ export default defineConfig({
                 const vRes: any = {
                   status: (code: number) => { res.statusCode = code; return vRes; },
                   json: (data: any) => { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(data)); },
-                  send: (data: any) => res.end(data)
+                  send: (data: any) => res.end(data),
+                  // API işleyicileri Cache-Control vb. başlıklar yazabilir (setHeader mock'u)
+                  setHeader: (key: string, value: string) => {
+                    try { res.setHeader(key, value); } catch { /* yoksay */ }
+                  }
                 };
                 await module.default(req, vRes);
               });

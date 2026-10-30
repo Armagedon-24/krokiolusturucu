@@ -46,13 +46,7 @@ export const FallAnimationCanvas: React.FC = () => {
   const timeRef = useRef<number>(0);
   const [impactFlash, setImpactFlash] = useState(false);
 
-  if (!fallData) return null;
-
-  const bounds = getCanvasBounds(fallData);
-  const fallState = getFallState(currentTime, duration, bounds.startX, bounds.startY, bounds.endX, bounds.endY);
-  const progress = fallState.progress;
-
-  // Animation loop
+  // Animation loop (hooks must run unconditionally — early return below)
   useEffect(() => {
     if (!isPlaying) {
       lastTimeRef.current = 0;
@@ -101,6 +95,12 @@ export const FallAnimationCanvas: React.FC = () => {
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
   }, [isPlaying, speed, loop, duration, setFallAnimation, currentTime]);
+
+  if (!fallData) return null;
+
+  const bounds = getCanvasBounds(fallData);
+  const fallState = getFallState(currentTime, duration, bounds.startX, bounds.startY, bounds.endX, bounds.endY);
+  const progress = fallState.progress;
 
   const sx = bounds.startX;
   const sy = bounds.startY;

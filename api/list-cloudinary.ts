@@ -6,6 +6,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  res.setHeader('Cache-Control', 'no-store');
+
   try {
     // Secure centralized authentication check
     if (!verifyAuth(req, res)) {
@@ -77,8 +79,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
 
     return res.status(200).json({ assets });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Cloudinary List Error:', error);
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: 'Sunucu hatası' });
   }
 }

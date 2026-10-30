@@ -266,7 +266,9 @@ const stripLongestDataUri = (node: any): boolean => {
  * Sync payload'ını 4.5MB sınırına karşı korur:
  * 1) Ağır base64'ler buluta taşınıp URL ile değiştirilir (eşzamanlılık 4),
  * 2) Hâlâ bütçe aşılırsa en büyük veri URI'leri kademeli çıkarılır.
- * Yerel uygulama durumu ASLA değişmez; yalnızca gönderilecek kopya düzenlenir.
+ * ÖNEMLİ: Çağıran taraf DEEP-COPY (JSON.parse(JSON.stringify(...))) göndermekle
+ * yükümlüdür — bu işlev gelen ağacı YERİNDE değiştirir; canlı store nesneleri
+ * paylaşılsaydı yerel veri bozulurdu (src='' kalıcı kayıp).
  */
 const sanitizeConfigForSync = async (config: any, authToken: string) => {
   try {
@@ -289,12 +291,16 @@ const sanitizeConfigForSync = async (config: any, authToken: string) => {
       console.warn(`Bulut senkronu: ${uploaded}/${uris.length} ağır görsel buluta kalıcı URL ile taşındı.`);
     }
     // Nihai boyut koruması — 413 asla oluşmasın
-    for (let guard = 0; guard < 30; guard++) {
+    let stripped = 0;
+    for (let guard = 0; guard < 200; guard++) {
       if (JSON.stringify(config).length <= SYNC_SIZE_BUDGET) break;
       if (!stripLongestDataUri(config)) break;
+      stripped++;
     }
+    return { stripped };
   } catch (err) {
     console.warn('Bulut senkronu veri temizliği başarısız, ham veri ile denenecek:', err);
+    return { stripped: 0 };
   }
 };
 
@@ -648,6 +654,24 @@ export const useStore = create<StoreState>()(
           }]
         }));
 
+        // Bulut Galerisi'nden açık taleple geri yükleme (allowDeletedName): o görselin
+        // eski mezarlık kayıtları temizlenir — aksi halde bayat 'name:'/'pid:' anahtarları
+        // sonsuza dek kalır ve sonraki İNDİR/Bulutu Tara görseli tekrar eler (radial_02 vakası).
+        if (opts?.allowDeletedName) {
+          const pid = publicIdFromUrl(finalSrc);
+          set((state) => ({
+            adminSettings: {
+              ...state.adminSettings,
+              deletedAssetIds: (state.adminSettings.deletedAssetIds || []).filter((k) =>
+                !(img.id && k === img.id) &&
+                !(pid && k === pid) &&
+                !(finalSrc && k === finalSrc) &&
+                !(img.name && k === 'name:' + String(img.name).trim().toLowerCase())
+              )
+            }
+          }));
+        }
+
         if (get().isAdmin) {
           get().syncToCloud(true);
         }
@@ -660,7 +684,10 @@ export const useStore = create<StoreState>()(
         if (isAdmin && targetImg) {
           try {
             // Buluttan da kalıcı olarak sil (yetkilendirme token'ı ile)
-            await cloud.delete(targetImg.src, get().adminPassword || '');
+            const del = await cloud.delete(targetImg.src, get().adminPassword || '');
+            if (del && del.success === false) {
+              console.error('Bulut silme başarısız:', del.error);
+            }
           } catch (error: unknown) {
             console.error('Bulut silme hatası:', error);
           }
@@ -802,7 +829,8 @@ export const useStore = create<StoreState>()(
       addNotification: (n) => {
         const id = uuidv4();
         set((state) => ({
-          notifications: [...state.notifications, { ...n, id }]
+          // En fazla 5 eşzamanlı bildirim: toplu yüklemelerde yığın birikmesin
+          notifications: [...state.notifications.slice(-4), { ...n, id }]
         }));
         setTimeout(() => {
           get().removeNotification(id);
@@ -1063,7 +1091,10 @@ export const useStore = create<StoreState>()(
           try {
             // Support for both Cloudinary and Vercel Blob
             if (targetSrc.includes('cloudinary.com') || targetSrc.includes('public.blob.vercel-storage.com')) {
-              await cloud.delete(targetSrc, get().adminPassword || '');
+              const del = await cloud.delete(targetSrc, get().adminPassword || '');
+              if (del && del.success === false) {
+                console.error('Bulut varlığı silinemedi:', del.error);
+              }
             }
           } catch (error: unknown) {
             console.error('Bulut varlığı silinirken hata:', error);
@@ -1161,16 +1192,27 @@ export const useStore = create<StoreState>()(
           
           const finalArchiveToSync = Array.from(archiveMap.values());
 
-          // 413 koruması: ağır base64'leri buluta taşı / bütçeye göre budayıp gönder
-          const configPayload: any = {
+          // 413 koruması: ağır base64'leri buluta taşı / bütçeye göre budayıp gönder.
+          // KRİTİK: JSON.parse(JSON.stringify(...)) ile DERİN KOPYA alınır — aksi halde
+          // sanitizeConfigForSync'in yerinde mutasyonu (replaceHeavyUris / stripLongestDataUri)
+          // canlı store nesnelerini (objects, scenes, uploadedImages, semboller) değiştirir:
+          // bütçe aşılırsa yerel kanvas nesnesinin src'si '' olur ve veri KALICI kaybedilir.
+          const configPayload: any = JSON.parse(JSON.stringify({
             uploadedImages: cleanUploads,
             allSymbols: cleanAllSymbols,
             projectState: { objects, backgroundImage, projectInfo, adminSettings },
             scenes: finalArchiveToSync,
             activeSceneId,
             visualSettings,
-          };
-          await sanitizeConfigForSync(configPayload, get().adminPassword || '');
+          }));
+          const syncStats = await sanitizeConfigForSync(configPayload, get().adminPassword || '');
+          if (syncStats.stripped > 0 && !silent) {
+            get().addNotification({
+              type: 'warning',
+              message: 'Yedek Kısmi Kaydedildi',
+              description: `Yedek boyutu sınırı aştığı için ${syncStats.stripped} büyük görsel yedekten çıkarıldı (yerel veriniz etkilenmedi). Görselleri küçültüp tekrar deneyin.`
+            });
+          }
           configPayload.uploadedImages = (configPayload.uploadedImages || []).filter((img: any) => img.src);
 
           await cloud.save(
@@ -1213,6 +1255,18 @@ export const useStore = create<StoreState>()(
       },
 
       restoreFromCloud: async (silent = false) => {
+        // YÜKLE sürerken İNDİR başlatılırsa bulut, İNDİR öncesi eski durumla
+        // geri yazılabilir (son yazan kazanır). Çakışmayı engelle.
+        if (_syncBusy) {
+          if (!silent) {
+            get().addNotification({
+              type: 'warning',
+              message: 'Lütfen Bekleyin',
+              description: 'Bulut senkronizasyonu sürüyor. İşlem bittikten sonra tekrar deneyin.'
+            });
+          }
+          return false;
+        }
         try {
           const data = await cloud.load();
           
@@ -1237,9 +1291,39 @@ export const useStore = create<StoreState>()(
             deletedSceneIds: Array.from(new Set([...(get().adminSettings.deletedSceneIds || []), ...(cloudAdminSettings.deletedSceneIds || [])])),
           };
 
+          // BAYAT YAPILANDIRMA KORUMASI: Cloud.save her kayıtta timestamp yazar.
+          // Bulut ts, bu cihazın son başarılı senkronundan daha ESKİ ise büyük olasılıkla
+          // Cloudinary CDN'inin önbelleklenmiş (bayat) kopyası okunuyor demektir —
+          // yeni veriyi ezmesin. Otomatik (sessiz) açılışta uygulanmaz; manuel İNDİR'de
+          // kullanıcı uyarılır ve yine de uygulanır.
+          const cloudTs = Number(data.timestamp || 0);
+          const localSyncedAt = get().allSymbolsSyncedAt || 0;
+          if (cloudTs > 0 && localSyncedAt > 0 && cloudTs < localSyncedAt - 60000) {
+            console.warn('Bulut yapılandırması bayat görünüyor (CDN önbelleği):', { cloudTs, localSyncedAt });
+            if (silent) {
+              return false;
+            }
+            get().addNotification({
+              type: 'warning',
+              message: 'Bayat Bulut Verisi',
+              description: 'Buluttan gelen yedek, son senkronunuzdan daha eski görünüyor (CDN önbelleği). Birkaç dakika sonra tekrar İNDİR demeyi deneyin. Veri yine de uygulanıyor.'
+            });
+          }
           if (data.uploadedImages && Array.isArray(data.uploadedImages)) {
             const blacklist = new Set(mergedAdminSettings.deletedAssetIds);
-            const cloudList = data.uploadedImages.filter((img: any) => !blacklist.has(img.id));
+            // TAM mezarlık filtresi: removeUploadedImage 4 anahtar yazar (id, public_id,
+            // ham src, name:<küçük harf>). Yalnızca id filtresi, bulut kaydı farklı id
+            // taşıdığında silinmiş görselin İNDİR ile geri gelmesine izin veriyordu.
+            const isTombstoned = (img: any): boolean => {
+              if (!img) return false;
+              if (img.id && blacklist.has(img.id)) return true;
+              const pid = publicIdFromUrl(img.src);
+              if (pid && blacklist.has(pid)) return true;
+              if (img.src && blacklist.has(img.src)) return true;
+              if (img.name && blacklist.has('name:' + String(img.name).trim().toLowerCase())) return true;
+              return false;
+            };
+            const cloudList = data.uploadedImages.filter((img: any) => !isTombstoned(img));
             // YEREL + BULUT BİRLEŞTİRME (id / src / Cloudinary public_id bazlı; bulut kazanır).
             // Yerel kategori düzenlemeleri ve henüz senkronlanmamış görseller kaybolmaz.
             const mergedMap = new Map<string, any>();
@@ -1268,9 +1352,10 @@ export const useStore = create<StoreState>()(
 
           if (data.allSymbols && Array.isArray(data.allSymbols)) {
             const blacklist = new Set(mergedAdminSettings.hiddenSymbolIds);
+            // Bozuk/eski bulut kayıtlarına karşı normalizasyon: symbols dizisi yoksa boş liste.
             updates.allSymbols = data.allSymbols.map((cat: any) => ({
               ...cat,
-              symbols: cat.symbols.filter((s: any) => !blacklist.has(s.id))
+              symbols: (Array.isArray(cat?.symbols) ? cat.symbols : []).filter((s: any) => s && !blacklist.has(s.id))
             }));
           }
 
@@ -1380,6 +1465,12 @@ export const useStore = create<StoreState>()(
 
       refreshSymbols: () => {
         set((state) => {
+          // Bozuk/eski bulut kayıtlarına karşı normalizasyon: her kategorinin symbols
+          // dizisi garanti edilir (yoksa boş liste) — aksi halde forEach çöker.
+          const allCats: any[] = (Array.isArray(state.allSymbols) ? state.allSymbols : []).map((cat: any) => ({
+            ...cat,
+            symbols: Array.isArray(cat?.symbols) ? cat.symbols : [],
+          }));
           // Hard-Blacklist: Silinen sembollerin hiçbir şekilde geri gelmemesi için en başta tanımlıyoruz
           const hardBlacklist = new Set([
             'ex-11', 'ex-12', 'ex-13', 'ex-14', 'ex-15', 'ex-16', 'ex-17', 'ex-18',
@@ -1422,7 +1513,7 @@ export const useStore = create<StoreState>()(
           }));
 
           const placedIn = new Map<string, string>();
-          state.allSymbols.forEach(cat => {
+          allCats.forEach(cat => {
             cat.symbols.forEach((s: any) => {
               const prev = placedIn.get(s.id);
               if (prev === undefined) {
@@ -1438,7 +1529,7 @@ export const useStore = create<StoreState>()(
 
           // 2. allSymbols kategori haritası (bulut/özel kategoriler dahil korunur)
           const categoryMap = new Map();
-          state.allSymbols.forEach(cat => {
+          allCats.forEach(cat => {
             categoryMap.set(cat.id, { ...cat, symbols: [] });
           });
 
@@ -1490,7 +1581,7 @@ export const useStore = create<StoreState>()(
 
           // 4. Taşınan sembolleri hedef (admin) kategorideki yerine yerleştir
           const symbolById = new Map<string, any>();
-          state.allSymbols.forEach(cat => cat.symbols.forEach((s: any) => {
+          allCats.forEach(cat => cat.symbols.forEach((s: any) => {
             if (!symbolById.has(s.id)) symbolById.set(s.id, s);
           }));
           SYMBOL_CATEGORIES.forEach(cat => cat.symbols.forEach(s => {
@@ -1552,7 +1643,7 @@ export const useStore = create<StoreState>()(
           uniqueUploads.forEach(img => {
             const cur = img.category || 'uncategorized';
             if (categoryMap.has(cur)) return; // geçerli kategori kimliği → değiştirme
-            const mapped = mapCloudCategoryToId(cur, state.allSymbols as any);
+            const mapped = mapCloudCategoryToId(cur, allCats as any);
             if (mapped !== cur) img.category = mapped;
           });
 
@@ -2109,6 +2200,10 @@ export const useStore = create<StoreState>()(
     {
       name: 'kroki-v2',
       version: 23,
+      // Sürüm atlarken migrate unutulursa zustand TÜM kalıcı durumu siler
+      // (mezarlık kayıtları dahil → silinen görseller geri gelir).
+      // Pass-through migrate bunu garanti altına alır.
+      migrate: (persisted: any) => persisted,
       partialize: (state) => ({
         // allSymbols and uploadedImages are excluded to avoid localStorage quota issues (5MB limit)
         // They will be fetched from the cloud via restoreFromCloud/refreshSymbols

@@ -8,7 +8,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    // Secure centralized authentication check
     if (!verifyAuth(req, res)) {
       return;
     }
@@ -21,14 +20,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({ error: 'Cloudinary API anahtarları eksik.' });
     }
 
-    const { config } = req.body;
+    // Platform HTML 413 yerine temiz JSON hatası döndürmek için erken boyut kontrolü
+    const contentLength = Number(req.headers['content-length'] || 0);
+    if (contentLength > 4_000_000) {
+      return res.status(413).json({ error: 'Yedek çok büyük (>4MB). Ağır görsellerin buluta taşınmasını bekleyip tekrar deneyin.' });
+    }
+
+    const body = (req.body && typeof req.body === 'object') ? req.body : {};
+    const config = (body as { config?: unknown }).config;
     if (!config) {
       return res.status(400).json({ error: 'Config verisi eksik.' });
     }
-    
+
     const timestamp = Math.round(new Date().getTime() / 1000);
     const publicId = 'kroki_config_v2';
-    
+
     // Cloudinary signed upload signature calculation
     const paramsToSign = `invalidate=true&public_id=${publicId}&timestamp=${timestamp}`;
     const signature = crypto.createHash('sha1').update(paramsToSign + API_SECRET).digest('hex');
@@ -49,16 +55,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       { method: 'POST', body: formData }
     );
 
-    const data = await response.json();
-    
-    if (data.error) {
-      console.error('Cloudinary Save Error:', data.error);
-      return res.status(500).json({ error: data.error.message });
+    const data = await response.json().catch(() => null);
+
+    if (!response.ok || !data || (data as { error?: { message?: string } }).error) {
+      const msg = (data as { error?: { message?: string } })?.error?.message || 'Cloudinary kayıt hatası';
+      console.error('Cloudinary Save Error:', msg);
+      return res.status(response.ok ? 502 : (response.status || 502)).json({ error: msg });
     }
-    
-    return res.status(200).json(data);
-  } catch (error: any) {
+
+    // İstemciye yalnızca gerekli alanlar döndürülür (api_key/signature sızdırılmaz)
+    const d = data as { public_id?: string; secure_url?: string; bytes?: number; created_at?: string };
+    return res.status(200).json({
+      public_id: d.public_id,
+      secure_url: d.secure_url,
+      bytes: d.bytes,
+      timestamp: timestamp * 1000,
+    });
+  } catch (error: unknown) {
     console.error('Config Save Error:', error);
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: 'Sunucu hatası' });
   }
 }

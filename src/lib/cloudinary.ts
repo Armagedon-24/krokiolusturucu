@@ -161,16 +161,24 @@ export const cloudinary = {
 
   // Verileri geri yükle
   load: async (): Promise<any> => {
+    // Zaman aşımı: CDN yanıtsız kalırsa uygulama açılışı sonsuza dek spinner'da kalmasın
+    const fetchWithTimeout = (url: string, ms = 12000): Promise<Response> => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), ms);
+      return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(timer));
+    };
     try {
       // Hem .json uzantılı hem uzantısız deniyoruz (Cloudinary raw dosyaları bazen otomatik uzantı ekler)
+      // Not: '?v=' sorgusu Cloudinary CDN önbellek anahtarına dahil DEĞİLDİR; gerçek tazelik
+      // invalidate=true ile sağlanır. Bayat kopyalara karşı store tarafında timestamp kontrolü var.
       const urls = [
-        `https://res.cloudinary.com/${CLOUD_NAME}/raw/upload/kroki_config_v2?v=${Date.now()}`,
-        `https://res.cloudinary.com/${CLOUD_NAME}/raw/upload/kroki_config_v2.json?v=${Date.now()}`
+        `https://res.cloudinary.com/${CLOUD_NAME}/raw/upload/kroki_config_v2`,
+        `https://res.cloudinary.com/${CLOUD_NAME}/raw/upload/kroki_config_v2.json`
       ];
 
       for (const url of urls) {
         try {
-          const response = await fetch(url);
+          const response = await fetchWithTimeout(url);
           if (response.ok) {
             const data = await response.json();
   
@@ -189,7 +197,7 @@ export const cloudinary = {
   },
 
   // Silme işlemi
-  delete: async (url: string, authToken?: string) => {
+  delete: async (url: string, authToken?: string): Promise<{ success: boolean; error?: string }> => {
     // Cloudinary için backend API üzerinden sil
     if (url.includes('cloudinary.com')) {
       try {
@@ -201,9 +209,15 @@ export const cloudinary = {
           },
           body: JSON.stringify({ url }),
         });
-        return await response.json();
+        const data = await response.json().catch(() => ({} as any));
+        if (!response.ok || data?.error) {
+          console.error('Cloudinary delete error:', data?.error || response.status);
+          return { success: false, error: data?.error || `Silme başarısız (HTTP ${response.status})` };
+        }
+        return { success: true };
       } catch (error) {
         console.error('Cloudinary delete error:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Silme başarısız' };
       }
     }
     

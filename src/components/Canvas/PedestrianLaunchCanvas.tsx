@@ -22,20 +22,7 @@ export const PedestrianLaunchCanvas: React.FC = () => {
   const timeRef = useRef<number>(0);
   const [impactFlash, setImpactFlash] = useState(false);
 
-  if (!launchData) return null;
-
-  // Compute scene bounds dynamically
-  const groundY = 350;
-  const maxDistPx = Math.min(500, launchData.throwDistance * 15);
-  const maxHeightPx = Math.min(200, launchData.maxHeight * 30);
-  const startX = 200;
-  const endX = startX + maxDistPx;
-
-  const totalW = Math.max(endX + 100, 500);
-
-  const launchState = getLaunchState(currentTime, duration, startX, groundY, endX, maxHeightPx);
-
-  // Animation loop
+  // Animation loop (hooks must run unconditionally — early return below)
   useEffect(() => {
     if (!isPlaying) {
       lastTimeRef.current = 0;
@@ -85,6 +72,19 @@ export const PedestrianLaunchCanvas: React.FC = () => {
     };
   }, [isPlaying, speed, loop, duration, setPedestrianLaunch, currentTime]);
 
+  if (!launchData) return null;
+
+  // Compute scene bounds dynamically
+  const groundY = 350;
+  const maxDistPx = Math.min(500, launchData.throwDistance * 15);
+  const maxHeightPx = Math.min(200, launchData.maxHeight * 30);
+  const startX = 200;
+  const endX = startX + maxDistPx;
+
+  const totalW = Math.max(endX + 100, 500);
+
+  const launchState = getLaunchState(currentTime, duration, startX, groundY, endX, maxHeightPx);
+
   return (
     <Group>
       {/* Ground */}
@@ -128,8 +128,8 @@ export const PedestrianLaunchCanvas: React.FC = () => {
       <Group>
         <Rect x={startX - 100} y={groundY - 20} width={60} height={22} fill="#E53935" stroke="#b71c1c" strokeWidth={2} cornerRadius={3} />
         <Rect x={startX - 100 + 40} y={groundY - 18} width={14} height={16} fill="rgba(200,230,255,0.4)" cornerRadius={1} />
-        <Circle cx={startX - 100 + 10} cy={groundY + 2} r={4} fill="#1a1a1a" />
-        <Circle cx={startX - 100 + 52} cy={groundY + 2} r={4} fill="#1a1a1a" />
+        <Circle x={startX - 100 + 10} y={groundY + 2} radius={4} fill="#1a1a1a" />
+        <Circle x={startX - 100 + 52} y={groundY + 2} radius={4} fill="#1a1a1a" />
         <Text x={startX - 100} y={groundY - 32} width={60} text={`${launchData.vehicleSpeed} km/h`} fontSize={9} fontStyle="bold" fill="#E53935" align="center" />
       </Group>
 
