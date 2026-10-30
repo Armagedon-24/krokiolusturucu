@@ -1377,6 +1377,16 @@ export const useStore = create<StoreState>()(
             });
           }
 
+          // 7. Yüklü görsellerin eski/ham kategori değerlerini gerçek kategori kimliklerine
+          //    normalize et (ör. bulut klasör adı 'Araçlar' → 'vehicles', 'root' → 'uncategorized').
+          //    Geçerli kategori kimliği atanmış görsellere (adminin atadığı kategori) DOKUNULMAZ.
+          uniqueUploads.forEach(img => {
+            const cur = img.category || 'uncategorized';
+            if (categoryMap.has(cur)) return; // geçerli kategori kimliği → değiştirme
+            const mapped = mapCloudCategoryToId(cur, state.allSymbols as any);
+            if (mapped !== cur) img.category = mapped;
+          });
+
           return {
             allSymbols: Array.from(categoryMap.values()),
             uploadedImages: uniqueUploads
