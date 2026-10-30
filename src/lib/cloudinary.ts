@@ -2,6 +2,48 @@ const CLOUD_NAME = 'dzen3qvgp';
 const UPLOAD_PRESET = 'kroki-olusturucu';
 
 /**
+ * İsim/kategori karşılaştırması için ortak normalizasyon:
+ * uzantı, özel karakter ve boşluk farklarını yok sayar; Türkçe karakterleri katlar
+ * (ç→c, ğ→g, ı→i, ö→o, ş→s, ü→u). Böylece bulut klasör adları ile uygulama
+ * kategori başlıkları/sembol adları güvenle eşleştirilir.
+ */
+export const normKey = (s?: string): string =>
+  (s || '')
+    .toString()
+    .trim()
+    .toLowerCase()
+    .replace(/\?v=\d+$/, '')
+    .replace(/\.[a-z0-9]+$/, '')
+    .replace(/ç/g, 'c')
+    .replace(/ğ/g, 'g')
+    .replace(/ı/g, 'i')
+    .replace(/ö/g, 'o')
+    .replace(/ş/g, 's')
+    .replace(/ü/g, 'u')
+    .replace(/â/g, 'a')
+    .replace(/î/g, 'i')
+    .replace(/û/g, 'u')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ');
+
+/**
+ * Bulut klasör/kategori adını uygulamadaki kategori kimliğine (cat.id) eşler.
+ * Örn: 'ARAÇLAR' -> 'vehicles', 'Delil İşaretleri' -> 'evidence', 'vehicles' -> 'vehicles'.
+ * Eşleşme yoksa 'uncategorized' döner — böylece buluttan yüklenen görseller
+ * hayalet/uydurma kategorilere düşmez, kategori sistemi bozulmaz.
+ */
+export const mapCloudCategoryToId = (
+  raw: string | undefined,
+  allSymbols: readonly { id: string, name: string }[]
+): string => {
+  const key = normKey(raw);
+  if (!key || key === 'uncategorized' || key === 'kroki olusturucu') return 'uncategorized';
+  const hit = allSymbols.find((c) => normKey(c.name) === key || normKey(c.id) === key);
+  return hit ? hit.id : 'uncategorized';
+};
+
+/**
  * Cloudinary URL'sinden transform parametrelerinden bağımsız benzersiz public_id türetir.
  * Mükerrer kontrolü ve silinen görsellerin yeniden gelmemesi için kullanılır.
  * Ör: https://res.cloudinary.com/<cloud>/image/upload/f_auto,q_auto,w_80/v123/kroki-olusturucu/uncategorized/kedi.png

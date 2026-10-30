@@ -4,7 +4,7 @@ import type { CanvasObject, CanvasState, ProjectInfo, Symbol, ScaleCalibration, 
 import { v4 as uuidv4 } from 'uuid';
 import { SYMBOL_CATEGORIES } from '../constants/symbols';
 import { createKrokiTemplate, createDiagramTemplate } from '../constants/templates';
-import { cloudinary as cloud, publicIdFromUrl } from '../lib/cloudinary';
+import { cloudinary as cloud, publicIdFromUrl, normKey, mapCloudCategoryToId } from '../lib/cloudinary';
 
 const TODAY = new Date().toISOString().split('T')[0];
 const DEFAULT_DRAWING_AREA = { x: 17, y: 167, width: 966, height: 1126 } as const;
@@ -45,6 +45,14 @@ interface StoreState extends CanvasState {
   applyTemplate: (type: 'kroki' | 'diagram') => void;
   removeSymbol: (catId: string, symbolId: string) => void;
   setAllSymbols: (allSymbols: readonly { readonly id: string, readonly name: string, readonly symbols: readonly Symbol[] }[]) => void;
+  /** Kalıcı sembol yerleşim haritası (kategori ID -> sıralı sembol ID listesi) + tazelik damgası.
+   *  Adminin taşıdığı kategori düzeni sayfa yenilense ve bulut erişilemese dahi korunur. */
+  symbolPlacements: { savedAt: number, cats: Record<string, string[]> };
+  /** Sembol yerleşiminin yerel olarak son değiştirilme zamanı (sürükleme vb.) */
+  _placementsSavedAt: number;
+  /** allSymbols'ın bulutla son eşleşme zamanı — bulutla başarılı senkron/geri yüklemede güncellenir.
+   *  savedAt > allSymbolsSyncedAt ise yerel yerleşim buluttan daha tazedir ve öncelik kazanır. */
+  allSymbolsSyncedAt: number;
   isAdmin: boolean;
   setIsAdmin: (isAdmin: boolean, password?: string) => void;
   syncToCloud: (silent?: boolean) => void;
@@ -158,6 +166,9 @@ export const useStore = create<StoreState>()(
     (set, get) => ({
       objects: [],
       allSymbols: SYMBOL_CATEGORIES,
+      symbolPlacements: { savedAt: 0, cats: {} },
+      _placementsSavedAt: 0,
+      allSymbolsSyncedAt: 0,
       uploadedImages: [],
       backgroundImage: null,
       backgroundOpacity: 1,
@@ -929,7 +940,9 @@ export const useStore = create<StoreState>()(
 },
 
       setAllSymbols: (allSymbols) => {
-        set({ allSymbols });
+        // Yerleşim damgası: admin kategori düzenini değiştirdi (taşıma/sıralama).
+        // Bulut senkronu başarısız olsa bile bu düzen localStorage'da kalıcı olur.
+        set({ allSymbols, _placementsSavedAt: Date.now() });
         if (get().isAdmin) {
           get().syncToCloud(true);
         }
@@ -1015,6 +1028,9 @@ export const useStore = create<StoreState>()(
               description: `Kütüphane ve çalışma durumu başarıyla buluta kaydedildi.`
             });
           }
+          // Bulut artık güncel: yerel yerleşim damgasıyla aynı tazelikte.
+          // Bundan sonra çakışmada bulut yerleşimi öncelik kazanır.
+          set({ allSymbolsSyncedAt: Date.now() });
         } catch (error: unknown) {
           console.error('Sync Error:', error);
           if (!silent) {
@@ -1054,7 +1070,31 @@ export const useStore = create<StoreState>()(
 
           if (data.uploadedImages && Array.isArray(data.uploadedImages)) {
             const blacklist = new Set(mergedAdminSettings.deletedAssetIds);
-            updates.uploadedImages = data.uploadedImages.filter((img: any) => !blacklist.has(img.id));
+            const cloudList = data.uploadedImages.filter((img: any) => !blacklist.has(img.id));
+            // YEREL + BULUT BİRLEŞTİRME (id / src / Cloudinary public_id bazlı; bulut kazanır).
+            // Yerel kategori düzenlemeleri ve henüz senkronlanmamış görseller kaybolmaz.
+            const mergedMap = new Map<string, any>();
+            const pidToId = new Map<string, string>();
+            const srcSeen = new Set<string>();
+            get().uploadedImages.forEach((img: any) => {
+              mergedMap.set(img.id, img);
+              if (img.src) srcSeen.add(img.src);
+              const pid = publicIdFromUrl(img.src);
+              if (pid) pidToId.set(pid, img.id);
+            });
+            cloudList.forEach((img: any) => {
+              const pid = publicIdFromUrl(img.src);
+              const existingId = (pid && pidToId.get(pid)) || (srcSeen.has(img.src) ? img.id : null) || (mergedMap.has(img.id) ? img.id : null);
+              if (existingId) {
+                const existing = mergedMap.get(existingId);
+                if (existing) mergedMap.set(existingId, { ...existing, ...img, category: img.category || existing.category });
+                return;
+              }
+              mergedMap.set(img.id, img);
+              if (img.src) srcSeen.add(img.src);
+              if (pid) pidToId.set(pid, img.id);
+            });
+            updates.uploadedImages = Array.from(mergedMap.values());
           }
 
           if (data.allSymbols && Array.isArray(data.allSymbols)) {
@@ -1141,7 +1181,11 @@ export const useStore = create<StoreState>()(
           });
           
           get().refreshSymbols();
-          
+
+          // Bulut verisi uygulandı: bulut yerleşimi artık güncel sayılır.
+          // (Çakışma kuralı: savedAt > allSymbolsSyncedAt ise yerel yerleşim kazanır)
+          set({ allSymbolsSyncedAt: Date.now() });
+
           if (!silent) {
             get().addNotification({
               type: 'success',
@@ -1169,7 +1213,7 @@ export const useStore = create<StoreState>()(
         set((state) => {
           // Hard-Blacklist: Silinen sembollerin hiçbir şekilde geri gelmemesi için en başta tanımlıyoruz
           const hardBlacklist = new Set([
-            'ex-11', 'ex-12', 'ex-13', 'ex-14', 'ex-15', 'ex-16', 'ex-17', 'ex-18', 
+            'ex-11', 'ex-12', 'ex-13', 'ex-14', 'ex-15', 'ex-16', 'ex-17', 'ex-18',
             'p-4', 'p-10', 'p-11', 'p-12', // Silinen İnsan Figürleri (Kesin Yasaklı)
             ...(state.adminSettings.deletedAssetIds || []),
             ...(state.adminSettings.hiddenSymbolIds || [])
@@ -1190,52 +1234,142 @@ export const useStore = create<StoreState>()(
             if (pid) seenPids.add(pid);
           });
 
-          // 2. allSymbols Deduplication and Merging
-          const categoryMap = new Map();
+          // 2. KATEGORİ SİSTEMİ KORUMASI — "admin yerleşimi kazanır" (placement wins)
+          // Mevcut yerleşim haritası: hangi sembol hangi kategorideyse orada KALIR.
+          // Admin bir sembolü sürükleyip başka kategoriye taşıdıysa, hardcoded varsayılan
+          // kategori onu ASLA geri çekmez; sayfa yenilense ve buluttan yüklense dahi
+          // sembol adminin atadığı kategoride kalır.
+          const localSavedAt = state.symbolPlacements?.savedAt || 0;
+          const syncedAt = state.allSymbolsSyncedAt || 0;
+          // Yerel yerleşim buluttan daha taze ise (ör. taşıma sonrası senkron başarısızsa)
+          // yerel kategori düzeni öncelik kazanır; aksi halde bulut/mevcut durum esastır.
+          const localPlacementWins = localSavedAt > syncedAt;
+          const persistedCats: Record<string, string[]> = state.symbolPlacements?.cats || {};
+
+          const placedIn = new Map<string, string>();
           state.allSymbols.forEach(cat => {
-            const cleanSymbols = cat.symbols.filter((s: any) => !hardBlacklist.has(s.id));
-            categoryMap.set(cat.id, { ...cat, symbols: cleanSymbols });
+            cat.symbols.forEach((s: any) => {
+              if (!placedIn.has(s.id)) placedIn.set(s.id, cat.id);
+            });
           });
 
-          // SYMBOL_CATEGORIES (Hardcoded) ile birleştir ve yasaklıları filtrele
+          // 2. allSymbols kategori haritası (bulut/özel kategoriler dahil korunur)
+          const categoryMap = new Map();
+          state.allSymbols.forEach(cat => {
+            categoryMap.set(cat.id, { ...cat, symbols: [] });
+          });
+
+          // localStorage'daki kalıcı yerleşimler: bulut geri yüklemesi başarısız olsa
+          // bile (çevrimdışı, 401 vb.) adminin kategori düzeni bozulmaz.
+          // Hedef kategori gerçekten varsa geçerlidir; bulut yerleşimi her zaman önceliklidir.
+          Object.entries(persistedCats).forEach(([cid, ids]) => {
+            if (!categoryMap.has(cid)) return; // hedef kategori artık yok → yoksay
+            (ids || []).forEach(sid => {
+              if (localPlacementWins) {
+                placedIn.set(sid, cid); // yerel daha taze: bulut/varsayılan yerleşimi geçersiz kılır
+              } else if (!placedIn.has(sid)) {
+                placedIn.set(sid, cid); // yerel, eksik sembol kimliklerini tamamlar
+              }
+            });
+          });
+
+          // 3. SYMBOL_CATEGORIES (Hardcoded) ile birleştir — yerleşim korumasıyla
           SYMBOL_CATEGORIES.forEach(hardCat => {
             const existingCat = categoryMap.get(hardCat.id);
-            
-            if (!existingCat) {
-              // Yeni kategori, yasaklıları filtreleyerek ekle
-              const cleanHardSymbols = hardCat.symbols.filter(s => !hardBlacklist.has(s.id));
-              categoryMap.set(hardCat.id, { ...hardCat, symbols: cleanHardSymbols });
-            } else {
-              // Kategori zaten var, sembolleri merge et
-              const symbolMap = new Map();
-              
-              // Önce mevcut sembolleri ekle (yasaklı olmayanları)
+            const symbolMap = new Map<string, any>();
+
+            // Mevcut semboller: başka kategoriye taşınanlar bu kategoriden ÇIKARILIR
+            if (existingCat) {
               existingCat.symbols.forEach((s: any) => {
-                if (!hardBlacklist.has(s.id)) {
-                  symbolMap.set(s.id, s);
-                }
+                if (hardBlacklist.has(s.id)) return;
+                const target = placedIn.get(s.id);
+                if (target && target !== hardCat.id) return; // admin başka kategoriye taşıdı
+                symbolMap.set(s.id, s);
               });
+            }
 
-              // Sonra hardcoded sembolleri ekle (yasaklı olmayanları)
-              hardCat.symbols.forEach(hardSym => {
-                if (!hardBlacklist.has(hardSym.id)) {
-                  const existingSym = symbolMap.get(hardSym.id);
-                  // Merge: Hardcoded veriler güncel kalsın ama mevcut özellikler (varsa) korunsun
-                  symbolMap.set(hardSym.id, existingSym ? { ...existingSym, ...hardSym } : hardSym);
-                }
-              });
+            // Hardcoded semboller: taşınmış olanlar varsayılan kategoriye GERİ EKLENMEZ
+            hardCat.symbols.forEach(hardSym => {
+              if (hardBlacklist.has(hardSym.id)) return;
+              const target = placedIn.get(hardSym.id);
+              if (target && target !== hardCat.id) return; // admin yerleşimi korunur
+              const existingSym = symbolMap.get(hardSym.id);
+              // Merge: Hardcoded veriler güncel kalsın ama mevcut özellikler (varsa) korunsun
+              symbolMap.set(hardSym.id, existingSym ? { ...existingSym, ...hardSym } : hardSym);
+            });
 
-              categoryMap.set(hardCat.id, {
-                ...existingCat,
-                name: hardCat.name,
-                symbols: Array.from(symbolMap.values())
-              });
+            categoryMap.set(hardCat.id, {
+              ...(existingCat || hardCat),
+              name: hardCat.name,
+              symbols: Array.from(symbolMap.values())
+            });
+          });
+
+          // 4. Taşınan sembolleri hedef (admin) kategorideki yerine yerleştir
+          const symbolById = new Map<string, any>();
+          state.allSymbols.forEach(cat => cat.symbols.forEach((s: any) => {
+            if (!symbolById.has(s.id)) symbolById.set(s.id, s);
+          }));
+          SYMBOL_CATEGORIES.forEach(cat => cat.symbols.forEach(s => {
+            if (!symbolById.has(s.id)) symbolById.set(s.id, s);
+          }));
+
+          placedIn.forEach((cid, sid) => {
+            if (hardBlacklist.has(sid)) return;
+            const targetCat = categoryMap.get(cid);
+            if (!targetCat) return; // hedef kategori yoksa sembol varsayılan yerinde kalır
+            const alreadyThere = targetCat.symbols.some((s: any) => s.id === sid);
+            if (!alreadyThere) {
+              const sym = symbolById.get(sid);
+              if (sym) targetCat.symbols.push(sym);
             }
           });
 
-          return { 
-            allSymbols: Array.from(categoryMap.values()), 
-            uploadedImages: uniqueUploads 
+          // 5. Küresel mükerrer temizliği: her sembol kimliği yalnızca BİR kategoride bulunur.
+          //    Hem varsayılan hem admin kategorisinde görünen eski kayıtlarda admin yerleşimi kazanır.
+          const originCat = new Map<string, string>();
+          SYMBOL_CATEGORIES.forEach(cat => cat.symbols.forEach(s => {
+            if (!originCat.has(s.id)) originCat.set(s.id, cat.id);
+          }));
+          const seenCat = new Map<string, string>(); // sembol kimliği -> ilk görüldüğü kategori
+          categoryMap.forEach((cat: any) => {
+            const kept: any[] = [];
+            cat.symbols.forEach((s: any) => {
+              const first = seenCat.get(s.id);
+              if (first === undefined) {
+                seenCat.set(s.id, cat.id);
+                kept.push(s);
+              } else if (first === originCat.get(s.id) && cat.id !== originCat.get(s.id)) {
+                // İlk kopya varsayılan kategorideydi; adminin taşıdığı kategorideki kopya kazanır
+                const firstCat = categoryMap.get(first);
+                if (firstCat) firstCat.symbols = firstCat.symbols.filter((x: any) => x.id !== s.id);
+                seenCat.set(s.id, cat.id);
+                kept.push(s);
+              }
+              // Aksi halde mükerrer kopyadır → düşürülür
+            });
+            cat.symbols = kept;
+          });
+
+          // 6. Kategori içi sıra: yerel yerleşim daha tazese adminin sıralaması uygulanır.
+          //    (Bulut daha tazese bulutun sıralaması zaten merge ile korunmuştur.)
+          if (localPlacementWins) {
+            categoryMap.forEach((cat: any) => {
+              const order: string[] | undefined = persistedCats[cat.id];
+              if (!order || order.length === 0) return;
+              const idx = new Map<string, number>();
+              order.forEach((sid, i) => idx.set(sid, i));
+              cat.symbols = [...cat.symbols].sort((a: any, b: any) => {
+                const ia = idx.has(a.id) ? idx.get(a.id)! : Number.MAX_SAFE_INTEGER;
+                const ib = idx.has(b.id) ? idx.get(b.id)! : Number.MAX_SAFE_INTEGER;
+                return ia - ib;
+              });
+            });
+          }
+
+          return {
+            allSymbols: Array.from(categoryMap.values()),
+            uploadedImages: uniqueUploads
           };
         });
       },
@@ -1284,21 +1418,17 @@ export const useStore = create<StoreState>()(
           const deletedKeys = new Set<string>(get().adminSettings.deletedAssetIds || []);
           const hiddenIds = new Set(get().adminSettings.hiddenSymbolIds || []);
 
-          // İsim+kategori parmak izleri: uygulamadaki sembollerin bulut aynaları
-          // (aynı kategori başlığı altında aynı isim) mükerrer olarak eklenmez
-          const normKey = (s?: string) => (s || '').toString().trim().toLowerCase()
-            .replace(/\?v=\d+$/, '')
-            .replace(/\.[a-z0-9]+$/, '')
-            .replace(/[^a-z0-9çğıöşüâîû]+/gi, ' ')
-            .trim().replace(/\s+/g, ' ');
-          const libraryKeys = new Set<string>();
+          // Kütüphane ad parmak izleri (yalnızca İSİM bazlı): admin bir sembolü/görseli
+          // başka kategoriye taşıdıysa, buluttaki eski klasör kopyası onu ESKİ kategorisine
+          // geri ekleyemez — kategori sistemi bozulmaz, mükerrer oluşmaz.
+          const libraryNames = new Set<string>();
           get().allSymbols.forEach(cat => cat.symbols.forEach((s: any) => {
             const n = normKey(s.name);
-            if (n) libraryKeys.add(`${normKey(cat.name)}|${n}`);
+            if (n) libraryNames.add(n);
           }));
           get().uploadedImages.forEach(img => {
             const n = normKey(img.name);
-            if (n) libraryKeys.add(`${normKey(img.category)}|${n}`);
+            if (n) libraryNames.add(n);
           });
 
           let recoveredCount = 0;
@@ -1311,16 +1441,20 @@ export const useStore = create<StoreState>()(
             const isDeleted = deletedKeys.has(asset.id) || deletedKeys.has(assetPid) ||
                               deletedKeys.has(asset.src) || (nameKey ? deletedKeys.has(nameKey) : false) ||
                               hiddenIds.has(asset.id) || hiddenIds.has(assetPid);
-            // Zaten kütüphanede varsa (URL, public_id veya isim+kategori eşleşmesi) tekrar eklenmez
+            // Zaten kütüphanede varsa (URL, public_id veya İSİM eşleşmesi) tekrar eklenmez.
+            // İsim eşleşmesi kategori FARKLI olsa bile engeller: admin taşımışsa eski
+            // kategoriye mükerrer kopya eklenmez, adminin atadığı kategori korunur.
             const isAlreadyPresent = currentUrls.has(asset.src) || currentPids.has(asset.id) || currentPids.has(assetPid) ||
-                                     libraryKeys.has(`${normKey(asset.category)}|${normKey(asset.name)}`);
+                                     libraryNames.has(normKey(asset.name));
 
             if (!isAlreadyPresent && !isDeleted) {
               newImages.push({
                 id: asset.id,
                 src: asset.src,
                 name: asset.name,
-                category: asset.category || 'uncategorized'
+                // Bulut klasör adı ('ARAÇLAR' gibi) uygulama kategori kimliğine eşlenir ('vehicles') —
+                // hayalet kategori oluşmaz, görsel doğru başlık altında görünür.
+                category: mapCloudCategoryToId(asset.category, get().allSymbols as any)
               });
               currentUrls.add(asset.src);
               currentPids.add(assetPid);
@@ -1809,6 +1943,19 @@ export const useStore = create<StoreState>()(
         // şifre boş kaldığı için sessizce 401 ile başarısız olur.
         adminSettings: state.adminSettings,
         adminPassword: state.adminPassword,
+        // Kategori sistemi koruması: sembol yerleşimleri (kategori + sıra) kalıcı.
+        // Sayfa yenilense dahi adminin oluşturduğu kategori düzeni bozulmaz.
+        symbolPlacements: {
+          savedAt: state._placementsSavedAt || 0,
+          cats: Object.fromEntries(
+            (state.allSymbols || []).map((cat: any) => [cat.id, (cat.symbols || []).map((s: any) => s.id)])
+          ),
+        },
+        _placementsSavedAt: state._placementsSavedAt || 0,
+        allSymbolsSyncedAt: state.allSymbolsSyncedAt || 0,
+        // Yüklenen görseller: yalnızca bulut URL referansları (hacimli base64'ler hariç).
+        // Kategori atamaları sayfa yenilense dahi yerelde korunur.
+        uploadedImages: (state.uploadedImages || []).filter((img: any) => img.src && /^https?:\/\//i.test(img.src)),
         symbolUsage: state.symbolUsage,
         visualSettings: state.visualSettings,
         savedAnimations: state.savedAnimations,
