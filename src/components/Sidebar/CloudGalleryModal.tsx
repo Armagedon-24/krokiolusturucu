@@ -11,6 +11,18 @@ interface CloudAsset {
   category: string;
 }
 
+/** İsim/kategori karşılaştırması için normalizasyon: uzantı, özel karakter ve boşluk farklarını yok sayar */
+const normKey = (s?: string): string =>
+  (s || '')
+    .toString()
+    .trim()
+    .toLowerCase()
+    .replace(/\?v=\d+$/, '')
+    .replace(/\.[a-z0-9]+$/, '')
+    .replace(/[^a-z0-9çğıöşüâîû]+/gi, ' ')
+    .trim()
+    .replace(/\s+/g, ' ');
+
 /**
  * Bulut Galerisi: Cloudinary deposundaki TÜM görselleri listeler;
  * kullanıcı seçtiklerini kütüphaneye (uploadedImages) yükler.
@@ -70,6 +82,18 @@ export const CloudGalleryModal: React.FC<{ onClose: () => void }> = ({ onClose }
     return s;
   }, [uploadedImages, allSymbols]);
 
+  // Kütüphane ad+kategori parmak izleri: buluttaki sembol aynalarını mükerrer sayar
+  const libraryKeys = useMemo(() => {
+    const s = new Set<string>();
+    const add = (name?: string, cat?: string) => {
+      const n = normKey(name);
+      if (n) s.add(`${normKey(cat)}|${n}`);
+    };
+    allSymbols.forEach(c => c.symbols.forEach((sym: any) => add(sym.name, c.name)));
+    uploadedImages.forEach(i => add(i.name, i.category));
+    return s;
+  }, [allSymbols, uploadedImages]);
+
   const deletedKeys = useMemo(
     () => new Set<string>(adminSettings.deletedAssetIds || []),
     [adminSettings.deletedAssetIds]
@@ -84,8 +108,9 @@ export const CloudGalleryModal: React.FC<{ onClose: () => void }> = ({ onClose }
 
   const isExistingAsset = useCallback((a: CloudAsset) => {
     const pid = publicIdFromUrl(a.src);
-    return existingUrls.has(a.src) || (pid ? existingPids.has(pid) : false);
-  }, [existingUrls, existingPids]);
+    const key = `${normKey(a.category)}|${normKey(a.name)}`;
+    return existingUrls.has(a.src) || (pid ? existingPids.has(pid) : false) || libraryKeys.has(key);
+  }, [existingUrls, existingPids, libraryKeys]);
 
   const visibleAssets = useMemo(() => {
     if (!assets) return [];

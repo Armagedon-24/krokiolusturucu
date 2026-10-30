@@ -1284,6 +1284,23 @@ export const useStore = create<StoreState>()(
           const deletedKeys = new Set<string>(get().adminSettings.deletedAssetIds || []);
           const hiddenIds = new Set(get().adminSettings.hiddenSymbolIds || []);
 
+          // İsim+kategori parmak izleri: uygulamadaki sembollerin bulut aynaları
+          // (aynı kategori başlığı altında aynı isim) mükerrer olarak eklenmez
+          const normKey = (s?: string) => (s || '').toString().trim().toLowerCase()
+            .replace(/\?v=\d+$/, '')
+            .replace(/\.[a-z0-9]+$/, '')
+            .replace(/[^a-z0-9çğıöşüâîû]+/gi, ' ')
+            .trim().replace(/\s+/g, ' ');
+          const libraryKeys = new Set<string>();
+          get().allSymbols.forEach(cat => cat.symbols.forEach((s: any) => {
+            const n = normKey(s.name);
+            if (n) libraryKeys.add(`${normKey(cat.name)}|${n}`);
+          }));
+          get().uploadedImages.forEach(img => {
+            const n = normKey(img.name);
+            if (n) libraryKeys.add(`${normKey(img.category)}|${n}`);
+          });
+
           let recoveredCount = 0;
           const newImages = [...uploadedImages];
 
@@ -1294,8 +1311,9 @@ export const useStore = create<StoreState>()(
             const isDeleted = deletedKeys.has(asset.id) || deletedKeys.has(assetPid) ||
                               deletedKeys.has(asset.src) || (nameKey ? deletedKeys.has(nameKey) : false) ||
                               hiddenIds.has(asset.id) || hiddenIds.has(assetPid);
-            // Zaten kütüphanede varsa (URL veya public_id eşleşmesi) tekrar eklenmez
-            const isAlreadyPresent = currentUrls.has(asset.src) || currentPids.has(asset.id) || currentPids.has(assetPid);
+            // Zaten kütüphanede varsa (URL, public_id veya isim+kategori eşleşmesi) tekrar eklenmez
+            const isAlreadyPresent = currentUrls.has(asset.src) || currentPids.has(asset.id) || currentPids.has(assetPid) ||
+                                     libraryKeys.has(`${normKey(asset.category)}|${normKey(asset.name)}`);
 
             if (!isAlreadyPresent && !isDeleted) {
               newImages.push({

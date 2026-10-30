@@ -22,6 +22,19 @@ import { processUploadedSymbolImage } from '../../utils/canvasUtils';
 import { getOptimizedCloudinaryUrl } from '../../lib/cloudinary';
 import { CloudGalleryModal } from './CloudGalleryModal';
 
+/** Sembol adını sade görünüm için temizler (uzantı, görünüm ekleri, kimlik parçaları) */
+const cleanSymbolName = (raw: string): string =>
+  (raw || '')
+    .replace(/\.[^/.]+$/, "")
+    .replace(/\?v=\d+/, "")
+    .replace(/üstten\s+görünüm/gi, '(Üstten)')
+    .replace(/sağdan\s+görünüm/gi, '(Sağdan)')
+    .replace(/soldan\s+görünüm/gi, '(Soldan)')
+    .replace(/\s[a-z0-9]{6}$/, '')
+    .replace(/[-_]/g, ' ')
+    .replace(/\d+$/, '')
+    .trim();
+
 export const Sidebar: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'symbols' | 'uploads' | 'animations' | 'calculators'>('symbols');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -752,34 +765,19 @@ export const Sidebar: React.FC = () => {
             <CalculatorIndex />
           )}
         </div>
-      </div>
 
-      {/* Symbol Tooltip — sade: sadece isim, butonları kapatmaz */}
-      {hoveredSymbol && (
+        {/* Sembol adı çubuğu — panelin en altında sabit ince şerit; hiçbir düğmeyi kapatmaz */}
         <div
-          className="fixed z-[60] max-w-[220px] bg-[#161616]/95 backdrop-blur-sm border border-[#F5C518]/40 rounded-md px-2.5 py-1 pointer-events-none animate-in fade-in duration-100"
-          style={{
-            left: Math.max(8, Math.min(window.innerWidth - 235, hoveredSymbol.rect.right + 10)),
-            top: Math.max(6, Math.min(
-              window.innerHeight - 36,
-              hoveredSymbol.rect.top + hoveredSymbol.rect.height / 2 - 13
-            )),
-          }}
+          className={`flex-shrink-0 w-full bg-[#141414] px-3 text-center transition-all duration-150 overflow-hidden ${
+            hoveredSymbol ? 'py-1.5 border-t border-[#F5C518]/25 opacity-100' : 'h-0 py-0 border-t border-transparent opacity-0'
+          }`}
+          aria-live="polite"
         >
-          <span className="block text-[11px] font-bold text-[#F5C518] truncate leading-tight">
-            {hoveredSymbol.name
-              .replace(/\.[^/.]+$/, "")
-              .replace(/\?v=\d+/, "")
-              .replace(/üstten\s+görünüm/gi, '(Üstten)')
-              .replace(/sağdan\s+görünüm/gi, '(Sağdan)')
-              .replace(/soldan\s+görünüm/gi, '(Soldan)')
-              .replace(/\s[a-z0-9]{6}$/, '')
-              .replace(/[-_]/g, ' ')
-              .replace(/\d+$/, '')
-              .trim()}
+          <span className="block text-[11px] font-bold text-[#F5C518] truncate leading-tight tracking-wide">
+            {hoveredSymbol ? cleanSymbolName(hoveredSymbol.name) : ''}
           </span>
         </div>
-      )}
+      </div>
 
       {/* Bulut Galerisi — Cloudinary'deki görselleri kütüphaneye yükleme */}
       {cloudGalleryOpen && (
