@@ -12,6 +12,7 @@ import {
   Settings2,
   Play,
   CloudDownload,
+  Sparkles,
 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { v4 as uuidv4 } from 'uuid';
@@ -452,6 +453,15 @@ export const Sidebar: React.FC = () => {
                         </h3>
                         {isAdmin && (
                           <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => window.dispatchEvent(new CustomEvent('open-image-generator', { detail: { category: cat.id } }))}
+                              className="cursor-pointer text-[9px] bg-[#2a2a2a] hover:bg-[#333] border border-[#444] text-gray-300 px-1.5 py-0.5 rounded flex items-center gap-1 transition-colors"
+                              title={`AI ile ${cat.name} kategorisine görsel üret`}
+                              aria-label={`AI ile ${cat.name} kategorisine görsel üret`}
+                            >
+                              <Sparkles size={10} className="text-violet-400" />
+                              AI
+                            </button>
                             <label className="cursor-pointer text-[9px] bg-[#2a2a2a] hover:bg-[#333] border border-[#444] text-gray-300 px-1.5 py-0.5 rounded flex items-center gap-1 transition-colors">
                               <Upload size={10} className="text-[#F5C518]" />
                               YÜKLE

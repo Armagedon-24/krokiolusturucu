@@ -1,4 +1,27 @@
-# React + TypeScript + Vite
+# Kroki Oluşturucu
+
+Trafik kazası ve adli olay kroki çizim uygulaması (React + TypeScript + Vite + Vercel Serverless + Cloudinary).
+
+## AI Görsel Üretici (Yönetici Özelliği)
+
+Admin girişi yapıldıktan sonra üst bardaki **GÖRSEL ÜRET** düğmesi (veya sol menüde her kategori başlığındaki **AI** düğmesi) ile yapay zekâ destekli görsel üretimi yapılır:
+
+1. Yönetici, üretmek istediği görseli **tarif eder** ve görselin **kaydedileceği kategoriyi** seçer.
+2. Görsel üretilir ve yöneticiye **önizlenir** (beyaz zemin otomatik olarak şeffaflaştırılır).
+3. Yönetici **onaylarsa** görsel, seçilen kategorinin Cloudinary klasörüne (`kroki-olusturucu/<kategori>/`) kaydedilir ve kütüphanede o kategoride yerini alır. Onaylamazsa hiçbir kayıt oluşmaz.
+
+### Sağlayıcı Yapılandırması (Vercel ortam değişkenleri)
+
+| Değişken | Zorunlu? | Açıklama |
+| --- | --- | --- |
+| `OPENAI_API_KEY` | İsteğe bağlı | Tanımlıysa OpenAI (gpt-image-1, yedekte dall-e-3) kullanılır. Tanımlı değilse ücretsiz Pollinations.ai devreye girer (yaklaşık 45 saniyede 1 üretim limiti vardır). |
+| `POLLINATIONS_TOKEN` | İsteğe bağlı | Pollinations "pollen" anahtarı — ücretsiz katmanın IP bazlı üretim limitini esnetir (paylaşımlı sunucusuz çıkış IP'leri için önerilir). |
+| `APP_AUTH_TOKEN` | Zorunlu | Admin şifresi (tüm `/api/*` uçları fail-closed'dur). |
+| `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` | Zorunlu | Onaylanan görsellerin kategori klasörlerine yüklenmesi için. |
+
+Üretim uç noktası: `POST /api/generate-image` — yalnızca yönetici oturumu (`x-auth-token`) ile çağrılabilir; IP başına hız sınırı uygulanır.
+
+## React + TypeScript + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
