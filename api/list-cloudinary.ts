@@ -51,8 +51,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       pageCount++;
     } while (nextCursor && pageCount < 10); // güvenlik sınırı: en fazla 5000 görsel
     
-    // Sadece gerekli alanları döndür
-    const assets = allResources.map((r: any) => {
+    // Sadece gerekli alanları döndür.
+    // 'kroki-olusturucu/objects/' klasörü: senkronun ağır base64 görselleri için içerik
+    // adresli YEDEK deposudur — galeride sembol/görsel olarak gösterilmemeli,
+    // Bulutu Tara ile kütüphaneye de alınmamalı (sadece sahne yedeği olarak yaşar).
+    const assets = allResources
+      .filter((r: any) => !(r.public_id || '').startsWith('kroki-olusturucu/objects/'))
+      .map((r: any) => {
       const parts = r.public_id.split('/');
       const fileNameRaw = parts.pop() || r.public_id;
       const folderName = parts.length > 1 ? parts.pop() : (parts.length === 1 && parts[0] !== 'kroki-olusturucu' ? parts[0] : 'uncategorized');

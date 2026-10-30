@@ -137,7 +137,7 @@ export const cloudinary = {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Yapılandırma yedeklenemedi');
+        throw new Error(errorData.error || `Yedekleme başarısız (HTTP ${response.status})`);
       }
 
       return await response.json();

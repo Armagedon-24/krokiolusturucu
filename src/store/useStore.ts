@@ -149,6 +149,155 @@ interface StoreState extends CanvasState {
 
 const MAX_HISTORY = 50;
 
+// ─── Bulut senkronu: ağır veri koruması (413 FUNCTION_PAYLOAD_TOO_LARGE düzeltmesi) ───
+// Vercel serverless istek gövdesi 4.5MB ile sınırlıdır. Sahne/nesne içindeki büyük
+// base64 görseller payload'ı aşıp senkronun TAMAMEN 413 ile çökmesine yol açardı.
+// Çözüm: senkron öncesi ağır base64'ler imzalı API ile buluta yüklenip URL ile
+// değiştirilir; yüklenemezse yalnızca YEDEKTEN çıkarılır (yerel duruma dokunulmaz).
+const HEAVY_ASSET_LIMIT = 100 * 1024;        // 100KB üzeri base64 "ağır" sayılır
+const MAX_ASSET_UPLOAD_CHARS = 3_000_000;    // upload API'si de 4.5MB sınırına tabidir
+const SYNC_SIZE_BUDGET = 3.5 * 1024 * 1024;  // nihai payload bütçesi (güvenli marj)
+
+const _assetUrlCache = new Map<string, string>();   // dataUri -> kalıcı bulut URL (tekilleştirme)
+const _assetFailCache = new Map<string, number>();  // dataUri -> son başarısız deneme (5 dk tekrar denemez)
+let _syncBusy = false;   // eşzamanlı senkron çakışma koruması
+let _syncQueued = false; // çakışan istek kuyruğu
+
+const sha1Hex = async (text: string): Promise<string> => {
+  try {
+    if (typeof crypto !== 'undefined' && (crypto as any).subtle) {
+      const buf = await crypto.subtle.digest('SHA-1', new TextEncoder().encode(text));
+      return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('');
+    }
+  } catch { /* fallback'e düş */ }
+  // crypto.subtle olmayan ortamlar için çift kanal FNV-1a (64+ bit)
+  const fnv = (seed: number) => {
+    let h = seed >>> 0;
+    for (let i = 0; i < text.length; i++) {
+      h ^= text.charCodeAt(i);
+      h = Math.imul(h, 16777619) >>> 0;
+    }
+    return h.toString(16).padStart(8, '0');
+  };
+  return 'fb' + fnv(0x811c9dc5) + fnv(0x01000193) + text.length.toString(16);
+};
+
+/** Ağır base64 görseli imzalı API ile buluta yükler; kalıcı URL döner, başarısızsa null. */
+const uploadHeavyAsset = async (dataUri: string, authToken: string): Promise<string | null> => {
+  const cached = _assetUrlCache.get(dataUri);
+  if (cached) return cached;
+  const failedAt = _assetFailCache.get(dataUri);
+  if (failedAt && Date.now() - failedAt < 300000) return null; // 5 dk içinde tekrar deneme
+  if (dataUri.length > MAX_ASSET_UPLOAD_CHARS) {
+    _assetFailCache.set(dataUri, Date.now());
+    return null;
+  }
+  try {
+    const hash = await sha1Hex(dataUri);
+    // İçerik adresli public_id: aynı görsel tekrar yüklenmez (mükerrer yok),
+    // galeri listelemesi bu klasörü dışladığı için Bulut Galerisi'ne sızmaz.
+    const publicId = 'kroki-olusturucu/objects/' + hash;
+    const res = await fetch('/api/upload-to-cloudinary', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-auth-token': authToken || '' },
+      body: JSON.stringify({ publicId, dataUri, tag: 'kroki-object' }),
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (!data.secure_url) throw new Error('secure_url yok');
+    _assetUrlCache.set(dataUri, data.secure_url);
+    return data.secure_url;
+  } catch {
+    _assetFailCache.set(dataUri, Date.now());
+    return null;
+  }
+};
+
+const collectHeavyUris = (node: any, out: Map<string, number>) => {
+  if (typeof node === 'string') {
+    if (node.startsWith('data:') && node.length > HEAVY_ASSET_LIMIT) out.set(node, node.length);
+  } else if (Array.isArray(node)) {
+    for (const item of node) collectHeavyUris(item, out);
+  } else if (node && typeof node === 'object') {
+    for (const key of Object.keys(node)) collectHeavyUris(node[key], out);
+  }
+};
+
+const replaceHeavyUris = (node: any, urlMap: Map<string, string>): any => {
+  if (typeof node === 'string') {
+    if (node.length > HEAVY_ASSET_LIMIT && node.startsWith('data:') && urlMap.has(node)) {
+      return urlMap.get(node) as string;
+    }
+    return node;
+  }
+  if (Array.isArray(node)) return node.map((item) => replaceHeavyUris(item, urlMap));
+  if (node && typeof node === 'object') {
+    for (const key of Object.keys(node)) node[key] = replaceHeavyUris(node[key], urlMap);
+    return node;
+  }
+  return node;
+};
+
+/** En uzun kalan data URI'sini bulup tüm kopyalarını yedekten çıkarır (bütçe koruması). */
+const stripLongestDataUri = (node: any): boolean => {
+  let longest = '';
+  const find = (n: any) => {
+    if (typeof n === 'string') {
+      if (n.startsWith('data:') && n.length > longest.length) longest = n;
+    } else if (Array.isArray(n)) n.forEach(find);
+    else if (n && typeof n === 'object') Object.keys(n).forEach((k) => find(n[k]));
+  };
+  find(node);
+  if (!longest) return false;
+  const replace = (n: any): any => {
+    if (typeof n === 'string') return n === longest ? '' : n;
+    if (Array.isArray(n)) return n.map(replace);
+    if (n && typeof n === 'object') {
+      Object.keys(n).forEach((k) => { n[k] = replace(n[k]); });
+      return n;
+    }
+    return n;
+  };
+  replace(node);
+  return true;
+};
+
+/**
+ * Sync payload'ını 4.5MB sınırına karşı korur:
+ * 1) Ağır base64'ler buluta taşınıp URL ile değiştirilir (eşzamanlılık 4),
+ * 2) Hâlâ bütçe aşılırsa en büyük veri URI'leri kademeli çıkarılır.
+ * Yerel uygulama durumu ASLA değişmez; yalnızca gönderilecek kopya düzenlenir.
+ */
+const sanitizeConfigForSync = async (config: any, authToken: string) => {
+  try {
+    const heavy = new Map<string, number>();
+    collectHeavyUris(config, heavy);
+    if (heavy.size > 0) {
+      const uris = Array.from(heavy.keys());
+      const urlMap = new Map<string, string>();
+      let uploaded = 0;
+      let cursor = 0;
+      const worker = async () => {
+        while (cursor < uris.length) {
+          const idx = cursor++;
+          const url = await uploadHeavyAsset(uris[idx], authToken);
+          if (url) { urlMap.set(uris[idx], url); uploaded++; }
+        }
+      };
+      await Promise.all([worker(), worker(), worker(), worker()]);
+      replaceHeavyUris(config, urlMap);
+      console.warn(`Bulut senkronu: ${uploaded}/${uris.length} ağır görsel buluta kalıcı URL ile taşındı.`);
+    }
+    // Nihai boyut koruması — 413 asla oluşmasın
+    for (let guard = 0; guard < 30; guard++) {
+      if (JSON.stringify(config).length <= SYNC_SIZE_BUDGET) break;
+      if (!stripLongestDataUri(config)) break;
+    }
+  } catch (err) {
+    console.warn('Bulut senkronu veri temizliği başarısız, ham veri ile denenecek:', err);
+  }
+};
+
 // Bulut adminSettings önbelleği (60 sn) — her senkronda tam config indirmeyi önler
 let _cloudAdminCache: { at: number; admin: any } | null = null;
 const fetchCloudAdminSettings = async (): Promise<any> => {
@@ -957,6 +1106,13 @@ export const useStore = create<StoreState>()(
           return;
         }
 
+        // Çakışan senkronları tekilleştir: mevcut senkron bitince kuyruktaki tekrar çalışsın.
+        if (_syncBusy) {
+          _syncQueued = true;
+          return;
+        }
+        _syncBusy = true;
+
         try {
           const { uploadedImages, allSymbols, objects, backgroundImage, projectInfo, scenes, archiveScenes = [], activeSceneId, visualSettings } = get();
 
@@ -985,15 +1141,10 @@ export const useStore = create<StoreState>()(
             ...(adminSettings.hiddenSymbolIds || [])
           ]);
 
-          // Clean uploadedImages — büyük base64'leri çıkar (sadece URL referanslarını tut)
-          const cleanUploads = uploadedImages
-            .filter(img => !hardBlacklist.has(img.id))
-            .map(img => ({
-              ...img,
-              // 50KB'dan büyük base64 src'leri payload'dan çıkar
-              src: (img.src && img.src.startsWith('data:') && img.src.length > 50000) ? '' : img.src
-            }))
-            .filter(img => img.src);
+          // Clean uploadedImages — silinen/ gizlenenler çıkarılır. Büyük base64'ler artık
+          // burada atılmaz: sanitizeConfigForSync bunları buluta kalıcı URL ile taşır
+          // (taşınamayanlar yalnızca yedekten çıkarılır, yerel kütüphane etkilenmez).
+          const cleanUploads = uploadedImages.filter(img => !hardBlacklist.has(img.id));
           
           // Clean allSymbols before saving
           const cleanAllSymbols = allSymbols.map(cat => ({
@@ -1011,13 +1162,25 @@ export const useStore = create<StoreState>()(
           
           const finalArchiveToSync = Array.from(archiveMap.values());
 
-          await cloud.save(
-            cleanUploads, 
-            cleanAllSymbols, 
-            { objects, backgroundImage, projectInfo, adminSettings },
-            finalArchiveToSync,
+          // 413 koruması: ağır base64'leri buluta taşı / bütçeye göre budayıp gönder
+          const configPayload: any = {
+            uploadedImages: cleanUploads,
+            allSymbols: cleanAllSymbols,
+            projectState: { objects, backgroundImage, projectInfo, adminSettings },
+            scenes: finalArchiveToSync,
             activeSceneId,
             visualSettings,
+          };
+          await sanitizeConfigForSync(configPayload, get().adminPassword || '');
+          configPayload.uploadedImages = (configPayload.uploadedImages || []).filter((img: any) => img.src);
+
+          await cloud.save(
+            configPayload.uploadedImages,
+            configPayload.allSymbols,
+            configPayload.projectState,
+            configPayload.scenes,
+            configPayload.activeSceneId,
+            configPayload.visualSettings,
             get().adminPassword || ''
           );
           
@@ -1034,11 +1197,18 @@ export const useStore = create<StoreState>()(
         } catch (error: unknown) {
           console.error('Sync Error:', error);
           if (!silent) {
+            const errMsg = error instanceof Error && error.message ? error.message : '';
             get().addNotification({
               type: 'error',
               message: 'Bulut Senkronizasyon Hatası',
-              description: 'Veriler buluta aktarılamadı.'
+              description: errMsg ? `Veriler buluta aktarılamadı: ${errMsg}` : 'Veriler buluta aktarılamadı.'
             });
+          }
+        } finally {
+          _syncBusy = false;
+          if (_syncQueued) {
+            _syncQueued = false;
+            void get().syncToCloud(true);
           }
         }
       },
