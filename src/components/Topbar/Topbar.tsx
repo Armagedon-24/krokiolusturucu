@@ -14,8 +14,7 @@ import {
   Contrast,
   Ruler,
   Map as MapIcon,
-  Info,
-  Sparkles
+  Info
 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { Suspense, lazy } from 'react';
@@ -27,7 +26,6 @@ const ScaleCalibrationModal = lazy(() => import('../UI/ScaleCalibrationModal').t
 const MapPickerModal = lazy(() => import('../UI/MapPickerModal').then(m => ({ default: m.MapPickerModal })));
 const AboutModal = lazy(() => import('../UI/AboutModal').then(m => ({ default: m.AboutModal })));
 const ThreeDPreview = lazy(() => import('../UI/ThreeDPreview').then(m => ({ default: m.ThreeDPreview })));
-const ImageGeneratorModal = lazy(() => import('../UI/ImageGeneratorModal').then(m => ({ default: m.ImageGeneratorModal })));
 import { compressAndResizeImage } from '../../utils/canvasUtils';
 
 export const Topbar: React.FC = () => {
@@ -61,19 +59,6 @@ export const Topbar: React.FC = () => {
   const [isScaleCalibrationOpen, setIsScaleCalibrationOpen] = React.useState(false);
   const [isMapModalOpen, setIsMapModalOpen] = React.useState(false);
   const [previewImage, setPreviewImage] = React.useState<string>('');
-  const [isImageGenOpen, setIsImageGenOpen] = React.useState(false);
-  const [imageGenCategory, setImageGenCategory] = React.useState<string | undefined>(undefined);
-
-  // Kategori başlığındaki AI düğmeleri (Sidebar) modalı ön-seçili kategoriyle açar
-  React.useEffect(() => {
-    const handleOpenImageGen = (e: Event) => {
-      const detail = (e as CustomEvent<{ category?: string }>).detail;
-      setImageGenCategory(detail?.category);
-      setIsImageGenOpen(true);
-    };
-    window.addEventListener('open-image-generator', handleOpenImageGen);
-    return () => window.removeEventListener('open-image-generator', handleOpenImageGen);
-  }, []);
 
   const handleBackgroundUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -191,18 +176,6 @@ export const Topbar: React.FC = () => {
           </button>
         )}
 
-        {isAdmin && (
-          <button
-            onClick={() => { setImageGenCategory(undefined); setIsImageGenOpen(true); }}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-violet-600/20 to-violet-500/10 border border-violet-400/40 rounded-md hover:from-violet-500/30 hover:to-violet-400/20 transition-all text-xs font-black text-violet-300 shadow-lg shadow-violet-600/10"
-            title="AI ile görsel üret ve bir kategoriye kaydet"
-            aria-label="AI Görsel Üretici"
-          >
-            <Sparkles size={14} />
-            <span>GÖRSEL ÜRET</span>
-          </button>
-        )}
-
         <button 
           onClick={() => setIsCaseManagerOpen(true)}
           className="flex items-center gap-1.5 px-3 py-1.5 bg-[#242424] border border-[#F5C518]/50 rounded-md hover:bg-[#F5C518]/10 transition-all text-xs font-black text-[#F5C518] shadow-lg shadow-[#F5C518]/5"
@@ -274,11 +247,6 @@ export const Topbar: React.FC = () => {
           }}
         />
         <ScaleCalibrationModal isOpen={isScaleCalibrationOpen} onClose={() => setIsScaleCalibrationOpen(false)} />
-        <ImageGeneratorModal
-          isOpen={isImageGenOpen}
-          onClose={() => setIsImageGenOpen(false)}
-          initialCategory={imageGenCategory}
-        />
         <PreviewModal 
           isOpen={isPreviewModalOpen} 
           onClose={() => {
