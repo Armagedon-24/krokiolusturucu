@@ -255,6 +255,20 @@ export const Sidebar: React.FC = () => {
     );
   }, [uploadedImages, selectedCategory, searchQuery]);
 
+  // Kütüphanedeki toplam sembol sayısı (hazır semboller + kullanıcı yüklenen görseller)
+  const totalLibraryCount = useMemo(
+    () =>
+      allSymbols.reduce((sum, cat) => sum + (cat.symbols?.length || 0), 0) +
+      uploadedImages.length,
+    [allSymbols, uploadedImages]
+  );
+
+  // Arama filtresinden sonra listede görünen sembol sayısı
+  const displayedSymbolCount = useMemo(
+    () => filteredSymbols.reduce((sum, cat: any) => sum + cat.totalCount, 0),
+    [filteredSymbols]
+  );
+
   const logicalOrder = useMemo(() => [
     'evidence',      // DELİL İŞARETLERİ
     'vehicles',      // ARAÇLAR
@@ -346,6 +360,13 @@ export const Sidebar: React.FC = () => {
                     className="bg-transparent border-none focus:ring-0 text-xs text-gray-200 placeholder-gray-400 w-full outline-none"
                     aria-label="Sembol veya Görsel Ara"
                   />
+                  {/* Kütüphanedeki toplam sembol sayısı — arama sırasında eşleşen sonuç sayısına döner */}
+                  <span
+                    className="flex-shrink-0 text-[9px] font-black tracking-wide rounded-full px-2 py-0.5 border whitespace-nowrap tabular-nums text-[#F5C518] bg-[#F5C518]/10 border-[#F5C518]/30"
+                    title="Kütüphanedeki toplam sembol sayısı (hazır semboller + yüklenen görseller)"
+                  >
+                    {searchQuery ? `${displayedSymbolCount} SONUÇ` : `${totalLibraryCount} SEMBOL`}
+                  </span>
                 </div>
               </div>
 
@@ -416,8 +437,14 @@ export const Sidebar: React.FC = () => {
                         onDragOver={handleSidebarDragOver}
                         onDrop={(e) => handleSidebarDrop(e, cat.id)}
                       >
-                        <h3 className="text-[11px] font-black text-[#F5C518] uppercase tracking-widest border-l-2 border-[#F5C518] pl-2">
+                        <h3 className="flex items-center gap-1.5 text-[11px] font-black text-[#F5C518] uppercase tracking-widest border-l-2 border-[#F5C518] pl-2">
                           {cat.name}
+                          <span
+                            className="text-[9px] font-bold text-gray-300 bg-[#242424] border border-[#333] rounded px-1.5 py-0.5 tracking-normal tabular-nums"
+                            title="Bu kategorideki sembol sayısı"
+                          >
+                            {cat.totalCount}
+                          </span>
                         </h3>
                         {isAdmin && (
                           <div className="flex items-center gap-2">
