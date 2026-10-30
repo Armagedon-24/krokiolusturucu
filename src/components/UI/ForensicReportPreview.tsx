@@ -26,15 +26,21 @@ const SECTIONS: Array<{ no: number; key: keyof ForensicReport; title: string }> 
 const PaperView: React.FC<{ report: ForensicReport }> = ({ report }) => {
   const m = reportMeta();
   const logoSrc = `${import.meta.env.BASE_URL}assets/kurum_logo.png`;
+  const wmSrc = `${import.meta.env.BASE_URL}assets/kurum_logo_filigran.png`;
   return (
-    <div className="bg-white text-[#26282E] px-5 py-4">
+    <div className="relative bg-white text-[#26282E] px-5 py-4 overflow-hidden">
+      {/* Sayfa arkası logo silüeti (filigran) */}
+      <div className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center">
+        <img src={wmSrc} alt="" aria-hidden className="w-3/4 max-w-[230px] opacity-[0.05]" />
+      </div>
+
       {/* Üst band — antet + logo */}
-      <div className="bg-[#16181D] text-white px-4 py-3 -mx-5 -mt-4">
-        <div className="flex items-center gap-3">
+      <div className="relative z-10 bg-[#16181D] text-white pl-2.5 pr-3 py-3 -mx-5 -mt-4">
+        <div className="flex items-center gap-2.5">
           <img src={logoSrc} alt="Kurum logosu" className="w-9 h-9 object-contain shrink-0" />
           <div className="min-w-0">
-            <div className="text-[12px] font-black tracking-wide leading-tight">ADLİ BİLİRKİŞİ ANALİZ RAPORU</div>
-            <div className="text-[8px] text-[#D8B94A] mt-0.5">Kaza Analiz ve Rekonstrüksiyon Birimi</div>
+            <div className="text-[10px] font-black tracking-wide leading-tight">KAZA ANALİZ VE REKONSTRÜKSİYON ANALİZİ</div>
+            <div className="text-[7px] text-gray-400 mt-0.5">Bilimsel yöntemlere dayalı teknik değerlendirme belgesi</div>
           </div>
           <div className="ml-auto text-right shrink-0 border border-gray-600 rounded px-2 py-1">
             <div className="text-[6.5px] font-bold text-gray-400 tracking-wider">RAPOR NO</div>
@@ -45,7 +51,7 @@ const PaperView: React.FC<{ report: ForensicReport }> = ({ report }) => {
       </div>
 
       {/* Bilgi tablosu */}
-      <div className="mt-3 text-[8px] border border-gray-200 rounded-sm overflow-hidden">
+      <div className="relative z-10 mt-3 text-[8px] border border-gray-200 rounded-sm overflow-hidden">
         {([
           ['RAPOR NO', m.dosyaNo],
           ['RAPOR TARİHİ', m.tarih],
@@ -54,18 +60,18 @@ const PaperView: React.FC<{ report: ForensicReport }> = ({ report }) => {
           ['ADRES', '.....................................................'],
         ] as Array<[string, string]>).map(([k, v], i) => (
           <div key={k} className={`flex ${i % 2 === 0 ? 'bg-[#F3F4F6]' : 'bg-white'} px-2.5 py-1`}>
-            <span className="w-24 shrink-0 font-bold text-gray-500 tracking-wide">{k}</span>
+            <span className="w-24 shrink-0 font-bold text-[#16181D] tracking-wide">{k}</span>
             <span className="text-[#26282E] truncate">{v}</span>
           </div>
         ))}
       </div>
 
       {/* Başlık + bölümler */}
-      <div className="mt-3 border border-gray-200 bg-[#FBFBFA] rounded-sm px-3 py-2">
+      <div className="relative z-10 mt-3 border border-gray-200 bg-[#FBFBFA] rounded-sm px-3 py-2">
         <div className="text-[10.5px] font-bold text-[#16181D] leading-snug">{report.title}</div>
       </div>
 
-    <div className="mt-3 space-y-3.5">
+    <div className="relative z-10 mt-3 space-y-3.5">
       {SECTIONS.map(({ no, key, title }) => {
         const raw = report[key];
         const items = typeof raw === 'string' ? [raw] : raw;
@@ -75,7 +81,7 @@ const PaperView: React.FC<{ report: ForensicReport }> = ({ report }) => {
               <span className="inline-flex items-center justify-center w-4 h-4 bg-[#C9A227] text-white text-[8px] font-black rounded-[2px]">
                 {no}
               </span>
-              <span className="text-[9px] font-black text-[#16181D] tracking-wide">{title}</span>
+              <span className="text-[10px] font-black text-black tracking-wide">{title}</span>
             </div>
             {items.length === 0 ? (
               <div className="text-[9px] text-gray-400 pl-5">— veri yok —</div>
@@ -97,7 +103,7 @@ const PaperView: React.FC<{ report: ForensicReport }> = ({ report }) => {
     </div>
 
     {/* İmza bloğu */}
-    <div className="mt-4 flex justify-end">
+    <div className="relative z-10 mt-4 flex justify-end">
       <div className="w-44 border border-gray-300 rounded-sm overflow-hidden">
         <div className="bg-[#16181D] text-white text-[8px] font-black text-center py-1">BİLİRKİŞİ</div>
         <div className="px-2.5 py-2 space-y-1 text-[8px] text-gray-500">
@@ -108,7 +114,7 @@ const PaperView: React.FC<{ report: ForensicReport }> = ({ report }) => {
       </div>
     </div>
 
-    <div className="mt-3 border-t border-gray-200 pt-2 text-[7.5px] leading-[1.5] text-gray-400">
+    <div className="relative z-10 mt-3 border-t border-gray-200 pt-2 text-[7.5px] leading-[1.5] text-gray-400">
       Bu rapor bilimsel yöntemlere dayalı bilirkişi görüşü niteliğindedir; nihai kanaat, dosyanın
       bütüncül delilleri ile birlikte değerlendirilmelidir.
     </div>

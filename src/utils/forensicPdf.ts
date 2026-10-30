@@ -9,7 +9,7 @@
  * (public/assets/fonts/). jsPDF standart Helvetica'sı Türkçe desteklemez.
  */
 
-import { jsPDF } from 'jspdf';
+import { jsPDF, GState } from 'jspdf';
 import type { ForensicReport } from './forensicReport';
 import { reportMeta } from './forensicReport';
 
@@ -24,6 +24,8 @@ const C_GOLD_SOFT = '#FBF6E3'; // sonuç kutusu dolgusu
 const C_LINE = '#C9CDD4'; // ince çizgiler
 const C_ZEBRA = '#F3F4F6'; // bilgi tablosu dolgusu
 const C_WHITE = '#FFFFFF';
+const C_HEADING = '#000000'; // bölüm başlıkları (en koyu)
+const C_RULE = '#AEB3BB'; // bölüm başlığı altı çizgi (belirgin)
 
 /* Sayfa geometrisi (mm) — A4 210×297 */
 const PW = 210;
@@ -38,9 +40,15 @@ const FONT_NAME = 'Liberation';
 const FONT_REG = 'LiberationSans-Regular.ttf';
 const FONT_BOLD = 'LiberationSans-Bold.ttf';
 const LOGO_URL = `${import.meta.env.BASE_URL}assets/kurum_logo.png`;
+/** Sayfa arkasına basılan tek renk silüet filigran. */
+const LOGO_WM_URL = `${import.meta.env.BASE_URL}assets/kurum_logo_filigran.png`;
+
+/** Belge başlığı — üst bant, devam sayfaları ve altbilgide ortak. */
+const DOC_TITLE = 'KAZA ANALİZ VE REKONSTRÜKSİYON ANALİZİ';
 
 let fontCache: Promise<{ reg: string; bold: string }> | null = null;
 let logoCache: Promise<string> | null = null;
+let logoWmCache: Promise<string> | null = null;
 
 /** TTF / PNG indirip base64'e çevirir. */
 async function fetchB64(url: string, what: string): Promise<string> {
@@ -70,6 +78,12 @@ function loadFontB64(): Promise<{ reg: string; bold: string }> {
 function loadLogoB64(): Promise<string> {
   if (!logoCache) logoCache = fetchB64(LOGO_URL, 'Logo');
   return logoCache;
+}
+
+/** Silüet filigranı bir kez indirir. */
+function loadWatermarkB64(): Promise<string> {
+  if (!logoWmCache) logoWmCache = fetchB64(LOGO_WM_URL, 'Filigran');
+  return logoWmCache;
 }
 
 /** Fontları bu dokümana kaydeder. */
@@ -116,6 +130,7 @@ export async function buildForensicPdf(report: ForensicReport): Promise<Forensic
   const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
   await ensureFonts(doc);
   const logoB64 = await loadLogoB64();
+  const wmB64 = await loadWatermarkB64();
 
   const meta = reportMeta();
 
@@ -142,18 +157,18 @@ export async function buildForensicPdf(report: ForensicReport): Promise<Forensic
     doc.rect(0, 0, PW, 14, 'F');
     doc.setFillColor(C_GOLD);
     doc.rect(0, 14, PW, 0.9, 'F');
-    doc.addImage(logoB64, 'PNG', ML, 2.2, 9.6, 9.6);
+    doc.addImage(logoB64, 'PNG', 12, 2.2, 9.6, 9.6);
     doc.setFont(FONT_NAME, 'bold');
     doc.setFontSize(9);
     doc.setTextColor(C_WHITE);
-    doc.text('ADLİ BİLİRKİŞİ ANALİZ RAPORU', ML + 12.6, 8.6);
+    doc.text(DOC_TITLE, 24.6, 8.6);
     doc.setFont(FONT_NAME, 'normal');
     doc.setFontSize(8);
     doc.setTextColor('#D8B94A');
     doc.text(meta.dosyaNo, PW - MR, 8.6, { align: 'right' });
   };
 
-  /** Bölüm başlığı: altın numara rozeti + koyu büyük harf başlık + ince çizgi. */
+  /** Bölüm başlığı: altın numara rozeti + en koyu büyük harf başlık + belirgin çizgi. */
   const sectionHeading = (no: number, title: string) => {
     ensure(16);
     doc.setFillColor(C_GOLD);
@@ -162,11 +177,11 @@ export async function buildForensicPdf(report: ForensicReport): Promise<Forensic
     doc.setFontSize(9.5);
     doc.setTextColor(C_WHITE);
     doc.text(String(no), ML + 3.25, y + 4.6, { align: 'center' });
-    doc.setFontSize(10.5);
-    doc.setTextColor(C_INK);
+    doc.setFontSize(11);
+    doc.setTextColor(C_HEADING);
     doc.text(trUpper(title), ML + 9.5, y + 4.6);
     y += 8.6;
-    hairline(doc, ML, y, CW);
+    hairline(doc, ML, y, CW, C_RULE, 0.35);
     y += 4;
   };
 
@@ -197,26 +212,32 @@ export async function buildForensicPdf(report: ForensicReport): Promise<Forensic
   doc.setFillColor(C_GOLD);
   doc.rect(0, 30, PW, 1.1, 'F');
 
-  // Sol: kurum logosu (antet)
-  doc.addImage(logoB64, 'PNG', ML - 1.5, 4.5, 21.5, 21.5 * (148 / 175));
-  const tx = ML + 24; // logo sonrası metin sütunu
+  // Sol: kurum logosu (antet) — daha sola hizalı
+  const logoX = 11;
+  doc.addImage(logoB64, 'PNG', logoX, 4.5, 21.5, 21.5 * (148 / 175));
+  const tx = logoX + 21.5 + 4; // logo sonrası metin sütunu
 
+  // Başlık: rozet alanına taşmayacak kadar sığana kadar punto küçült
+  const badgeLeft = PW - MR - 52;
+  const maxTitleW = badgeLeft - 4 - tx;
   doc.setFont(FONT_NAME, 'bold');
-  doc.setFontSize(15.5);
   doc.setTextColor(C_WHITE);
-  doc.text('ADLİ BİLİRKİŞİ ANALİZ RAPORU', tx, 13);
+  let titleSize = 15.5;
+  doc.setFontSize(titleSize);
+  while (titleSize > 11 && doc.getTextWidth(DOC_TITLE) > maxTitleW) {
+    titleSize -= 0.5;
+    doc.setFontSize(titleSize);
+  }
+  doc.text(DOC_TITLE, tx, 13.5);
   doc.setFont(FONT_NAME, 'normal');
-  doc.setFontSize(8.5);
-  doc.setTextColor('#D8B94A');
-  doc.text('Kaza Analiz ve Rekonstrüksiyon Birimi', tx, 19.2);
   doc.setFontSize(7.5);
   doc.setTextColor('#9CA3AF');
-  doc.text('Bilimsel yöntemlere dayalı teknik değerlendirme belgesi', tx, 24.5);
+  doc.text('Bilimsel yöntemlere dayalı teknik değerlendirme belgesi', tx, 20);
 
   // Sağda rapor rozeti
   doc.setDrawColor('#4B5563');
   doc.setLineWidth(0.3);
-  doc.roundedRect(PW - MR - 52, 7, 52, 17, 1.5, 1.5, 'S');
+  doc.roundedRect(badgeLeft, 7, 52, 17, 1.5, 1.5, 'S');
   doc.setFont(FONT_NAME, 'bold');
   doc.setFontSize(6.5);
   doc.setTextColor('#9CA3AF');
@@ -247,9 +268,10 @@ export async function buildForensicPdf(report: ForensicReport): Promise<Forensic
       doc.setFillColor(C_ZEBRA);
       doc.rect(ML, y, CW, rh, 'F');
     }
+    // Etiketler (başlıklar) en koyu tonda — girdiler normal ağırlıkta kalır
     doc.setFont(FONT_NAME, 'bold');
     doc.setFontSize(8.5);
-    doc.setTextColor(C_GRAY);
+    doc.setTextColor(C_INK);
     doc.text(trUpper(k), ML + 3, y + 4.5);
     doc.setFont(FONT_NAME, 'normal');
     doc.setFontSize(9);
@@ -344,13 +366,24 @@ export async function buildForensicPdf(report: ForensicReport): Promise<Forensic
   /* ALTBİLGİ — tüm sayfalara sonradan damgalanır                      */
   /* ================================================================ */
   const total = doc.getNumberOfPages();
+
+  /* Filigran: sayfa arkasına logo silüeti (açık gri ton) */
+  const WM_W = 112;
+  const WM_H = WM_W * (148 / 175);
+  const wmX = (PW - WM_W) / 2;
+  const wmY = (31 + 281) / 2 - WM_H / 2; // içerik alanının dikey ortası
+
   for (let p = 1; p <= total; p++) {
     doc.setPage(p);
+    doc.saveGraphicsState();
+    doc.setGState(new GState({ opacity: 0.05 }));
+    doc.addImage(wmB64, 'PNG', wmX, wmY, WM_W, WM_H);
+    doc.restoreGraphicsState();
     hairline(doc, ML, PH - 16, CW, C_LINE, 0.2);
     doc.setFont(FONT_NAME, 'normal');
     doc.setFontSize(7.5);
     doc.setTextColor(C_GRAY);
-    doc.text(`${meta.dosyaNo} · Adli Bilirkişi Analiz Raporu`, ML, PH - 12);
+    doc.text(`${meta.dosyaNo} · Kaza Analiz ve Rekonstrüksiyon Analizi`, ML, PH - 12);
     doc.setFont(FONT_NAME, 'bold');
     doc.text(`Sayfa ${p} / ${total}`, PW - MR, PH - 12, { align: 'right' });
     doc.setFont(FONT_NAME, 'normal');
