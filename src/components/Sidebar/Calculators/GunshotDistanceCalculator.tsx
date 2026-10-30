@@ -3,7 +3,7 @@ import { Target, PlusCircle, Flame, Droplet, Shield, Info, AlertTriangle } from 
 import { useStore } from '../../../store/useStore';
 import { HelpTooltip } from '../../UI/HelpTooltip';
 import { formatForensicReport } from '../../../utils/forensicReport';
-import { ForensicReportPreview } from '../../UI/ForensicReportPreview';
+import { ForensicReportPreview, ForensicPdfButton } from '../../UI/ForensicReportPreview';
 
 const CHOKE_TYPES = [
   { id: 'full', name: 'Full Choke (Dar)', factor: 1.0 },
@@ -285,13 +285,16 @@ export const GunshotDistanceCalculator: React.FC = () => {
               </div>
             </div>
 
-            <button
-              onClick={handleAddToCanvas}
-              className="w-full flex items-center justify-center gap-2 py-4 bg-[#F5C518] text-black rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-[#ffcf24] transition-all shadow-lg active:scale-95"
-            >
-              <PlusCircle size={14} />
-              ANALİZİ KROKİYE EKLE
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={handleAddToCanvas}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-[#F5C518] text-black rounded-2xl font-black text-[9px] uppercase tracking-widest hover:bg-[#ffcf24] transition-all active:scale-95"
+              >
+                <PlusCircle size={13} />
+                ANALİZİ KROKİYE EKLE
+              </button>
+              <ForensicPdfButton report={report} />
+            </div>
           </div>
         </div>
 

@@ -1,7 +1,7 @@
 /**
  * Adli bilirkişi analiz raporunun kurumsal PDF üretimi (jsPDF).
  *
- * Tasarım: A4 dikey, koyu kurumsal başlık bandı, altın vurgu çizgisi,
+ * Tasarım: A4 dikey, koyu kurumsal başlık bandı, gri vurgu çizgisi,
  * numaralı bölüm başlıkları, asılı girintili maddeler, sonuç kutusu,
  * bilirkişi imza alanı ve her sayfada rapor no + sayfa numarası altbilgisi.
  *
@@ -19,8 +19,8 @@ import { reportMeta } from './forensicReport';
 const C_INK = '#16181D'; // başlık bandı / ana metin başlıkları
 const C_BODY = '#26282E'; // gövde metni
 const C_GRAY = '#6B7280'; // ikincil metin
-const C_GOLD = '#C9A227'; // vurgu (koyu altın — baskıda okunur)
-const C_GOLD_SOFT = '#FBF6E3'; // sonuç kutusu dolgusu
+const C_ACCENT = '#6B7280'; // vurgu (nötr gri — tamamen tek renk kurumsal)
+const C_BOX_BG = '#F3F4F6'; // sonuç kutusu dolgusu
 const C_LINE = '#C9CDD4'; // ince çizgiler
 const C_ZEBRA = '#F3F4F6'; // bilgi tablosu dolgusu
 const C_WHITE = '#FFFFFF';
@@ -40,8 +40,8 @@ const FONT_NAME = 'Liberation';
 const FONT_REG = 'LiberationSans-Regular.ttf';
 const FONT_BOLD = 'LiberationSans-Bold.ttf';
 const LOGO_URL = `${import.meta.env.BASE_URL}assets/kurum_logo.png`;
-/** Sayfa arkasına basılan tek renk silüet filigran. */
-const LOGO_WM_URL = `${import.meta.env.BASE_URL}assets/kurum_logo_filigran.png`;
+/** Sayfa arkasına basılan içi boş (kontur) ve renksiz filigran. */
+const LOGO_WM_URL = `${import.meta.env.BASE_URL}assets/kurum_logo_filigran_kontur.png`;
 
 /** Belge başlığı — üst bant, devam sayfaları ve altbilgide ortak. */
 const DOC_TITLE = 'KAZA ANALİZ VE REKONSTRÜKSİYON ANALİZİ';
@@ -139,7 +139,7 @@ export async function buildForensicPdf(report: ForensicReport): Promise<Forensic
   let pageNo = 1;
 
   const setBody = () => { doc.setFont(FONT_NAME, 'normal'); doc.setFontSize(9.5); doc.setTextColor(C_BODY); };
-  const setItemNo = () => { doc.setFont(FONT_NAME, 'bold'); doc.setFontSize(9.5); doc.setTextColor(C_GOLD); };
+  const setItemNo = () => { doc.setFont(FONT_NAME, 'bold'); doc.setFontSize(9.5); doc.setTextColor(C_ACCENT); };
 
   /** Sayfa sonuna sığmıyorsa yeni sayfa aç, devam üst bilgisini bas. */
   const ensure = (need: number) => {
@@ -155,7 +155,7 @@ export async function buildForensicPdf(report: ForensicReport): Promise<Forensic
   const drawContinuationHeader = () => {
     doc.setFillColor(C_INK);
     doc.rect(0, 0, PW, 14, 'F');
-    doc.setFillColor(C_GOLD);
+    doc.setFillColor(C_ACCENT);
     doc.rect(0, 14, PW, 0.9, 'F');
     doc.addImage(logoB64, 'PNG', 12, 2.2, 9.6, 9.6);
     doc.setFont(FONT_NAME, 'bold');
@@ -164,22 +164,28 @@ export async function buildForensicPdf(report: ForensicReport): Promise<Forensic
     doc.text(DOC_TITLE, 24.6, 8.6);
     doc.setFont(FONT_NAME, 'normal');
     doc.setFontSize(8);
-    doc.setTextColor('#D8B94A');
+    doc.setTextColor('#D1D5DB');
     doc.text(meta.dosyaNo, PW - MR, 8.6, { align: 'right' });
   };
 
-  /** Bölüm başlığı: altın numara rozeti + en koyu büyük harf başlık + belirgin çizgi. */
+  /** Bölüm başlığı: sayfada ortalanmış numara rozeti + en koyu büyük harf başlık + belirgin çizgi. */
   const sectionHeading = (no: number, title: string) => {
     ensure(16);
-    doc.setFillColor(C_GOLD);
-    doc.rect(ML, y, 6.5, 6.5, 'F');
     doc.setFont(FONT_NAME, 'bold');
+    doc.setFontSize(11);
+    const t = trUpper(title);
+    const tw = doc.getTextWidth(t);
+    const bw = 6.5;
+    const gap = 3.5;
+    const x0 = (PW - (bw + gap + tw)) / 2;
+    doc.setFillColor(C_ACCENT);
+    doc.rect(x0, y, bw, bw, 'F');
     doc.setFontSize(9.5);
     doc.setTextColor(C_WHITE);
-    doc.text(String(no), ML + 3.25, y + 4.6, { align: 'center' });
+    doc.text(String(no), x0 + bw / 2, y + 4.6, { align: 'center' });
     doc.setFontSize(11);
     doc.setTextColor(C_HEADING);
-    doc.text(trUpper(title), ML + 9.5, y + 4.6);
+    doc.text(t, x0 + bw + gap, y + 4.6);
     y += 8.6;
     hairline(doc, ML, y, CW, C_RULE, 0.35);
     y += 4;
@@ -209,7 +215,7 @@ export async function buildForensicPdf(report: ForensicReport): Promise<Forensic
   /* ================================================================ */
   doc.setFillColor(C_INK);
   doc.rect(0, 0, PW, 30, 'F');
-  doc.setFillColor(C_GOLD);
+  doc.setFillColor(C_ACCENT);
   doc.rect(0, 30, PW, 1.1, 'F');
 
   // Sol: kurum logosu (antet) — daha sola hizalı
@@ -243,7 +249,7 @@ export async function buildForensicPdf(report: ForensicReport): Promise<Forensic
   doc.setTextColor('#9CA3AF');
   doc.text('RAPOR NO', PW - MR - 48, 11.5);
   doc.setFontSize(9.5);
-  doc.setTextColor('#E5B94E');
+  doc.setTextColor('#D1D5DB');
   doc.text(meta.dosyaNo, PW - MR - 48, 17.5);
   doc.setFont(FONT_NAME, 'normal');
   doc.setFontSize(7);
@@ -309,17 +315,17 @@ export async function buildForensicPdf(report: ForensicReport): Promise<Forensic
       .map((c) => doc.splitTextToSize(c, CW - 16) as string[]);
     const totalH = blocks.reduce((a, b) => a + b.length * 4.35, 0) + 9;
     ensure(totalH + 4);
-    // Altın vurgu çubuğu + yumuşak dolgu
+    // Gri vurgu çubuğu + yumuşak dolgu
     const boxTop = y;
-    doc.setFillColor(C_GOLD_SOFT);
+    doc.setFillColor(C_BOX_BG);
     doc.rect(ML, boxTop, CW, totalH, 'F');
-    doc.setFillColor(C_GOLD);
+    doc.setFillColor(C_ACCENT);
     doc.rect(ML, boxTop, 1.6, totalH, 'F');
     let ty = boxTop + 5.5;
     blocks.forEach((b) => {
       doc.setFont(FONT_NAME, 'normal');
       doc.setFontSize(9.5);
-      doc.setTextColor('#3B3418');
+      doc.setTextColor(C_BODY);
       doc.text(b, ML + 6, ty);
       ty += b.length * 4.35;
     });
@@ -367,16 +373,16 @@ export async function buildForensicPdf(report: ForensicReport): Promise<Forensic
   /* ================================================================ */
   const total = doc.getNumberOfPages();
 
-  /* Filigran: sayfa arkasına logo silüeti (açık gri ton) */
-  const WM_W = 112;
+  /* Filigran: sayfayı kaplayan içi boş (kontur) gri logo */
+  const WM_W = 206;
   const WM_H = WM_W * (148 / 175);
   const wmX = (PW - WM_W) / 2;
-  const wmY = (31 + 281) / 2 - WM_H / 2; // içerik alanının dikey ortası
+  const wmY = (PH - WM_H) / 2; // sayfanın dikey ortası
 
   for (let p = 1; p <= total; p++) {
     doc.setPage(p);
     doc.saveGraphicsState();
-    doc.setGState(new GState({ opacity: 0.05 }));
+    doc.setGState(new GState({ opacity: 0.16 }));
     doc.addImage(wmB64, 'PNG', wmX, wmY, WM_W, WM_H);
     doc.restoreGraphicsState();
     hairline(doc, ML, PH - 16, CW, C_LINE, 0.2);

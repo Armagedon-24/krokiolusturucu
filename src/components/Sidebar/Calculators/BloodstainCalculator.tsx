@@ -3,7 +3,7 @@ import { Droplets, Ruler, Info, PlusCircle, Target, ArrowUpCircle } from 'lucide
 import { useStore } from '../../../store/useStore';
 import { HelpTooltip } from '../../UI/HelpTooltip';
 import { formatForensicReport, trNum } from '../../../utils/forensicReport';
-import { ForensicReportPreview } from '../../UI/ForensicReportPreview';
+import { ForensicReportPreview, ForensicPdfButton } from '../../UI/ForensicReportPreview';
 
 export const BloodstainCalculator: React.FC = () => {
   const [width, setWidth] = useState<number>(5);
@@ -215,13 +215,16 @@ export const BloodstainCalculator: React.FC = () => {
               </div>
             </div>
 
-            <button
-              onClick={handleAddToCanvas}
-              className="w-full flex items-center justify-center gap-2 py-4 bg-red-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-red-700 transition-all shadow-lg active:scale-95 mt-2"
-            >
-              <PlusCircle size={14} />
-              ANALİZİ RAPORA EKLE
-            </button>
+            <div className="mt-2 flex gap-2">
+              <button
+                onClick={handleAddToCanvas}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-red-600 text-white rounded-2xl font-black text-[9px] uppercase tracking-widest hover:bg-red-700 transition-all active:scale-95"
+              >
+                <PlusCircle size={13} />
+                ANALİZİ RAPORA EKLE
+              </button>
+              <ForensicPdfButton report={report} />
+            </div>
           </div>
         </div>
 
