@@ -40,7 +40,7 @@ export const EvidencePhotoModal: React.FC<EvidencePhotoModalProps> = ({
         const compressedDataUrl = await compressAndResizeImage(file, 600, 600, 0.45);
         const fileName = `evidence_${object.findingNo || 'marker'}_${Date.now()}_${i}`;
         try {
-          const url = await cloudinary.upload(compressedDataUrl, fileName, 'evidence_photos');
+          const url = await cloudinary.upload(compressedDataUrl, fileName, 'evidence_photos', useStore.getState().adminPassword || '');
           newPhotoUrls.push(url || compressedDataUrl);
         } catch {
           newPhotoUrls.push(compressedDataUrl);

@@ -1,5 +1,4 @@
 const CLOUD_NAME = 'dzen3qvgp';
-const UPLOAD_PRESET = 'kroki-olusturucu';
 
 /**
  * İsim/kategori karşılaştırması için ortak normalizasyon:
@@ -75,37 +74,50 @@ export const getOptimizedCloudinaryUrl = (url: string, width = 80, height?: numb
 };
 
 export const cloudinary = {
-  upload: async (file: Blob | string, fileName: string, category?: string): Promise<string> => {
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('upload_preset', UPLOAD_PRESET);
-    // Kullanıcının isteği üzerine dosya adını birebir aynı tutuyoruz
-    const safeName = fileName.replace(/[^a-zA-Z0-9.\-_]/g, '_');
-    formData.append('public_id', safeName); 
-    
-    // Kategoriye göre bulutta klasörleme yapıyoruz ve tag ekliyoruz
-    formData.append('tags', 'kroki-olusturucu');
-    if (category && category !== 'uncategorized') {
-      formData.append('folder', `kroki-olusturucu/${category}`);
-    } else {
-      formData.append('folder', `kroki-olusturucu/uncategorized`);
-    }
-
+  upload: async (file: Blob | string, fileName: string, category?: string, authToken?: string): Promise<string> => {
     try {
-      const response = await fetch(
-        `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`,
-        {
-          method: 'POST',
-          body: formData,
-        }
-      );
+      // Blob'ları data URI'ye çevir (imzalı API veri URI bekler)
+      let dataUri: string;
+      if (typeof file === 'string') {
+        dataUri = file;
+      } else {
+        dataUri = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = () => reject(new Error('Dosya okunamadı'));
+          reader.readAsDataURL(file);
+        });
+      }
+      if (!dataUri || !dataUri.startsWith('data:')) {
+        throw new Error('Geçersiz görsel verisi');
+      }
+
+      // İmzasız preset Cloudinary'de beyaz listede olmadığı için ("Upload preset must be
+      // whitelisted for unsigned uploads") yükleme artık imzalı sunucu API'si üzerinden yapılır.
+      // Türkçe karakterler katlanır (ç→c, ğ→g...) ki dosya adları aramada/mükerrer kontrolde tutarlı olsun.
+      const safeName = (fileName || 'gorsel')
+        .replace(/ç/g, 'c').replace(/ğ/g, 'g').replace(/ı/g, 'i')
+        .replace(/ö/g, 'o').replace(/ş/g, 's').replace(/ü/g, 'u')
+        .replace(/[^a-zA-Z0-9.\-_]/g, '_');
+      const catFolder = (category && category !== 'uncategorized') ? category : 'uncategorized';
+      const publicId = `kroki-olusturucu/${catFolder}/${safeName}`;
+
+      const response = await fetch('/api/upload-to-cloudinary', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-auth-token': authToken || '',
+        },
+        body: JSON.stringify({ publicId, dataUri, tag: 'kroki-olusturucu' }),
+      });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Cloudinary yükleme hatası');
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error || `Cloudinary yükleme hatası (HTTP ${response.status})`);
       }
 
       const data = await response.json();
+      if (!data.secure_url) throw new Error('Bulut adresi alınamadı');
       return data.secure_url;
     } catch (error) {
       console.error('Cloudinary Upload Error:', error);

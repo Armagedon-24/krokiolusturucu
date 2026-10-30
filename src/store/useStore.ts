@@ -619,12 +619,11 @@ export const useStore = create<StoreState>()(
 
         if (get().isAdmin && img.src.startsWith('data:')) {
           try {
-            const response = await fetch(img.src);
-            const blob = await response.blob();
-            
-            const cleanName = img.name;
-
-            const publicUrl = await cloud.upload(blob, cleanName, img.category);
+            // İmzalı yükleme: imzasız preset beyaz listede olmadığından her zaman
+            // "Upload preset must be whitelisted" hatası veriyordu. Artık sunucu
+            // tarafında imzalanan /api/upload-to-cloudinary kullanılır.
+            const cleanName = img.name || 'gorsel';
+            const publicUrl = await cloud.upload(img.src, cleanName, img.category, get().adminPassword || '');
             finalSrc = publicUrl;
           } catch (error: unknown) {
             console.error('Bulut yükleme hatası:', error);
