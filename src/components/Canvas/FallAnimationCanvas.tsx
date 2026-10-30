@@ -46,7 +46,8 @@ export const FallAnimationCanvas: React.FC = () => {
   const timeRef = useRef<number>(0);
   const [impactFlash, setImpactFlash] = useState(false);
 
-  // Animation loop (hooks must run unconditionally — early return below)
+  // Animation loop — MUST run before any early return (React hooks kuralı:
+  // koşullu hook sırası değişimi tuvale aktarımda tüm uygulamayı çökertir).
   useEffect(() => {
     if (!isPlaying) {
       lastTimeRef.current = 0;
@@ -62,11 +63,11 @@ export const FallAnimationCanvas: React.FC = () => {
       lastTimeRef.current = timestamp;
 
       const deltaSec = (deltaMs / 1000) * speed;
-      const newTime = Math.min(timeRef.current + deltaSec, duration);
+      const newTime = Math.min(timeRef.current + deltaSec, Math.max(duration, 0.1));
       timeRef.current = newTime;
 
-      const wasUnderImpact = currentTime / duration <= 0.9;
-      const isUnderImpact = newTime / duration > 0.9;
+      const wasUnderImpact = currentTime / Math.max(duration, 0.1) <= 0.9;
+      const isUnderImpact = newTime / Math.max(duration, 0.1) > 0.9;
       if (!wasUnderImpact && isUnderImpact) {
         setImpactFlash(true);
         setTimeout(() => setImpactFlash(false), 150);
@@ -74,7 +75,7 @@ export const FallAnimationCanvas: React.FC = () => {
 
       setFallAnimation({ currentTime: newTime });
 
-      if (newTime >= duration) {
+      if (newTime >= Math.max(duration, 0.1)) {
         if (loop) {
           timeRef.current = 0;
           lastTimeRef.current = 0;

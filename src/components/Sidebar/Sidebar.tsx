@@ -88,6 +88,14 @@ export const Sidebar: React.FC = () => {
         });
       } catch (err) {
         console.error('Image optimization error:', err);
+        addNotification({
+          type: 'error',
+          message: 'Görsel Yüklenemedi',
+          description: `"${file.name}" işlenirken bir sorun oluştu. Lütfen tekrar deneyin.`
+        });
+      } finally {
+        // Aynı dosya tekrar seçilirse onChange tetiklensin
+        e.target.value = '';
       }
     }
   };
@@ -114,6 +122,14 @@ export const Sidebar: React.FC = () => {
         });
       } catch (err) {
         console.error('Category upload error:', err);
+        addNotification({
+          type: 'error',
+          message: 'Görsel Yüklenemedi',
+          description: `"${file.name}" işlenirken bir sorun oluştu. Lütfen tekrar deneyin.`
+        });
+      } finally {
+        // Aynı dosya tekrar seçilirse onChange tetiklensin
+        e.target.value = '';
       }
     }
   };

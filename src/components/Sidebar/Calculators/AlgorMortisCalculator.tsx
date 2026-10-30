@@ -22,7 +22,16 @@ export const AlgorMortisCalculator: React.FC = () => {
   useEffect(() => {
     const baseCoolingRate = 1.5;
     const adjustedRate = baseCoolingRate * condition.factor;
-    const calculatedHours = (37.2 - bodyTemp) / adjustedRate;
+    // Newton soğuma modeli: ortam sıcaklığı artık hesaba katılıyor.
+    // t = (T0 − Ta)/k × ln((T0 − Ta)/(Tb − Ta)) — k başlangıç eğimi (°C/saat).
+    // Vücut ısısı ortam sıcaklığına yaklaştıysa güvenilir tahmin yapılamaz.
+    const delta0 = 37.2 - ambientTemp;
+    const deltaNow = bodyTemp - ambientTemp;
+    if (delta0 <= 0 || deltaNow <= 0.5) {
+      setHours(0);
+      return;
+    }
+    const calculatedHours = (delta0 / adjustedRate) * Math.log(delta0 / deltaNow);
     setHours(Math.max(0, calculatedHours));
   }, [bodyTemp, ambientTemp, condition]);
 

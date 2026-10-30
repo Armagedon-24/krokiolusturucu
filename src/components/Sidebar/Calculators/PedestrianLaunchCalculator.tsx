@@ -45,7 +45,10 @@ export const PedestrianLaunchCalculator: React.FC = () => {
       running_opposite: -10,
     };
     const relSpeedKmh = stateSpeeds[pedestrianState] ?? 0;
-    const vehicleSpeedKmh = vEffMs * 3.6 - relSpeedKmh;
+    // vEff = KAPANIŞ (çarpma) hızı. Araç hızı = kapanış ± yaya hızı:
+    // aynı yönde (+) araç yayayı arkadan yakalar → araç daha hızlı;
+    // ters yönde (−) araç daha yavaş olabilir. (İşaret önceleri tersydi.)
+    const vehicleSpeedKmh = vEffMs * 3.6 + relSpeedKmh;
 
     // Derived Searle values using vEffMs
     const flightDist = vEffMs * sqrtHG;
@@ -237,7 +240,8 @@ export const PedestrianLaunchCalculator: React.FC = () => {
           <input
             type="number"
             value={throwDistInput}
-            onChange={(e) => setThrowDistInput(Math.max(1, Math.min(200, Number(e.target.value))))}
+            onChange={(e) => setThrowDistInput(Number(e.target.value))}
+            onBlur={() => setThrowDistInput(v => Math.max(1, Math.min(200, Number(v) || 20)))}
             className="w-full bg-[#111] border border-[#333] rounded-2xl px-5 py-4 text-sm text-white focus:border-[#F5C518]/50 outline-none transition-all font-mono"
             step="0.1"
           />
@@ -252,7 +256,8 @@ export const PedestrianLaunchCalculator: React.FC = () => {
           <input
             type="number"
             value={pedestrianHeight}
-            onChange={(e) => setPedestrianHeight(Math.max(100, Math.min(220, Number(e.target.value))))}
+            onChange={(e) => setPedestrianHeight(Number(e.target.value))}
+            onBlur={() => setPedestrianHeight(h => Math.max(100, Math.min(220, Number(h) || 175)))}
             className="w-full bg-[#111] border border-[#333] rounded-2xl px-5 py-4 text-sm text-white focus:border-[#F5C518]/50 outline-none transition-all font-mono"
           />
         </div>
@@ -266,7 +271,8 @@ export const PedestrianLaunchCalculator: React.FC = () => {
           <input
             type="number"
             value={pedestrianWeight}
-            onChange={(e) => setPedestrianWeight(Math.max(30, Math.min(200, Number(e.target.value))))}
+            onChange={(e) => setPedestrianWeight(Number(e.target.value))}
+            onBlur={() => setPedestrianWeight(h => Math.max(30, Math.min(200, Number(h) || 75)))}
             className="w-full bg-[#111] border border-[#333] rounded-2xl px-5 py-4 text-sm text-white focus:border-[#F5C518]/50 outline-none transition-all font-mono"
           />
         </div>
@@ -409,7 +415,7 @@ export const PedestrianLaunchCalculator: React.FC = () => {
       <div className="sticky top-0 px-4 py-3 bg-[#1a1a1a] border-b border-[#2a2a2a] flex items-center justify-between z-20">
         <div className="flex items-center gap-2">
           <button
-            onClick={() => { useStore.getState().clearObjects(); setThrowDistInput(20); setPedestrianHeight(175); setPedestrianWeight(75); setPedestrianState('stationary'); }}
+            onClick={() => { setThrowDistInput(20); setPedestrianHeight(175); setPedestrianWeight(75); setPedestrianState('stationary'); }}
             className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-gray-600 hover:text-red-400 transition-colors"
           >
             TEMİZLE

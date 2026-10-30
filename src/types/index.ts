@@ -189,6 +189,8 @@ export interface AccidentAnimationState {
   speed: number;
   loop: boolean;
   showTimeline: boolean;
+  /** Modal oynatıcı (AccidentAnimationPlayer) açıkken tuval döngüsünü kilitlemek için */
+  playerOpen?: boolean;
 }
 
 export interface FallData {
@@ -281,6 +283,8 @@ export interface CanvasState {
   backgroundImage: string | null;
   backgroundOpacity: number;
   backgroundGrayscale: boolean;
+  /** Arka plan görselinin Transformer ile yapılan ve kaydedilen konum/ölçek/dönüş */
+  backgroundTransform?: { x: number; y: number; scaleX: number; scaleY: number; rotation: number };
   canvasBgColor: string;
   canvasOrientation: 'landscape' | 'portrait';
   selectedId: string | null;
@@ -291,7 +295,7 @@ export interface CanvasState {
   historyIndex: number;
   drawingArea?: { x: number, y: number, width: number, height: number };
   symbolUsage: Record<string, number>;
-  
+
   adminPassword: string | null;
   
   // 3D Visual Settings

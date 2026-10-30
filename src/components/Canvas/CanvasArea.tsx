@@ -55,6 +55,323 @@ const useSmartImage = (src: string | undefined) => {
   return corsImage || plainImage;
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// PDF/Önizleme export çizici (ekran render'ının canvas-2D aynası).
+// Ekranla aynı dalları çizer: a-4/a-5 ölçüm okları, ev-callout balonu,
+// ev-arrow-desc açıklama balonu, Bulgu Listesi tablosu, mesafe/bulgu etiketleri.
+// Ayna (scaleX/scaleY === -1) ofseti çağıran taraf uygular; bu fonksiyon node
+// orijinine translate edilmiş bağlamda çizer.
+// ─────────────────────────────────────────────────────────────────────────────
+const drawArrowHeadExport = (ctx: CanvasRenderingContext2D, fromX: number, fromY: number, toX: number, toY: number, headLen: number) => {
+  const angle = Math.atan2(toY - fromY, toX - fromX);
+  const spread = Math.PI / 7;
+  ctx.beginPath();
+  ctx.moveTo(toX, toY);
+  ctx.lineTo(toX - headLen * Math.cos(angle - spread), toY - headLen * Math.sin(angle - spread));
+  ctx.lineTo(toX - headLen * Math.cos(angle + spread), toY - headLen * Math.sin(angle + spread));
+  ctx.closePath();
+  ctx.fill();
+};
+
+const wrapTextByWidth = (text: string, fontSize: number, maxWidth: number): string[] => {
+  const out: string[] = [];
+  const charW = fontSize * 0.58;
+  text.split('\n').forEach((paragraph) => {
+    let line = '';
+    paragraph.split(' ').forEach((word) => {
+      const candidate = line ? `${line} ${word}` : word;
+      if (candidate.length * charW > maxWidth && line) {
+        out.push(line);
+        line = word;
+      } else {
+        line = candidate;
+      }
+    });
+    out.push(line);
+  });
+  return out;
+};
+
+export const drawExportObject = (ctx: CanvasRenderingContext2D, obj: any, img: HTMLImageElement | null, sceneObjects: any[]) => {
+  const w = obj.width ?? 50;
+  const h = obj.height ?? 50;
+  const symbolId: string = obj.symbolId || '';
+
+  // 1) ev-callout — dinamik balon (ekrandaki Path + Text ile aynı geometri)
+  if (symbolId === 'ev-callout') {
+    const text = String(obj.distance || '');
+    const fontSize = obj.distanceFontSize || 14;
+    const { w: cw, h: ch } = calculateCalloutSize(text, fontSize);
+    const r = 4;
+    const tailH = ch * 0.25;
+    const boxH = ch - tailH;
+    const tailW = Math.min(cw * 0.2, 20);
+    ctx.beginPath();
+    ctx.moveTo(r, 0);
+    ctx.lineTo(cw - r, 0); ctx.arcTo(cw, 0, cw, r, r);
+    ctx.lineTo(cw, boxH - r); ctx.arcTo(cw, boxH, cw - r, boxH, r);
+    ctx.lineTo(r + tailW * 1.5, boxH);
+    ctx.lineTo(r, ch);
+    ctx.lineTo(r + tailW * 0.5, boxH);
+    ctx.lineTo(r, boxH); ctx.arcTo(0, boxH, 0, boxH - r, r);
+    ctx.lineTo(0, r); ctx.arcTo(0, 0, r, 0, r);
+    ctx.closePath();
+    ctx.strokeStyle = obj.fill === 'transparent' || !obj.fill ? '#000000' : obj.fill;
+    ctx.lineWidth = 2;
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+    // Metin (kutu ortası)
+    ctx.fillStyle = obj.distanceColor || '#000000';
+    ctx.font = `bold ${fontSize}px Inter, Arial`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const lines = text.split('\n');
+    const lineH = fontSize * 1.1;
+    const startY = boxH / 2 - ((lines.length - 1) * lineH) / 2;
+    lines.forEach((ln: string, i: number) => ctx.fillText(ln, cw / 2, startY + i * lineH));
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    return;
+  }
+
+  // 2) ev-arrow-desc / ev-arrow-desc-ellipse — ok + çerçeve + çok satırlı metin
+  if (symbolId === 'ev-arrow-desc' || symbolId === 'ev-arrow-desc-ellipse') {
+    const mx = obj.markerX !== undefined ? obj.markerX : 0;
+    const my = obj.markerY !== undefined ? obj.markerY : 0;
+    const tx = obj.textX !== undefined ? obj.textX : 120;
+    const ty = obj.textY !== undefined ? obj.textY : 0;
+    const isEllipse = symbolId === 'ev-arrow-desc-ellipse';
+    const text = String(obj.distance || '');
+    const fontSize = obj.distanceFontSize || 12;
+
+    const lines = text.split('\n');
+    const charWidth = fontSize * 0.6;
+    const padding = 12;
+    const maxLineLength = Math.max(...lines.map((l: string) => l.length), 1);
+    const autoW = maxLineLength * charWidth + padding * 2;
+    const autoH = lines.length * (fontSize * 1.2) + padding * 2;
+    const frameW = obj.frameWidth !== undefined ? obj.frameWidth : autoW;
+    const frameH = obj.frameHeight !== undefined ? obj.frameHeight : autoH;
+
+    const centerX = tx + frameW / 2;
+    const centerY = ty + frameH / 2;
+    const dx = mx - centerX;
+    const dy = my - centerY;
+    let ax = centerX;
+    let ay = centerY;
+    if (dx !== 0 || dy !== 0) {
+      if (isEllipse) {
+        const t = 1 / Math.sqrt((dx * dx) / ((frameW / 2) ** 2) + (dy * dy) / ((frameH / 2) ** 2));
+        ax = centerX + dx * t;
+        ay = centerY + dy * t;
+      } else {
+        const absDx = Math.abs(dx);
+        const absDy = Math.abs(dy);
+        const sc = Math.min((frameW / 2) / (absDx || 1e-6), (frameH / 2) / (absDy || 1e-6));
+        ax = centerX + dx * sc;
+        ay = centerY + dy * sc;
+      }
+    }
+    // Ok
+    ctx.strokeStyle = obj.fill || '#000000';
+    ctx.fillStyle = obj.fill || '#000000';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(mx, my); ctx.stroke();
+    drawArrowHeadExport(ctx, ax, ay, mx, my, 10);
+    // Çerçeve
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 1.5;
+    if (isEllipse) {
+      ctx.beginPath();
+      ctx.ellipse(centerX, centerY, frameW / 2, frameH / 2, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    } else {
+      ctx.strokeRect(tx, ty, frameW, frameH);
+    }
+    // Metin (dikey ortalanmış, satır kaydırma ile)
+    const wrapped = wrapTextByWidth(text, fontSize, frameW - 8);
+    ctx.fillStyle = '#000000';
+    ctx.font = `bold ${fontSize}px Inter, Arial`;
+    ctx.textAlign = 'center';
+    const lineH = fontSize * 1.2;
+    const startY = ty + frameH / 2 - ((wrapped.length - 1) * lineH) / 2;
+    wrapped.forEach((ln, i) => ctx.fillText(ln, centerX, startY + i * lineH));
+    ctx.textAlign = 'left';
+    return;
+  }
+
+  // 3) Bulgu Listesi tablosu (ekrandaki hesapla birebir)
+  if (obj.type === 'finding-list') {
+    const findings = (sceneObjects || [])
+      .filter((o: any) => o.findingNo)
+      .sort((a: any, b: any) => String(a.findingNo || '').localeCompare(String(b.findingNo || ''), undefined, { numeric: true }));
+
+    const textWidth = w - 16;
+    const charWidth = 4.5;
+    const prefixWidth = 54;
+    const descWidth = textWidth - prefixWidth;
+    const charsPerDescLine = descWidth / charWidth;
+
+    let currentY = 0;
+    const items: { prefix: string; descLines: string[]; y: number }[] = [];
+    findings.forEach((f: any) => {
+      const prefix = `Bulgu No. ${f.findingNo}:`;
+      const desc = f.findingDesc || f.name || '';
+      const nLines = Math.max(1, Math.ceil(desc.length / charsPerDescLine));
+      items.push({ prefix, descLines: wrapTextByWidth(desc, 9, descWidth), y: currentY });
+      currentY += nLines * 11 + 6;
+    });
+    const totalHeight = Math.max(100, currentY + 40);
+
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+    ctx.fillRect(0, 0, w, totalHeight);
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(0, 0, w, totalHeight);
+
+    ctx.fillStyle = '#000';
+    ctx.font = 'bold 11px Inter, Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('BULGU LISTESI', w / 2, 15);
+    ctx.textAlign = 'left';
+    ctx.beginPath(); ctx.moveTo(5, 20); ctx.lineTo(w - 5, 20); ctx.stroke();
+
+    items.forEach((it) => {
+      ctx.font = 'bold 9px Inter, Arial';
+      ctx.fillText(it.prefix, 8, 25 + it.y + 9);
+      ctx.font = '9px Inter, Arial';
+      it.descLines.forEach((ln, i) => ctx.fillText(ln, 8 + prefixWidth, 25 + it.y + 9 + i * 11));
+    });
+    return;
+  }
+
+  // 4) Ölçüm/yön okları — a-4, a-5, isDistanceArrow (iki yönlü uçlu)
+  const isNativeArrow = obj.isDistanceArrow || symbolId === 'a-4' || symbolId === 'a-5';
+  if (isNativeArrow) {
+    const hasCoords = obj.startX !== undefined && obj.endX !== undefined;
+    const pts = hasCoords
+      ? [obj.startX - obj.x, obj.startY - obj.y, obj.endX - obj.x, obj.endY - obj.y]
+      : [0, h / 2, w, h / 2];
+    const isMeasurement = obj.isDistanceArrow || symbolId === 'a-4';
+    ctx.strokeStyle = isMeasurement ? '#000000' : (obj.fill || obj.stroke || '#000000');
+    ctx.fillStyle = ctx.strokeStyle;
+    ctx.lineWidth = isMeasurement ? 5 : (obj.strokeWidth || 5);
+    ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(pts[0], pts[1]); ctx.lineTo(pts[2], pts[3]); ctx.stroke();
+    drawArrowHeadExport(ctx, pts[0], pts[1], pts[2], pts[3], 12);
+    if (isMeasurement) drawArrowHeadExport(ctx, pts[2], pts[3], pts[0], pts[1], 12);
+    return;
+  }
+
+  // 5) Görsel tabanlı sembol/fotoğraf
+  if (obj.src && img) {
+    ctx.drawImage(img, 0, 0, w, h);
+    return;
+  }
+
+  // 6) Dikdörtgen / çizgi / metin
+  if (obj.type === 'rect') {
+    ctx.fillStyle = obj.fill || 'transparent';
+    ctx.strokeStyle = obj.stroke || 'black';
+    ctx.lineWidth = obj.strokeWidth || 1;
+    if (obj.fill && obj.fill !== 'transparent') ctx.fillRect(0, 0, w, h);
+    ctx.strokeRect(0, 0, w, h);
+    return;
+  }
+  if (obj.type === 'line') {
+    ctx.strokeStyle = obj.fill || 'black';
+    ctx.lineWidth = obj.strokeWidth || Math.min(w, h) || 1;
+    if (obj.dash) ctx.setLineDash(obj.dash);
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(w > h ? w : 0, w > h ? 0 : h); ctx.stroke();
+    ctx.setLineDash([]);
+    return;
+  }
+  if (obj.type === 'text' || obj.type === 'template-text') {
+    ctx.font = `${obj.fontStyle || 'normal'} ${obj.fontSize || 12}px ${obj.fontFamily || 'Arial'}`;
+    ctx.fillStyle = obj.fill || '#000';
+    ctx.textAlign = (obj.align as CanvasTextAlign) || 'left';
+    const lines = String(obj.text || '').split('\n');
+    const textX = obj.align === 'right' ? w : (obj.align === 'center' ? w / 2 : 0);
+    lines.forEach((line: string, idx: number) => ctx.fillText(line, textX, (obj.fontSize || 12) * (idx + 1)));
+    ctx.textAlign = 'left';
+    return;
+  }
+
+  // 7) Bulgu işaretleyicileri
+  if (symbolId === 'ev-circle') {
+    ctx.beginPath(); ctx.arc(w / 2, h / 2, Math.min(w, h) / 2, 0, Math.PI * 2);
+    ctx.fillStyle = '#F5C518'; ctx.fill();
+    ctx.strokeStyle = '#000'; ctx.lineWidth = 2; ctx.stroke();
+    if (obj.findingNo) {
+      ctx.font = `bold ${w * 0.4}px Arial`; ctx.fillStyle = '#000';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(String(obj.findingNo), w / 2, h / 2);
+      ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    }
+    return;
+  }
+  if (symbolId === 'ev-square') {
+    ctx.fillStyle = '#F5C518'; ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = '#000'; ctx.lineWidth = 2; ctx.strokeRect(0, 0, w, h);
+    if (obj.findingNo) {
+      ctx.font = `bold ${w * 0.4}px Arial`; ctx.fillStyle = '#000';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(String(obj.findingNo), w / 2, h / 2);
+      ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    }
+    return;
+  }
+
+  // 8) Mesafe/hız etiketi (ev-callout vb. hariç — ekrandaki kuralla aynı)
+  const labelExcluded = ['ev-arrow-desc', 'ev-arrow-desc-ellipse', 'ev-callout', 'ev-shooting-trajectory'];
+  if (obj.distance && !labelExcluded.includes(symbolId)) {
+    const isDistanceTool = obj.isDistanceArrow || symbolId === 'a-4';
+    const angle = isDistanceTool && obj.startX !== undefined
+      ? Math.atan2(obj.endY - obj.startY, obj.endX - obj.startX) * (180 / Math.PI)
+      : 0;
+    let textRotation = angle;
+    if (textRotation > 90) textRotation -= 180;
+    if (textRotation < -90) textRotation += 180;
+    const fontSize = obj.distanceFontSize || (isDistanceTool ? 10 : 14);
+    const gx = isDistanceTool ? w / 2 : 0;
+    const gy = isDistanceTool ? h / 2 : (symbolId === 'ev-arrow-text' ? -20 : (h ? h + 5 : 50));
+    ctx.save();
+    ctx.translate(gx, gy);
+    ctx.rotate((textRotation * Math.PI) / 180);
+    ctx.font = `bold ${fontSize}px Inter, Arial`;
+    ctx.fillStyle = obj.distanceColor || '#000000';
+    ctx.textAlign = 'center';
+    ctx.fillText(String(obj.text || obj.distance || ''), 0, -fontSize - 8);
+    if (obj.showSpeedInfo) {
+      const rawText = String(obj.text || obj.distance || '');
+      const match = rawText.match(/\d+(\.\d+)?/);
+      const cm = match ? parseFloat(match[0]) : NaN;
+      if (!isNaN(cm) && cm > 0) {
+        const meters = rawText.toLowerCase().includes('metre') ? cm : cm / 100;
+        const mu = obj.mu || 0.75;
+        const efficiency = obj.efficiency || 100;
+        const speed = Math.round(15.94 * Math.sqrt(mu * meters * (efficiency / 100)));
+        ctx.font = `italic bold ${fontSize * 0.85}px Inter, Arial`;
+        ctx.fillStyle = '#059669';
+        ctx.fillText(`(~${speed} km/s)`, 0, 5 + fontSize * 0.85);
+      }
+    }
+    ctx.restore();
+  }
+
+  // 9) Bulgu numarası madalyonu (sembol üstünde küçük sarı rozet)
+  if (obj.findingNo && !['ev-circle', 'ev-square', 'finding-list'].includes(symbolId)) {
+    ctx.beginPath(); ctx.arc(w / 2, -15, 8, 0, Math.PI * 2);
+    ctx.fillStyle = '#F5C518'; ctx.fill();
+    ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.font = 'bold 10px Inter, Arial';
+    ctx.fillStyle = '#000';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(String(obj.findingNo), w / 2, -15);
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  }
+};
+
 const IndividualObject = ({ 
   shapeProps, 
   isSelected, 
@@ -2423,6 +2740,7 @@ export const CanvasArea: React.FC = () => {
     backgroundImage, 
     backgroundOpacity, 
     backgroundGrayscale, 
+    backgroundTransform, 
     selectedId, 
     setSelectedId, 
     updateObject, 
@@ -3000,7 +3318,17 @@ export const CanvasArea: React.FC = () => {
               ctx.rect(da.x, da.y, da.width, da.height);
               ctx.clip();
               ctx.globalAlpha = 1;
-              ctx.drawImage(bgImg, da.x, da.y, da.width, da.height);
+              // Aktif sahnede Transformer ile yapılan arka plan dönüşümünü aynala
+              // (store'dan güncel okunur — stale closure olmasın)
+              const bt = (scene.id === currentActiveId) ? useStore.getState().backgroundTransform : undefined;
+              if (bt && (bt.scaleX !== 1 || bt.scaleY !== 1 || bt.rotation || bt.x || bt.y)) {
+                ctx.translate(da.x + (bt.x || 0), da.y + (bt.y || 0));
+                ctx.rotate(bt.rotation || 0);
+                ctx.scale(bt.scaleX || 1, bt.scaleY || 1);
+                ctx.drawImage(bgImg, 0, 0, da.width, da.height);
+              } else {
+                ctx.drawImage(bgImg, da.x, da.y, da.width, da.height);
+              }
               ctx.restore();
             }
           }
@@ -3030,8 +3358,11 @@ export const CanvasArea: React.FC = () => {
             const w = obj.width ?? 50;
             const h = obj.height ?? 50;
             const rot = ((obj.rotation ?? 0) * Math.PI) / 180;
-            const ox = (obj as any).offsetX ?? 0;
-            const oy = (obj as any).offsetY ?? 0;
+            // Ayna (flip) ofseti: ekrandaki Konva node'ları offsetX/offsetY ile
+            // scaleX/scaleY === -1'i telafi eder; export bunu birebir kopyalamalı,
+            // aksi halde çevrilmiş nesneler PDF'te tam genişlik/yükseklik kayar.
+            const ox = (obj.scaleX === -1) ? w : 0;
+            const oy = (obj.scaleY === -1) ? h : 0;
 
             // Apply transform matching Konva node origin
             if (rot !== 0 || ox !== 0 || oy !== 0) {
@@ -3044,65 +3375,8 @@ export const CanvasArea: React.FC = () => {
               ctx.scale(obj.scaleX ?? 1, obj.scaleY ?? 1);
             }
 
-            if (obj.src) {
-              // Image-based symbol / uploaded image / photo
-              const img = imgMap.get(obj.src);
-              if (img) {
-                ctx.drawImage(img, 0, 0, w, h);
-              }
-            } else if (obj.type === 'rect') {
-              ctx.fillStyle = obj.fill || 'transparent';
-              ctx.strokeStyle = obj.stroke || 'black';
-              ctx.lineWidth = obj.strokeWidth || 1;
-              if (obj.fill && obj.fill !== 'transparent') ctx.fillRect(0, 0, w, h);
-              ctx.strokeRect(0, 0, w, h);
-            } else if (obj.type === 'line') {
-              ctx.strokeStyle = obj.fill || 'black';
-              ctx.lineWidth = obj.strokeWidth || Math.min(w, h) || 1;
-              if (obj.dash) ctx.setLineDash(obj.dash);
-              ctx.beginPath();
-              ctx.moveTo(0, 0);
-              ctx.lineTo(w > h ? w : 0, w > h ? 0 : h);
-              ctx.stroke();
-            } else if (obj.type === 'text' || obj.type === 'template-text') {
-              ctx.font = `${obj.fontStyle || 'normal'} ${obj.fontSize || 12}px ${obj.fontFamily || 'Arial'}`;
-              ctx.fillStyle = obj.fill || '#000';
-              ctx.textAlign = (obj.align as CanvasTextAlign) || 'left';
-              const text = obj.text || '';
-              const lines = text.split('\n');
-              const textX = obj.align === 'right' ? w : (obj.align === 'center' ? w / 2 : 0);
-              lines.forEach((line: string, idx: number) => {
-                ctx.fillText(line, textX, (obj.fontSize || 12) * (idx + 1));
-              });
-            } else if (obj.symbolId === 'ev-circle') {
-              ctx.beginPath();
-              ctx.arc(w / 2, h / 2, Math.min(w, h) / 2, 0, Math.PI * 2);
-              ctx.fillStyle = '#F5C518';
-              ctx.fill();
-              ctx.strokeStyle = '#000';
-              ctx.lineWidth = 2;
-              ctx.stroke();
-              if (obj.findingNo) {
-                ctx.font = `bold ${w * 0.4}px Arial`;
-                ctx.fillStyle = '#000';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillText(String(obj.findingNo), w / 2, h / 2);
-              }
-            } else if (obj.symbolId === 'ev-square') {
-              ctx.fillStyle = '#F5C518';
-              ctx.fillRect(0, 0, w, h);
-              ctx.strokeStyle = '#000';
-              ctx.lineWidth = 2;
-              ctx.strokeRect(0, 0, w, h);
-              if (obj.findingNo) {
-                ctx.font = `bold ${w * 0.4}px Arial`;
-                ctx.fillStyle = '#000';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillText(String(obj.findingNo), w / 2, h / 2);
-              }
-            }
+            const img = obj.src ? (imgMap.get(obj.src) || null) : null;
+            drawExportObject(ctx, obj, img, sceneObjects);
 
             ctx.restore();
           }
@@ -3474,7 +3748,16 @@ export const CanvasArea: React.FC = () => {
             ctx.beginPath();
             ctx.rect(da.x, da.y, da.width, da.height);
             ctx.clip();
-            ctx.drawImage(bgImg, da.x, da.y, da.width, da.height);
+            // Transformer ile yapılan arka plan dönüşümünü aynala
+            const bt = state.backgroundTransform;
+            if (bt && (bt.scaleX !== 1 || bt.scaleY !== 1 || bt.rotation || bt.x || bt.y)) {
+              ctx.translate(da.x + (bt.x || 0), da.y + (bt.y || 0));
+              ctx.rotate(bt.rotation || 0);
+              ctx.scale(bt.scaleX || 1, bt.scaleY || 1);
+              ctx.drawImage(bgImg, 0, 0, da.width, da.height);
+            } else {
+              ctx.drawImage(bgImg, da.x, da.y, da.width, da.height);
+            }
             ctx.restore();
           }
         }
@@ -3501,8 +3784,9 @@ export const CanvasArea: React.FC = () => {
           const w = obj.width ?? 50;
           const h = obj.height ?? 50;
           const rot = ((obj.rotation ?? 0) * Math.PI) / 180;
-          const ox = (obj as any).offsetX ?? 0;
-          const oy = (obj as any).offsetY ?? 0;
+          // Ayna (flip) ofseti — PDF export ile aynı kural
+          const ox = (obj.scaleX === -1) ? w : 0;
+          const oy = (obj.scaleY === -1) ? h : 0;
 
           if (rot !== 0 || ox !== 0 || oy !== 0) {
             ctx.translate(x + ox, y + oy);
@@ -3514,36 +3798,8 @@ export const CanvasArea: React.FC = () => {
             ctx.scale(obj.scaleX ?? 1, obj.scaleY ?? 1);
           }
 
-          if (obj.src) {
-            const img = imgMap.get(obj.src);
-            if (img) ctx.drawImage(img, 0, 0, w, h);
-          } else if (obj.type === 'rect') {
-            if (obj.fill && obj.fill !== 'transparent') { ctx.fillStyle = obj.fill; ctx.fillRect(0, 0, w, h); }
-            ctx.strokeStyle = obj.stroke || '#000'; ctx.lineWidth = obj.strokeWidth || 1; ctx.strokeRect(0, 0, w, h);
-          } else if (obj.type === 'line') {
-            ctx.strokeStyle = obj.fill || '#000';
-            ctx.lineWidth = obj.strokeWidth || Math.min(w, h) || 1;
-            if (obj.dash) ctx.setLineDash(obj.dash);
-            ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(w > h ? w : 0, w > h ? 0 : h); ctx.stroke();
-          } else if (obj.type === 'text' || (obj.type as any) === 'template-text') {
-            ctx.font = `${obj.fontStyle || 'normal'} ${obj.fontSize || 12}px ${obj.fontFamily || 'Arial'}`;
-            ctx.fillStyle = obj.fill || '#000';
-            ctx.textAlign = (obj.align as CanvasTextAlign) || 'left';
-            const lines = (obj.text || '').split('\n');
-            const textX = obj.align === 'right' ? w : (obj.align === 'center' ? w / 2 : 0);
-            lines.forEach((line: string, idx: number) => {
-              ctx.fillText(line, textX, (obj.fontSize || 12) * (idx + 1));
-            });
-          } else if (obj.symbolId === 'ev-circle') {
-            ctx.beginPath(); ctx.arc(w/2, h/2, Math.min(w,h)/2, 0, Math.PI*2);
-            ctx.fillStyle = '#F5C518'; ctx.fill();
-            ctx.strokeStyle = '#000'; ctx.lineWidth = 2; ctx.stroke();
-            if (obj.findingNo) { ctx.font = `bold ${w*0.4}px Arial`; ctx.fillStyle = '#000'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(obj.findingNo), w/2, h/2); }
-          } else if (obj.symbolId === 'ev-square') {
-            ctx.fillStyle = '#F5C518'; ctx.fillRect(0, 0, w, h);
-            ctx.strokeStyle = '#000'; ctx.lineWidth = 2; ctx.strokeRect(0, 0, w, h);
-            if (obj.findingNo) { ctx.font = `bold ${w*0.4}px Arial`; ctx.fillStyle = '#000'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(obj.findingNo), w/2, h/2); }
-          }
+          const img = obj.src ? (imgMap.get(obj.src) || null) : null;
+          drawExportObject(ctx, obj, img, currentObjects);
           ctx.restore();
         }
 
@@ -4602,16 +4858,36 @@ export const CanvasArea: React.FC = () => {
                 >
                   <KonvaImage
                     image={bgImage}
-                    x={0}
-                    y={0}
+                    x={backgroundTransform?.x ?? 0}
+                    y={backgroundTransform?.y ?? 0}
                     width={drawingArea?.width || 1000}
                     height={drawingArea?.height || 1400}
+                    scaleX={backgroundTransform?.scaleX ?? 1}
+                    scaleY={backgroundTransform?.scaleY ?? 1}
+                    rotation={backgroundTransform?.rotation ?? 0}
                     name="background-image"
                     ref={bgImageRef}
                     opacity={backgroundOpacity}
                     filters={backgroundGrayscale ? [Konva.Filters.Grayscale] : []}
                     onClick={() => setSelectedId('background-image')}
                     onTap={() => setSelectedId('background-image')}
+                    onTransformEnd={() => {
+                      // Transformer değişikliklerini kalıcı hale getir: node değerlerini
+                      // oku, node'u sıfırla ve store'a yaz (yoksa export/yenileme kaybeder)
+                      const node = bgImageRef.current;
+                      if (!node) return;
+                      const bt = {
+                        x: node.x(),
+                        y: node.y(),
+                        scaleX: node.scaleX(),
+                        scaleY: node.scaleY(),
+                        rotation: node.rotation(),
+                      };
+                      node.scaleX(1);
+                      node.scaleY(1);
+                      node.rotation(0);
+                      useStore.setState({ backgroundTransform: bt });
+                    }}
                   />
                 </Group>
               )}
