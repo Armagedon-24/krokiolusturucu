@@ -34,15 +34,15 @@ const PaperView: React.FC<{ report: ForensicReport }> = ({ report }) => {
         <img src={wmSrc} alt="" aria-hidden className="w-[92%] max-w-none opacity-[0.14]" />
       </div>
 
-      {/* Üst band — antet + logo */}
-      <div className="relative z-10 bg-[#16181D] text-white pl-2.5 pr-3 py-3 -mx-5 -mt-4">
-        <div className="flex items-center gap-2.5">
-          <img src={logoSrc} alt="Kurum logosu" className="w-9 h-9 object-contain shrink-0" />
-          <div className="min-w-0">
-            <div className="text-[10px] font-black tracking-wide leading-tight">KAZA ANALİZ VE REKONSTRÜKSİYON ANALİZİ</div>
-            <div className="text-[7px] text-gray-400 mt-0.5">Bilimsel yöntemlere dayalı teknik değerlendirme belgesi</div>
-          </div>
-          <div className="ml-auto text-right shrink-0 border border-gray-600 rounded px-2 py-1">
+      {/* Üst band — antet: logo solda, ortalanmış ana başlık, sağ altta rapor rozeti */}
+      <div className="relative z-10 bg-[#16181D] text-white pl-2.5 pr-3 py-2.5 -mx-5 -mt-4">
+        <img src={logoSrc} alt="Kurum logosu" className="absolute left-2.5 top-1/2 -translate-y-1/2 w-9 h-9 object-contain" />
+        <div className="px-12 text-center">
+          <div className="text-[10px] font-black tracking-wide leading-tight">KAZA ANALİZ VE REKONSTRÜKSİYON ANALİZİ</div>
+          <div className="text-[7px] text-gray-400 mt-0.5">Bilimsel yöntemlere dayalı teknik değerlendirme belgesi</div>
+        </div>
+        <div className="mt-2 flex justify-end">
+          <div className="text-right border border-gray-600 rounded px-2 py-1">
             <div className="text-[6.5px] font-bold text-gray-400 tracking-wider">RAPOR NO</div>
             <div className="text-[8.5px] font-bold text-[#D1D5DB] leading-tight">{m.dosyaNo}</div>
             <div className="text-[6.5px] text-gray-400">{m.tarih} · {m.saat}</div>
@@ -68,7 +68,7 @@ const PaperView: React.FC<{ report: ForensicReport }> = ({ report }) => {
 
       {/* Başlık + bölümler */}
       <div className="relative z-10 mt-3 border border-gray-200 bg-[#FBFBFA] rounded-sm px-3 py-2">
-        <div className="text-[10.5px] font-bold text-[#16181D] leading-snug text-center">{report.title}</div>
+        <div className="text-[10.5px] font-bold text-[#16181D] leading-snug">{report.title}</div>
       </div>
 
     <div className="relative z-10 mt-3 space-y-3.5">
@@ -77,7 +77,7 @@ const PaperView: React.FC<{ report: ForensicReport }> = ({ report }) => {
         const items = typeof raw === 'string' ? [raw] : raw;
         return (
           <div key={key}>
-            <div className="flex items-center justify-center gap-1.5 border-b border-gray-300 pb-1 mb-1.5">
+            <div className="flex items-center gap-1.5 border-b border-gray-300 pb-1 mb-1.5">
               <span className="inline-flex items-center justify-center w-4 h-4 bg-[#6B7280] text-white text-[8px] font-black rounded-[2px]">
                 {no}
               </span>

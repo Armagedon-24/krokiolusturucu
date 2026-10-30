@@ -168,24 +168,18 @@ export async function buildForensicPdf(report: ForensicReport): Promise<Forensic
     doc.text(meta.dosyaNo, PW - MR, 8.6, { align: 'right' });
   };
 
-  /** Bölüm başlığı: sayfada ortalanmış numara rozeti + en koyu büyük harf başlık + belirgin çizgi. */
+  /** Bölüm başlığı: gri numara rozeti + en koyu büyük harf başlık + belirgin çizgi. */
   const sectionHeading = (no: number, title: string) => {
     ensure(16);
-    doc.setFont(FONT_NAME, 'bold');
-    doc.setFontSize(11);
-    const t = trUpper(title);
-    const tw = doc.getTextWidth(t);
-    const bw = 6.5;
-    const gap = 3.5;
-    const x0 = (PW - (bw + gap + tw)) / 2;
     doc.setFillColor(C_ACCENT);
-    doc.rect(x0, y, bw, bw, 'F');
+    doc.rect(ML, y, 6.5, 6.5, 'F');
+    doc.setFont(FONT_NAME, 'bold');
     doc.setFontSize(9.5);
     doc.setTextColor(C_WHITE);
-    doc.text(String(no), x0 + bw / 2, y + 4.6, { align: 'center' });
+    doc.text(String(no), ML + 3.25, y + 4.6, { align: 'center' });
     doc.setFontSize(11);
     doc.setTextColor(C_HEADING);
-    doc.text(t, x0 + bw + gap, y + 4.6);
+    doc.text(trUpper(title), ML + 9.5, y + 4.6);
     y += 8.6;
     hairline(doc, ML, y, CW, C_RULE, 0.35);
     y += 4;
@@ -218,43 +212,43 @@ export async function buildForensicPdf(report: ForensicReport): Promise<Forensic
   doc.setFillColor(C_ACCENT);
   doc.rect(0, 30, PW, 1.1, 'F');
 
-  // Sol: kurum logosu (antet) — daha sola hizalı
+  // Sol: kurum logosu (antet)
   const logoX = 11;
   doc.addImage(logoB64, 'PNG', logoX, 4.5, 21.5, 21.5 * (148 / 175));
-  const tx = logoX + 21.5 + 4; // logo sonrası metin sütunu
 
-  // Başlık: rozet alanına taşmayacak kadar sığana kadar punto küçült
-  const badgeLeft = PW - MR - 52;
-  const maxTitleW = badgeLeft - 4 - tx;
+  // Ana başlık + alt yazı: sayfada ortalanır (RAPOR NO rozeti sağ alt köşededir)
+  const badgeW = 46;
+  const badgeLeft = PW - MR - badgeW;
   doc.setFont(FONT_NAME, 'bold');
   doc.setTextColor(C_WHITE);
   let titleSize = 15.5;
   doc.setFontSize(titleSize);
-  while (titleSize > 11 && doc.getTextWidth(DOC_TITLE) > maxTitleW) {
+  const maxTitleW = 2 * (PW / 2 - (logoX + 21.5 + 4)); // logo ile çakışmasın
+  while (titleSize > 10 && doc.getTextWidth(DOC_TITLE) > maxTitleW) {
     titleSize -= 0.5;
     doc.setFontSize(titleSize);
   }
-  doc.text(DOC_TITLE, tx, 13.5);
+  doc.text(DOC_TITLE, PW / 2, 11, { align: 'center' });
   doc.setFont(FONT_NAME, 'normal');
   doc.setFontSize(7.5);
   doc.setTextColor('#9CA3AF');
-  doc.text('Bilimsel yöntemlere dayalı teknik değerlendirme belgesi', tx, 20);
+  doc.text('Bilimsel yöntemlere dayalı teknik değerlendirme belgesi', PW / 2, 17.5, { align: 'center' });
 
-  // Sağda rapor rozeti
+  // Sağ altta rapor rozeti — ortalanmış başlık satırıyla çakışmasın diye bandın altına alınır
   doc.setDrawColor('#4B5563');
   doc.setLineWidth(0.3);
-  doc.roundedRect(badgeLeft, 7, 52, 17, 1.5, 1.5, 'S');
+  doc.roundedRect(badgeLeft, 13, badgeW, 16.5, 1.5, 1.5, 'S');
   doc.setFont(FONT_NAME, 'bold');
   doc.setFontSize(6.5);
   doc.setTextColor('#9CA3AF');
-  doc.text('RAPOR NO', PW - MR - 48, 11.5);
-  doc.setFontSize(9.5);
+  doc.text('RAPOR NO', badgeLeft + 4, 16.5);
+  doc.setFontSize(9);
   doc.setTextColor('#D1D5DB');
-  doc.text(meta.dosyaNo, PW - MR - 48, 17.5);
+  doc.text(meta.dosyaNo, badgeLeft + 4, 21.5);
   doc.setFont(FONT_NAME, 'normal');
   doc.setFontSize(7);
   doc.setTextColor('#9CA3AF');
-  doc.text(`${meta.tarih} · ${meta.saat}`, PW - MR - 48, 21.8);
+  doc.text(`${meta.tarih} · ${meta.saat}`, badgeLeft + 4, 26.3);
 
   /* --- Bilgi tablosu ---------------------------------------------- */
   y = 37.5;
