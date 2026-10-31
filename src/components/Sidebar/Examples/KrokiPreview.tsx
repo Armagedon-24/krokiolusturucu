@@ -1,165 +1,195 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Stage, Layer, Image as KImage, Rect, Line, Text as KText } from 'react-konva';
-import type { CanvasObject } from '../../../types';
-import { buildKrokiObjects, type KrokiArea } from '../../../utils/krokiTransfer';
-import type { KrokiScenario } from '../../../data/krokiExamples';
+import React, { useMemo } from 'react';
+import { buildScenarioObjects, type KrokiScenario } from '../../../data/krokiScenarios';
 
-/** Sembol görsellerini paylaşılan önbellekte tutar. */
-const imgCache = new Map<string, HTMLImageElement>();
+/** Senaryoların tasarlandığı yerleşim alanı (landscape kroki şablonu). */
+const DESIGN_W = 1366;
+const DESIGN_H = 706;
 
-function useSymbolImages(srcs: string[]): void {
-  const key = srcs.join('|');
-  const [, force] = useState(0);
-  useEffect(() => {
-    let alive = true;
-    const pending = Array.from(new Set(srcs)).filter((s) => s && !imgCache.has(s));
-    if (!pending.length) return;
-    Promise.all(
-      pending.map(
-        (s) =>
-          new Promise<void>((res) => {
-            const img = new window.Image();
-            img.onload = () => { imgCache.set(s, img); res(); };
-            img.onerror = () => { imgCache.set(s, img); res(); };
-            img.src = s;
-          })
-      )
-    ).then(() => {
-      if (alive) force((n) => n + 1);
-    });
-    return () => { alive = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
-}
-
-interface Props {
+interface KrokiPreviewProps {
   scenario: KrokiScenario;
-  width: number;
-  /** Önizleme alanı (tasarım uzayındaki krokiyi sığdırmak için kullanılır). */
-  area: KrokiArea;
+  /** Görüntü genişliği (px) — yükseklik orana göre hesaplanır */
+  width?: number;
+  className?: string;
 }
 
 /**
- * Kroki senaryosunun küçük önizlemesi. Tuvalde kullanılanla aynı
- * buildKrokiObjects mantığıyla çizilir; etkileşimsizdir.
+ * Senaryo krokisinin küçük önizlemesi. buildScenarioObjects ile üretilen TÜYLE
+ * BİREBİR AYNI nesneleri (aynı semboller, konumlar, döndürmeler) ölçekleyerek
+ * HTML/CSS ile çizer — böylece kartta görülen kroki, tuvale aktarılan krokidir.
  */
-export const KrokiPreview: React.FC<Props> = ({ scenario, width, area }) => {
-  const scale = width / area.width;
-  const height = Math.round(area.height * scale);
-  const objects = useMemo(() => buildKrokiObjects(scenario, area) as CanvasObject[], [scenario, area]);
-  const srcs = useMemo(
-    () => objects.map((o) => (o.type === 'symbol' ? String(o.src ?? '') : '')),
-    [objects]
+export const KrokiPreview: React.FC<KrokiPreviewProps> = ({ scenario, width = 320, className = '' }) => {
+  const s = width / DESIGN_W;
+  const height = Math.round(DESIGN_H * s);
+
+  const objects = useMemo(
+    () => buildScenarioObjects(scenario, { x: 0, y: 0, width: DESIGN_W, height: DESIGN_H }),
+    [scenario],
   );
-  useSymbolImages(srcs);
+
+  const symbols = objects.filter(
+    (o) => o.type === 'symbol' && o.src && !['a-4', 'a-5', 'ev-callout', 'ev-circle', 'ev-square'].includes(o.symbolId || ''),
+  );
+  const markers = objects.filter((o) => o.symbolId === 'ev-circle' || o.symbolId === 'ev-square');
+  const texts = objects.filter((o) => o.type === 'text');
+  const arrows = objects.filter(
+    (o) => ['a-4', 'a-5'].includes(o.symbolId || '') && o.startX !== undefined && o.endX !== undefined,
+  );
+  const callouts = objects.filter((o) => o.symbolId === 'ev-callout');
 
   return (
-    <div className="rounded-xl border border-[#333] bg-white overflow-hidden" style={{ lineHeight: 0 }}>
-      <Stage width={width} height={height} listening={false}>
-        <Layer>
-          <Rect x={0} y={0} width={width} height={height} fill="#ffffff" />
-          {objects.map((o, i) => {
-            const x = (Number(o.x) - area.x) * scale;
-            const y = (Number(o.y) - area.y) * scale;
-            const w = Number(o.width) * scale;
-            const h = Number(o.height ?? o.width) * scale;
-            if (o.type === 'rect') {
-              return (
-                <Rect
-                  key={i}
-                  x={x} y={y} width={w} height={h}
-                  rotation={o.rotation ?? 0}
-                  fill={o.fill ?? 'transparent'}
-                  stroke={o.stroke ?? '#000000'}
-                  strokeWidth={(o.strokeWidth ?? 1.5) * scale}
-                  dash={o.dash?.map((d) => d * scale)}
-                />
-              );
-            }
-            if (o.type === 'line') {
-              if (o.dash) {
-                const horizontal = Number(o.width) >= Number(o.height);
-                return (
-                  <Line
-                    key={i}
-                    x={x} y={y}
-                    rotation={o.rotation ?? 0}
-                    points={horizontal ? [0, 0, w, 0] : [0, 0, 0, h]}
-                    stroke={o.fill ?? '#000000'}
-                    strokeWidth={Math.min(w, h) || 1}
-                    dash={o.dash.map((d) => d * scale)}
-                  />
-                );
-              }
-              return (
-                <Rect key={i} x={x} y={y} width={Math.max(w, 1)} height={Math.max(h, 1)} rotation={o.rotation ?? 0} fill={o.fill ?? '#000000'} />
-              );
-            }
-            if (o.type === 'text') {
-              const fs = Number(o.fontSize ?? 10) * scale;
-              return (
-                <KText
-                  key={i}
-                  x={x} y={y}
-                  width={w}
-                  text={String(o.text ?? '')}
-                  fontSize={Math.max(4, fs)}
-                  fontStyle={o.fontStyle ?? 'normal'}
-                  fill={o.fill ?? '#000000'}
-                  align={o.align ?? 'center'}
-                />
-              );
-            }
-            // sembol
-            const img = o.src ? imgCache.get(String(o.src)) : undefined;
-            if (!img || !img.complete || !img.naturalWidth) return null;
-            if (o.symbolId === 'ev-callout') {
-              // Balon: basit çizim (gövde + metin)
-              return (
-                <React.Fragment key={i}>
-                  <Rect
-                    x={x} y={y} width={w} height={h * 0.78}
-                    stroke="#000000" strokeWidth={Math.max(1, 2 * scale)} fill="#ffffff" cornerRadius={4 * scale}
-                  />
-                  <KText
-                    x={x + 2} y={y + h * 0.12} width={w - 4}
-                    text={String(o.distance ?? '')}
-                    fontSize={Number(o.distanceFontSize ?? 9) * scale}
-                    fill="#000000" align="center"
-                  />
-                  <Line
-                    points={[x + w * 0.15, y + h * 0.78, x, y + h, x + w * 0.3, y + h * 0.78]}
-                    closed fill="#ffffff" stroke="#000000" strokeWidth={Math.max(1, 2 * scale)}
-                  />
-                </React.Fragment>
-              );
-            }
-            if (o.symbolId === 'a-4' || o.symbolId === 'a-5') {
-              const rad = (o.rotation ?? 0) * (Math.PI / 180);
-              const cx = x + (w / 2) * Math.cos(rad) - (h / 2) * Math.sin(rad);
-              const cy = y + (w / 2) * Math.sin(rad) + (h / 2) * Math.cos(rad);
-              return (
-                <React.Fragment key={i}>
-                  <Line
-                    x={x} y={y} rotation={o.rotation ?? 0}
-                    points={[0, h / 2, w, h / 2]}
-                    stroke="#000000" strokeWidth={Math.max(1, 2 * scale)}
-                  />
-                  {o.distance ? (
-                    <KText
-                      x={cx - w / 2} y={cy - h / 2 - 12 * scale} width={w}
-                      text={String(o.distance)}
-                      fontSize={Math.max(5, Number(o.distanceFontSize ?? 9) * scale)}
-                      fill="#000000" align="center"
-                    />
-                  ) : null}
-                </React.Fragment>
-              );
-            }
-            return <KImage key={i} x={x} y={y} width={w} height={h} rotation={o.rotation ?? 0} image={img} />;
-          })}
-        </Layer>
-      </Stage>
+    <div
+      className={`relative bg-white border border-[#444] rounded-lg overflow-hidden shadow-inner ${className}`}
+      style={{ width, height }}
+      title="Kroki önizlemesi — tuvale aktarınca düzenlenebilir"
+    >
+      {/* Semboller */}
+      {symbols.map((o) => (
+        <img
+          key={o.id}
+          src={o.src}
+          alt={o.name || 'sembol'}
+          draggable={false}
+          className="absolute select-none pointer-events-none"
+          style={{
+            left: (o.x || 0) * s,
+            top: (o.y || 0) * s,
+            width: Math.max((o.width || 0) * s, 2),
+            height: Math.max((o.height || 0) * s, 2),
+            transform: `rotate(${o.rotation || 0}deg)`,
+            transformOrigin: '0 0',
+            mixBlendMode: 'multiply',
+          }}
+          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+        />
+      ))}
+
+      {/* Numaratörler (sarı daire/kare + bulgu no) */}
+      {markers.map((o) => {
+        const size = (o.width || 34) * s;
+        const isSquare = o.symbolId === 'ev-square';
+        return (
+          <div
+            key={o.id}
+            className="absolute flex items-center justify-center font-black text-black"
+            style={{
+              left: (o.x || 0) * s,
+              top: (o.y || 0) * s,
+              width: size,
+              height: size,
+              background: '#F5C518',
+              border: '1px solid #000',
+              borderRadius: isSquare ? 2 : '50%',
+              fontSize: Math.max(size * 0.45, 5),
+              lineHeight: 1,
+              boxShadow: '0 1px 2px rgba(0,0,0,0.35)',
+            }}
+          >
+            {o.findingNo}
+          </div>
+        );
+      })}
+
+      {/* Metin etiketleri (minik) */}
+      {texts.map((o) => (
+        <div
+          key={o.id}
+          className="absolute pointer-events-none"
+          style={{
+            left: (o.x || 0) * s,
+            top: (o.y || 0) * s,
+            width: (o.width || 220) * s,
+            fontSize: Math.max((o.fontSize || 10) * s, 3),
+            fontWeight: o.fontStyle === 'bold' ? 800 : 400,
+            textAlign: (o.align as 'left' | 'center' | 'right') || 'left',
+            color: '#111',
+            lineHeight: 1.25,
+            whiteSpace: 'pre-wrap',
+          }}
+        >
+          {o.text}
+        </div>
+      ))}
+
+      {/* Açıklama balonları */}
+      {callouts.map((o) => (
+        <div
+          key={o.id}
+          className="absolute bg-white border border-black rounded"
+          style={{
+            left: (o.x || 0) * s,
+            top: (o.y || 0) * s,
+            width: Math.max((o.width || 120) * s, 8),
+            height: Math.max((o.height || 60) * s, 6),
+            fontSize: Math.max((o.distanceFontSize || 12) * s, 4),
+            lineHeight: 1.15,
+            color: '#000',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '0 1px',
+            textAlign: 'center',
+            overflow: 'hidden',
+            boxShadow: '0 1px 2px rgba(0,0,0,0.25)',
+          }}
+        >
+          <span style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+            {o.distance}
+          </span>
+        </div>
+      ))}
+
+      {/* Ölçü / yön okları */}
+      <svg
+        className="absolute inset-0 pointer-events-none"
+        width={width}
+        height={height}
+        viewBox={`0 0 ${width} ${height}`}
+      >
+        <defs>
+          <marker id="kroki-prev-arr" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto">
+            <path d="M0,0 L5,2.5 L0,5 Z" fill="#000" />
+          </marker>
+          <marker id="kroki-prev-arr-start" markerWidth="5" markerHeight="5" refX="1" refY="2.5" orient="auto">
+            <path d="M5,0 L0,2.5 L5,5 Z" fill="#000" />
+          </marker>
+        </defs>
+        {arrows.map((o) => {
+          const x1 = (o.startX || 0) * s;
+          const y1 = (o.startY || 0) * s;
+          const x2 = (o.endX || 0) * s;
+          const y2 = (o.endY || 0) * s;
+          const isMeasure = o.symbolId === 'a-4' || o.isDistanceArrow;
+          const angle = Math.atan2(y2 - y1, x2 - x1) * (180 / Math.PI);
+          const labelRot = angle > 90 ? angle - 180 : angle < -90 ? angle + 180 : angle;
+          const mx = (x1 + x2) / 2;
+          const my = (y1 + y2) / 2;
+          const fs = Math.max((o.distanceFontSize || 11) * s, 4.5);
+          return (
+            <g key={o.id}>
+              <line
+                x1={x1} y1={y1} x2={x2} y2={y2}
+                stroke="#000"
+                strokeWidth={Math.max(1.1 * s * 4, 0.9)}
+                markerEnd="url(#kroki-prev-arr)"
+                markerStart={isMeasure ? 'url(#kroki-prev-arr-start)' : undefined}
+              />
+              {o.distance ? (
+                <text
+                  x={mx}
+                  y={my - fs * 0.7}
+                  fontSize={fs}
+                  fontWeight={700}
+                  fill="#000"
+                  textAnchor="middle"
+                  transform={`rotate(${labelRot} ${mx} ${my})`}
+                >
+                  {o.distance}
+                </text>
+              ) : null}
+            </g>
+          );
+        })}
+      </svg>
     </div>
   );
 };

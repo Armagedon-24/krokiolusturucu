@@ -4,6 +4,7 @@ import type { CanvasObject, CanvasState, ProjectInfo, Symbol, ScaleCalibration, 
 import { v4 as uuidv4 } from 'uuid';
 import { SYMBOL_CATEGORIES } from '../constants/symbols';
 import { createKrokiTemplate, createDiagramTemplate } from '../constants/templates';
+import { buildScenarioObjects, type KrokiScenario } from '../data/krokiScenarios';
 import { cloudinary as cloud, publicIdFromUrl, normKey, mapCloudCategoryToId } from '../lib/cloudinary';
 
 const TODAY = new Date().toISOString().split('T')[0];
@@ -18,9 +19,6 @@ export interface Notification {
 
 interface StoreState extends CanvasState {
   addObject: (obj: Partial<CanvasObject>) => void;
-  /** Örnek olay krokileri gibi çok nesneli yerleşimler için toplu ekleme:
-   *  ızgara hizalaması yapmaz, tek geçmiş kaydı oluşturur. */
-  addKrokiObjects: (objs: Partial<CanvasObject>[]) => void;
   addUploadedImage: (img: { id: string, src: string, name: string, category?: string, group?: string }, opts?: { allowDeletedName?: boolean }) => void;
   removeUploadedImage: (id: string) => void;
   updateUploadedImage: (id: string, category?: string, group?: string, name?: string) => void;
@@ -46,6 +44,8 @@ interface StoreState extends CanvasState {
   clearCanvas: () => void;
   updateProjectInfo: (updates: Partial<ProjectInfo>) => void;
   applyTemplate: (type: 'kroki' | 'diagram') => void;
+  /** Örnek olay kroki senaryosunu tuvale yükler: Olay Yeri Krokisi şablonu + senaryo nesneleri. */
+  loadKrokiScenario: (scenario: KrokiScenario) => void;
   removeSymbol: (catId: string, symbolId: string) => void;
   setAllSymbols: (allSymbols: readonly { readonly id: string, readonly name: string, readonly symbols: readonly Symbol[] }[]) => void;
   /** Kalıcı sembol yerleşim haritası (kategori ID -> sıralı sembol ID listesi) + tazelik damgası.
@@ -584,42 +584,6 @@ export const useStore = create<StoreState>()(
         get().saveHistory();
       },
 
-      addKrokiObjects: (objs) => {
-        if (!objs.length) return;
-        const existingObjects = get().objects;
-        let maxZ = existingObjects.reduce((max, o) => Math.max(max, o.zIndex || 0), -1);
-        const newObjs: CanvasObject[] = objs.map((obj) => {
-          maxZ += 1;
-          return {
-            id: uuidv4(),
-            type: 'symbol',
-            x: 150,
-            y: 150,
-            width: 100,
-            height: 100,
-            rotation: 0,
-            scaleX: 1,
-            scaleY: 1,
-            distanceColor: '#000000',
-            ratioFixed: false,
-            ...obj,
-            zIndex: maxZ,
-          } as CanvasObject;
-        });
-        set((state) => ({
-          objects: [...state.objects, ...newObjs],
-          selectedId: null,
-          symbolUsage: (() => {
-            const usage = { ...state.symbolUsage };
-            newObjs.forEach((o) => {
-              if (o.symbolId) usage[o.symbolId] = (usage[o.symbolId] || 0) + 1;
-            });
-            return usage;
-          })(),
-        }));
-        get().saveHistory();
-      },
-
       addUploadedImage: async (img, opts) => {
         // Mükerrer kontrolü: isim, ham src VE Cloudinary public_id üzerinden
         // (transform parametreleri farklı URL'ler aynı görsel olarak sayılır)
@@ -1120,6 +1084,53 @@ export const useStore = create<StoreState>()(
         });
         get().saveHistory();
       },
+
+      loadKrokiScenario: (scenario) => {
+        // Senaryolar yatay (landscape) kroki şablonu için tasarlanmıştır.
+        const width = 1400;
+        const height = 1000;
+        const info: ProjectInfo = {
+          type: 'kroki',
+          eventName: scenario.title,
+          reportNo: get().projectInfo.reportNo || '',
+          address: scenario.address,
+          date: new Date().toISOString().split('T')[0],
+          sketchedBy: get().projectInfo.sketchedBy || '',
+          diagramType: '',
+          description: '',
+          expert2: '',
+        };
+
+        const tpl = createKrokiTemplate(width, height, info);
+        const scenarioObjects = buildScenarioObjects(scenario, tpl.drawingArea);
+        const allObjects = [...tpl.objects, ...scenarioObjects];
+
+        set((state) => ({
+          canvasOrientation: 'landscape' as const,
+          backgroundImage: null,
+          backgroundTransform: { x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0 },
+          backgroundOpacity: 1,
+          backgroundGrayscale: false,
+          objects: allObjects,
+          drawingArea: tpl.drawingArea,
+          projectInfo: info,
+          krokiInfo: { ...info },
+          // Yeni örnek olay = yeni dosya: eski sayfalar (scenes) sıfırlanır
+          scenes: [],
+          activeSceneId: null,
+          selectedId: null,
+          history: [[...allObjects]],
+          historyIndex: 0,
+          symbolUsage: state.symbolUsage,
+        }));
+
+        get().addNotification({
+          type: 'success',
+          message: 'Örnek Olay Krokisi Yüklendi',
+          description: `"${scenario.title}" tuvale aktarıldı. Tüm nesneleri seçip sürükleyebilir, ölçekleyebilir ve yeni nesneler ekleyebilirsiniz.`,
+        });
+      },
+
       removeSymbol: async (catId, symbolId) => {
         const isAdmin = get().isAdmin;
         let targetSrc = '';
