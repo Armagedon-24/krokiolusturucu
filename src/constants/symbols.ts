@@ -388,9 +388,9 @@ export const SYMBOL_CATEGORIES = [
     name: 'Mimari Yapılar',
     symbols: [
       { id: 'arch-w1i', name: 'İç Duvar (Yatay)', src: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iMTAwIiB2aWV3Qm94PSIwIDAgMTAwIDEwMCI+PHJlY3QgeD0iMCIgeT0iNDYiIHdpZHRoPSIxMDAiIGhlaWdodD0iOCIgZmlsbD0iYmxhY2siLz48L3N2Zz4=',
-        thumbnail: '/assets/symbols/karakalem/inline/arch-w1i.png', type: 'symbol', description: 'Oda bölmeleri ve iç duvarlar için kullanılır (8 birim kalınlık).' },
+        thumbnail: '/assets/symbols/karakalem/inline/arch-w1i.png', type: 'symbol', description: 'Oda bölmeleri ve iç duvarlar için kullanılır (varsayılan 250×10 birim).' },
       { id: 'arch-w1vi', name: 'İç Duvar (Dikey)', src: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iMTAwIiB2aWV3Qm94PSIwIDAgMTAwIDEwMCI+PHJlY3QgeD0iNDYiIHk9IjAiIHdpZHRoPSI4IiBoZWlnaHQ9IjEwMCIgZmlsbD0iYmxhY2siLz48L3N2Zz4=',
-        thumbnail: '/assets/symbols/karakalem/inline/arch-w1vi.png', type: 'symbol', description: 'Oda bölmeleri için dikey iç duvar yapısı (8 birim kalınlık).' },
+        thumbnail: '/assets/symbols/karakalem/inline/arch-w1vi.png', type: 'symbol', description: 'Oda bölmeleri için dikey iç duvar yapısı (varsayılan 250×10 birim).' },
       { id: 'arch-7', name: 'Kavisli Duvar', src: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iMTAwIiB2aWV3Qm94PSIwIDAgMTAwIDEwMCI+PHBhdGggZD0iTSAxMCA5MCBBIDgwIDgwIDAgMCAxIDkwIDEwIiBzdHJva2U9ImJsYWNrIiBzdHJva2Utd2lkdGg9IjEwIiBmaWxsPSJub25lIi8+PC9zdmc+',
         thumbnail: '/assets/symbols/karakalem/inline/arch-7.png', type: 'symbol', description: 'Kavisli veya dairesel mimari alanları çizmek için kullanılır.' },
       { id: 'arch-w-square', name: 'Kare Duvar', src: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect x="10" y="10" width="80" height="80" fill="none" stroke="black" stroke-width="8"/></svg>',
@@ -406,25 +406,27 @@ export const SYMBOL_CATEGORIES = [
       { 
         id: 'arch-6-v4', 
         name: 'Merdiven', 
-        src: '/assets/symbols/stair_straight.svg',
-        thumbnail: '/assets/symbols/karakalem/stair_straight.png',
+        src: '/assets/symbols/stair_straight.svg?v=2',
+        thumbnail: '/assets/symbols/karakalem/stair_straight.png?v=2',
         type: 'symbol', 
+        width: 70, height: 150,
         description: 'Prosedürel merdiven motoru. Yükseklik değiştikçe basamak sayısı otomatik hesaplanır. Katlar arası geçişleri gösterir.' 
       },
       { 
         id: 'arch-6l-v4', 
         name: 'Merdiven (L)', 
-        src: '/assets/symbols/stair_l.svg',
-        thumbnail: '/assets/symbols/karakalem/stair_l.png',
+        src: '/assets/symbols/stair_l.svg?v=2',
+        thumbnail: '/assets/symbols/karakalem/stair_l.png?v=2',
         type: 'symbol',
         description: 'L şeklinde prosedürel merdiven. Boyutlandırıldığında basamak sayıları ve genişlikleri otomatik ayarlanır.'
       },
       { 
         id: 'arch-6u-v4', 
         name: 'Merdiven (U)', 
-        src: '/assets/symbols/stair_u.svg',
-        thumbnail: '/assets/symbols/karakalem/stair_u.png',
+        src: '/assets/symbols/stair_u.svg?v=2',
+        thumbnail: '/assets/symbols/karakalem/stair_u.png?v=2',
         type: 'symbol',
+        width: 80, height: 120,
         description: 'U şeklinde prosedürel merdiven. Yükseklik ve genişlik değişimine göre basamak sayısı otomatik hesaplanır.'
       },
       { id: 'arch-house', name: 'Müstakil Ev', src: '/assets/symbols/house_detached.svg?v=2',

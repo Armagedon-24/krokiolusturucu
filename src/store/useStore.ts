@@ -515,8 +515,8 @@ export const useStore = create<StoreState>()(
 
         if (obj.symbolId === 'arch-w1') { width = 200; height = 10; }
         else if (obj.symbolId === 'arch-w1v') { width = 10; height = 200; }
-        else if (obj.symbolId === 'arch-w1i') { width = 200; height = 8; }
-        else if (obj.symbolId === 'arch-w1vi') { width = 8; height = 200; }
+        else if (obj.symbolId === 'arch-w1i') { width = 250; height = 10; }
+        else if (obj.symbolId === 'arch-w1vi') { width = 10; height = 250; }
         else if (obj.symbolId === 'arch-win') { width = 60; height = 15; } // Window
         else if (['arch-d1r', 'arch-d1l'].includes(obj.symbolId || '')) { width = 60; height = 60; } // Single Doors
         else if (obj.symbolId === 'arch-d2') { width = 120; height = 60; } // Double Door

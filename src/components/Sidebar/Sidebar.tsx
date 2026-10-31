@@ -579,8 +579,8 @@ export const Sidebar: React.FC = () => {
                                       } else if (isWall) {
                                         if (item.id === 'arch-w1') { finalWidth = 200; finalHeight = 10; }
                                         else if (item.id === 'arch-w1v') { finalWidth = 10; finalHeight = 200; }
-                                        else if (item.id === 'arch-w1i') { finalWidth = 200; finalHeight = 8; }
-                                        else if (item.id === 'arch-w1vi') { finalWidth = 8; finalHeight = 200; }
+                                        else if (item.id === 'arch-w1i') { finalWidth = 250; finalHeight = 10; }
+                                        else if (item.id === 'arch-w1vi') { finalWidth = 10; finalHeight = 250; }
                                       }
 
                                       addObject({

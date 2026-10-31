@@ -393,6 +393,58 @@ export const drawExportObject = (ctx: CanvasRenderingContext2D, obj: any, img: H
     return;
   }
 
+  // 4e) MERDİVEN MOTORU — ekrandaki Dynamic Stairs Engine'in birebir aynası.
+  //     Prosedürel çizim: sarı SVG dokusuna düşmez (renk klasik siyah), basamak
+  //     sayısı boyuta göre yeniden hesaplandığından uzatmada görünüm bozulmaz.
+  if (['arch-6', 'arch-6-v4'].includes(symbolId)) {
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(0, 0, w, h);
+    ctx.strokeStyle = '#666666';
+    ctx.beginPath(); ctx.moveTo(2, 0); ctx.lineTo(2, h); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(w - 2, 0); ctx.lineTo(w - 2, h); ctx.stroke();
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < Math.floor(h / 15); i++) {
+      ctx.beginPath(); ctx.moveTo(0, (i + 1) * 15); ctx.lineTo(w, (i + 1) * 15); ctx.stroke();
+    }
+    return;
+  }
+  if (['arch-6l', 'arch-6l-v4'].includes(symbolId)) {
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, 0); ctx.lineTo(w, 0); ctx.lineTo(w, h); ctx.lineTo(w - 40, h); ctx.lineTo(w - 40, 40); ctx.lineTo(0, 40);
+    ctx.closePath(); ctx.stroke();
+    ctx.lineWidth = 1;
+    for (let i = 0; i < Math.floor((w - 40) / 15); i++) {
+      ctx.beginPath(); ctx.moveTo((i + 1) * 15, 0); ctx.lineTo((i + 1) * 15, 40); ctx.stroke();
+    }
+    ctx.beginPath(); ctx.moveTo(w - 40, 0); ctx.lineTo(w, 40); ctx.stroke();
+    for (let i = 0; i < Math.floor((h - 40) / 15); i++) {
+      ctx.beginPath(); ctx.moveTo(w - 40, 40 + (i + 1) * 15); ctx.lineTo(w, 40 + (i + 1) * 15); ctx.stroke();
+    }
+    return;
+  }
+  if (['arch-6u', 'arch-6u-v4'].includes(symbolId)) {
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, 0); ctx.lineTo(35, 0); ctx.lineTo(35, h - 35); ctx.lineTo(w - 35, h - 35); ctx.lineTo(w - 35, 0); ctx.lineTo(w, 0); ctx.lineTo(w, h); ctx.lineTo(0, h);
+    ctx.closePath(); ctx.stroke();
+    ctx.lineWidth = 1;
+    for (let i = 0; i < Math.floor((h - 35) / 15); i++) {
+      ctx.beginPath(); ctx.moveTo(0, (i + 1) * 15); ctx.lineTo(35, (i + 1) * 15); ctx.stroke();
+    }
+    for (let i = 0; i < Math.floor((h - 35) / 15); i++) {
+      ctx.beginPath(); ctx.moveTo(w - 35, (i + 1) * 15); ctx.lineTo(w, (i + 1) * 15); ctx.stroke();
+    }
+    for (let i = 0; i < Math.floor((w - 70) / 20); i++) {
+      ctx.beginPath(); ctx.moveTo(35 + (i + 1) * 20, h - 35); ctx.lineTo(35 + (i + 1) * 20, h); ctx.stroke();
+    }
+    return;
+  }
+
   // 5) Bulgu işaretleyicileri — görsel çiziminden ÖNCE yakalanmalı (numaratörün
   //    karakalem PNG'si boş daire olduğundan drawImage'a düşerse sarı daire ve
   //    bulgu numarası çıktıda kaybolur).
@@ -703,11 +755,11 @@ const IndividualObject = ({
       const maxSize = 120;
 
       if (isWallH) {
-        initialWidth = 200;
+        initialWidth = 250;
         initialHeight = 10;
       } else if (isWallV) {
         initialWidth = 10;
-        initialHeight = 200;
+        initialHeight = 250;
       } else if (isWindow) {
         // Pencereler için varsayılan: boy 50, en 10
         initialWidth = 50;
@@ -716,6 +768,11 @@ const IndividualObject = ({
         // Kapılar için standart başlangıç boyutu
         initialWidth = 60;
         initialHeight = 60;
+      } else if (['arch-6', 'arch-6-v4', 'arch-6l', 'arch-6l-v4', 'arch-6u', 'arch-6u-v4'].includes(shapeProps.symbolId || '')) {
+        // Prosedürel merdivenler: yerleştirme boyutu korunur — basamak motoru
+        // boyuta göre çizildiğinden oran sabitlemeye gerek yoktur.
+        initialWidth = shapeProps.width;
+        initialHeight = shapeProps.height;
       } else {
         // Diğer tüm mimari ve sokak objeleri için (kapılar, merdivenler, binalar)
         // En geniş kenarı maxSize (120px) yap ve oranı koru
@@ -1287,10 +1344,11 @@ const IndividualObject = ({
               />
             );
           })()
-        ) : ['arch-6', 'arch-6l', 'arch-6u', 'arch-6s', 'arch-6sf', 'arch-6-spiral-f', 'arch-6-spiral-s', 'arch-6-spiral-s-top', 'arch-w-square'].includes(shapeProps.symbolId || '') ? (
-          // Dynamic Stairs Engine
+        ) : ['arch-6', 'arch-6-v4', 'arch-6l', 'arch-6l-v4', 'arch-6u', 'arch-6u-v4', 'arch-6s', 'arch-6sf', 'arch-6-spiral-f', 'arch-6-spiral-s', 'arch-6-spiral-s-top', 'arch-w-square'].includes(shapeProps.symbolId || '') ? (
+          // Dynamic Stairs Engine — v4 merdivenler de burada prosedürel çizilir:
+          // siyah kalem stili + basamak sayısı boyuta göre otomatik → uzatma bozulması yok.
           <Group>
-            {shapeProps.symbolId === 'arch-6' && (
+            {['arch-6', 'arch-6-v4'].includes(shapeProps.symbolId || '') && (
               <Group>
                 <Rect width={shapeProps.width} height={shapeProps.height} stroke="#000" strokeWidth={2} />
                 <Line points={[2, 0, 2, shapeProps.height]} stroke="#666" strokeWidth={2} />
@@ -1300,7 +1358,7 @@ const IndividualObject = ({
                 ))}
               </Group>
             )}
-            {shapeProps.symbolId === 'arch-6l' && (
+            {['arch-6l', 'arch-6l-v4'].includes(shapeProps.symbolId || '') && (
               <Group>
                 <Path data={`M 0 0 L ${shapeProps.width} 0 L ${shapeProps.width} ${shapeProps.height} L ${shapeProps.width - 40} ${shapeProps.height} L ${shapeProps.width - 40} 40 L 0 40 Z`} stroke="#000" strokeWidth={2} />
                 {/* Horizontal steps */}
@@ -1315,7 +1373,7 @@ const IndividualObject = ({
                 ))}
               </Group>
             )}
-            {shapeProps.symbolId === 'arch-6u' && (
+            {['arch-6u', 'arch-6u-v4'].includes(shapeProps.symbolId || '') && (
               <Group>
                 <Path data={`M 0 0 L 35 0 L 35 ${shapeProps.height - 35} L ${shapeProps.width - 35} ${shapeProps.height - 35} L ${shapeProps.width - 35} 0 L ${shapeProps.width} 0 L ${shapeProps.width} ${shapeProps.height} L 0 ${shapeProps.height} Z`} stroke="#000" strokeWidth={2} />
                 {/* Steps left */}
@@ -4639,8 +4697,8 @@ export const CanvasArea: React.FC = () => {
         } else if (isWall) {
           if (symbol.id === 'arch-w1') { finalWidth = 200; finalHeight = 10; }
           else if (symbol.id === 'arch-w1v') { finalWidth = 10; finalHeight = 200; }
-          else if (symbol.id === 'arch-w1i') { finalWidth = 200; finalHeight = 8; }
-          else if (symbol.id === 'arch-w1vi') { finalWidth = 8; finalHeight = 200; }
+          else if (symbol.id === 'arch-w1i') { finalWidth = 250; finalHeight = 10; }
+          else if (symbol.id === 'arch-w1vi') { finalWidth = 10; finalHeight = 250; }
         }
 
         let finalX = pos.x - finalWidth / 2;
