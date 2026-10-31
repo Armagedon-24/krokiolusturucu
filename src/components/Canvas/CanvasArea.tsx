@@ -124,6 +124,73 @@ const st3EdgeSegments = (w: number, h: number, roadWidth: number): number[][] =>
   ];
 };
 
+// st-2 T KAVŞAK / st-4 ARTI KAVŞAK — ortak kenar geometrisi (ekran + export).
+// Merkez halka/hub YOK; yol kenarları kavşak ağızlarında YUMUŞAK KAVİS
+// (fillet) yaylarıyla birleşir. Kavisler SVG yay komutuyla ('M … A …') ifade
+// edilir: hem Konva <Path> hem Path2D aynı metni çizer → birebir uyum.
+//  - fills  : fillet bölgelerini gövdeye katan beyaz köşe yamaları
+//  - edges  : siyah düz kenar segmentleri (uçları teğet noktalarında)
+//  - arcPaths: fillet yayları (sweep=1, çeyrek çember)
+//  - dashes : kavşak ağzında kesilen kesikli orta çizgiler
+interface JunctionGeom {
+  fills: number[][];
+  edges: number[][];
+  arcPaths: string[];
+  dashes: number[][];
+}
+
+const st4JunctionGeometry = (w: number, h: number, roadWidth: number): JunctionGeom => {
+  const cx = w / 2, cy = h / 2, s = roadWidth / 2, f = roadWidth * 0.35;
+  const A = (x1: number, y1: number, x2: number, y2: number) => `M ${x1} ${y1} A ${f} ${f} 0 0 1 ${x2} ${y2}`;
+  return {
+    fills: [
+      [cx - s - f, cy - s - f, f, f], [cx + s, cy - s - f, f, f],
+      [cx - s - f, cy + s, f, f], [cx + s, cy + s, f, f],
+    ],
+    edges: [
+      [cx - s, 0, cx - s, cy - s - f], [cx - s, cy + s + f, cx - s, h],
+      [cx + s, 0, cx + s, cy - s - f], [cx + s, cy + s + f, cx + s, h],
+      [0, cy - s, cx - s - f, cy - s], [cx + s + f, cy - s, w, cy - s],
+      [0, cy + s, cx - s - f, cy + s], [cx + s + f, cy + s, w, cy + s],
+    ],
+    arcPaths: [
+      A(cx - s, cy - s - f, cx - s - f, cy - s), // sol üst
+      A(cx + s + f, cy - s, cx + s, cy - s - f), // sağ üst
+      A(cx - s - f, cy + s, cx - s, cy + s + f), // sol alt
+      A(cx + s, cy + s + f, cx + s + f, cy + s), // sağ alt
+    ],
+    dashes: [
+      [cx, 0, cx, cy - s], [cx, cy + s, cx, h],
+      [0, cy, cx - s, cy], [cx + s, cy, w, cy],
+    ],
+  };
+};
+
+const st2JunctionGeometry = (w: number, h: number, roadWidth: number): JunctionGeom => {
+  const cx = w / 2, cy = h / 2, s = roadWidth / 2, f = roadWidth * 0.35;
+  const A = (x1: number, y1: number, x2: number, y2: number) => `M ${x1} ${y1} A ${f} ${f} 0 0 1 ${x2} ${y2}`;
+  return {
+    fills: [
+      [cx - s - f, cy + s, f, f], [cx + s, cy + s, f, f],
+    ],
+    edges: [
+      [0, cy - s, w, cy - s],              // üst kenar (tam genişlik)
+      [0, cy + s, cx - s - f, cy + s],     // alt kenar sol
+      [cx + s + f, cy + s, w, cy + s],     // alt kenar sağ
+      [cx - s, h, cx - s, cy + s + f],     // gövde sol
+      [cx + s, h, cx + s, cy + s + f],     // gövde sağ
+    ],
+    arcPaths: [
+      A(cx - s - f, cy + s, cx - s, cy + s + f), // sol alt fillet
+      A(cx + s, cy + s + f, cx + s + f, cy + s), // sağ alt fillet
+    ],
+    dashes: [
+      [0, cy, cx - s, cy], [cx + s, cy, w, cy], // yatay orta (gövde ağzında kesilir)
+      [cx, cy, cx, h],                          // gövde orta çizgisi
+    ],
+  };
+};
+
 export const drawExportObject = (ctx: CanvasRenderingContext2D, obj: any, img: HTMLImageElement | null, sceneObjects: any[]) => {
   const w = obj.width ?? 50;
   const h = obj.height ?? 50;
@@ -356,7 +423,9 @@ export const drawExportObject = (ctx: CanvasRenderingContext2D, obj: any, img: H
   // 5e) UZATMA MOTORU v4 — desen tekrarı (ekrandaki fillPattern'in aynası).
   //     Metadata'lı kütüphane dokuları bütün-görsel tiling; metadata'sız yüklemelerde
   //     KAPAK+KESİT (3-slice): uçlar sabit, orta bant tekrar eder → parçalanma yok.
-  if (obj.src && img) {
+  //     st-1..st-4 vektör yol/kavşak motorlarında çizilir (aşağıda) — dokuya düşmez;
+  //     aksi halde kayıtlı tileMode eski SVG dokusunu fayanslayıp siyah dikiş bırakır.
+  if (obj.src && img && symbolId !== 'st-1' && symbolId !== 'st-2' && symbolId !== 'st-3' && symbolId !== 'st-4') {
     const tex = getTextureInfo(img);
     const resolved = resolveConcreteTileMode(
       obj,
@@ -385,29 +454,48 @@ export const drawExportObject = (ctx: CanvasRenderingContext2D, obj: any, img: H
     const curvX = obj.curvatureX !== undefined ? obj.curvatureX : w / 2;
     const controlY = h / 2 + curv * 2;
     const p = new Path2D(`M 0 ${h / 2} Q ${curvX} ${controlY} ${w} ${h / 2}`);
+    const e = Math.max(1.5, h / 20); // kenar kalınlığı — st-3/st-4 motoruyla aynı oran
     ctx.lineCap = 'butt';
     ctx.lineJoin = 'round';
     ctx.strokeStyle = '#000000';
-    ctx.lineWidth = h + 5;
+    ctx.lineWidth = h + 2 * e; // siyah taban → iki yanda e kalınlığında yol kenarı
     ctx.stroke(p);
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = h;
     ctx.stroke(p);
     ctx.strokeStyle = '#000000';
-    ctx.lineWidth = Math.max(1.5, h / 25);
+    ctx.lineWidth = e;
     ctx.setLineDash([20, 20]);
     ctx.stroke(p);
     ctx.setLineDash([]);
     return;
   }
 
-  // 5g) KAVŞAK MOTORU (st-3 Y / st-4 Döner) — ekrandaki vektör kavşak motorunun aynası
-  if (symbolId === 'st-3' || symbolId === 'st-4') {
+  // 5g) KAVŞAK MOTORU (st-2 T / st-3 Y / st-4 Artı) — ekrandaki vektör kavşak motorunun aynası
+  if (symbolId === 'st-2' || symbolId === 'st-3' || symbolId === 'st-4') {
     const roadWidth = Math.min(w, h) * 0.35;
     const lineW = Math.max(1.5, roadWidth / 20);
     const line = (x1: number, y1: number, x2: number, y2: number) => {
       ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
     };
+    if (symbolId === 'st-2') {
+      // T Kavşak motoru — ekrandakiyle aynı: gövdeler → fillet yamaları →
+      // kesikli (gövde ağzında kesilir) → siyah kenarlar → yumuşak kavisler
+      const g = st2JunctionGeometry(w, h, roadWidth);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, h / 2 - roadWidth / 2, w, roadWidth);
+      ctx.fillRect(w / 2 - roadWidth / 2, h / 2 - roadWidth / 2, roadWidth, h - (h / 2 - roadWidth / 2));
+      for (const fl of g.fills) ctx.fillRect(fl[0], fl[1], fl[2], fl[3]);
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = lineW;
+      ctx.setLineDash([20, 20]);
+      ctx.lineCap = 'butt';
+      for (const d of g.dashes) line(d[0], d[1], d[2], d[3]);
+      ctx.setLineDash([]);
+      for (const sg of g.edges) line(sg[0], sg[1], sg[2], sg[3]);
+      for (const d of g.arcPaths) ctx.stroke(new Path2D(d));
+      return;
+    }
     if (symbolId === 'st-3') {
       // Y Kavşak — ekrandaki katman sırasıyla: gövde → hub → kesikli → SİYAH kenarlar
       ctx.strokeStyle = '#ffffff';
@@ -435,32 +523,22 @@ export const drawExportObject = (ctx: CanvasRenderingContext2D, obj: any, img: H
       }
       return;
     }
-    // st-4 Döner kavşak — beyaz gövde → SİYAH yol kenar çizgileri → kesikli → siyah çevirili halka
-    // (ekrandaki Konva motorunun birebir aynası; kenarlar beyaz kalınca krokide yol belli olmuyordu)
-    const edgeW = lineW; // max(1.5, roadWidth/20) — ekrandaki edgeWidth ile aynı
+    // st-4 Artı kavşak — MERKEZ HALKA YOK; beyaz gövdeler → fillet yamaları →
+    // kesikli (kavşak ağzında kesilir) → siyah kenarlar → yumuşak kavis filletler.
+    // (Kullanıcı isteği: ortadaki yuvarlak daire kaldırıldı, birleşimlere kavis)
+    const g4 = st4JunctionGeometry(w, h, roadWidth);
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(w / 2 - roadWidth / 2, 0, roadWidth, h);
     ctx.fillRect(0, h / 2 - roadWidth / 2, w, roadWidth);
+    for (const fl of g4.fills) ctx.fillRect(fl[0], fl[1], fl[2], fl[3]);
     ctx.strokeStyle = '#000000';
-    ctx.lineWidth = edgeW;
-    ctx.lineCap = 'butt';
-    // Dikey yol kenarları
-    line(w / 2 - roadWidth / 2, 0, w / 2 - roadWidth / 2, h);
-    line(w / 2 + roadWidth / 2, 0, w / 2 + roadWidth / 2, h);
-    // Yatay yol kenarları
-    line(0, h / 2 - roadWidth / 2, w, h / 2 - roadWidth / 2);
-    line(0, h / 2 + roadWidth / 2, w, h / 2 + roadWidth / 2);
-    // Kesikli orta çizgiler
     ctx.lineWidth = lineW;
     ctx.setLineDash([20, 20]);
-    line(w / 2, 0, w / 2, h);
-    line(0, h / 2, w, h / 2);
+    ctx.lineCap = 'butt';
+    for (const d of g4.dashes) line(d[0], d[1], d[2], d[3]);
     ctx.setLineDash([]);
-    // Hub — siyah çevirili döner kavşak halkası (kenar çizgilerini kavşak içinde keser)
-    ctx.beginPath(); ctx.arc(w / 2, h / 2, roadWidth * 0.8, 0, Math.PI * 2);
-    ctx.fillStyle = '#ffffff'; ctx.fill();
-    ctx.lineWidth = edgeW;
-    ctx.strokeStyle = '#000000'; ctx.stroke();
+    for (const sg of g4.edges) line(sg[0], sg[1], sg[2], sg[3]);
+    for (const d of g4.arcPaths) ctx.stroke(new Path2D(d));
     return;
   }
 
@@ -1550,6 +1628,41 @@ const IndividualObject = ({
               );
             })()}
           </Group>
+        ) : shapeProps.symbolId === 'st-2' ? (
+          // T KAVŞAK MOTORU — beyaz gövdeler + kavşak ağzında yumuşak kavis
+          // filletleri + siyah kenarlar (st-3/st-4 motoruyla aynı stil)
+          <Group>
+            {(() => {
+              const w = shapeProps.width;
+              const h = shapeProps.height;
+              const roadWidth = Math.min(w, h) * 0.35;
+              const edgeWidth = Math.max(1.5, roadWidth / 20);
+              const g = st2JunctionGeometry(w, h, roadWidth);
+              return (
+                <Group>
+                  {/* Gövdeler: yatay yol + gövde */}
+                  <Rect x={0} y={h/2 - roadWidth/2} width={w} height={roadWidth} fill="#ffffff" />
+                  <Rect x={w/2 - roadWidth/2} y={h/2 - roadWidth/2} width={roadWidth} height={h - h/2 + roadWidth/2} fill="#ffffff" />
+                  {/* Fillet köşe yamaları */}
+                  {g.fills.map((fl, i) => (
+                    <Rect key={`st2-f${i}`} x={fl[0]} y={fl[1]} width={fl[2]} height={fl[3]} fill="#ffffff" />
+                  ))}
+                  {/* Kesikli orta çizgiler — gövde ağzında kesilir */}
+                  {g.dashes.map((d, i) => (
+                    <Line key={`st2-d${i}`} points={d} stroke="#000000" strokeWidth={edgeWidth} dash={[20, 20]} lineCap="butt" />
+                  ))}
+                  {/* Siyah yol kenarları */}
+                  {g.edges.map((sg, i) => (
+                    <Line key={`st2-e${i}`} points={sg} stroke="#000000" strokeWidth={edgeWidth} lineCap="butt" />
+                  ))}
+                  {/* Yumuşak kavis filletleri */}
+                  {g.arcPaths.map((d, i) => (
+                    <Path key={`st2-a${i}`} data={d} stroke="#000000" strokeWidth={edgeWidth} lineCap="butt" />
+                  ))}
+                </Group>
+              );
+            })()}
+          </Group>
         ) : (shapeProps.symbolId === 'st-3' || shapeProps.symbolId === 'st-4') ? (
           // Advanced Vector Road Junction Engine (Matched to st-1 Style)
           <Group>
@@ -1589,28 +1702,32 @@ const IndividualObject = ({
                   </Group>
                 );
               } else {
-                // Roundabout (st-1 style) — beyaz gövde + SİYAH yol kenar çizgileri
-                // (kenarlar beyaz kalınca krokide yol olduğu anlaşılmıyordu)
-                const edgeWidth = centerLineWidth; // aynı kalınlık: max(1.5, roadWidth/20)
+                // Artı kavşak (st-4) — MERKEZ HALKA YOK; beyaz gövdeler + kavşak
+                // ağızlarında yumuşak kavis filletleri + siyah kenarlar
+                // (kullanıcı isteği: ortadaki yuvarlak daire kaldırıldı)
+                const edgeWidth = centerLineWidth;
+                const g = st4JunctionGeometry(w, h, roadWidth);
                 return (
                   <Group>
-                    {/* Roads */}
+                    {/* Gövdeler */}
                     <Rect x={w/2 - roadWidth/2} y={0} width={roadWidth} height={h} fill={roadColor} />
                     <Rect x={0} y={h/2 - roadWidth/2} width={w} height={roadWidth} fill={roadColor} />
-
-                    {/* Road Edge Lines — siyah yol kenarları */}
-                    <Line points={[w/2 - roadWidth/2, 0, w/2 - roadWidth/2, h]} stroke={lineColor} strokeWidth={edgeWidth} lineCap="butt" />
-                    <Line points={[w/2 + roadWidth/2, 0, w/2 + roadWidth/2, h]} stroke={lineColor} strokeWidth={edgeWidth} lineCap="butt" />
-                    <Line points={[0, h/2 - roadWidth/2, w, h/2 - roadWidth/2]} stroke={lineColor} strokeWidth={edgeWidth} lineCap="butt" />
-                    <Line points={[0, h/2 + roadWidth/2, w, h/2 + roadWidth/2]} stroke={lineColor} strokeWidth={edgeWidth} lineCap="butt" />
-
-                    {/* Center Dashed Lines (st-1 style) */}
-                    <Line points={[w/2, 0, w/2, h]} stroke={lineColor} strokeWidth={centerLineWidth} dash={centerDash} lineCap="butt" />
-                    <Line points={[0, h/2, w, h/2]} stroke={lineColor} strokeWidth={centerLineWidth} dash={centerDash} lineCap="butt" />
-
-                    {/* Hub — siyah çevirili döner kavşak halkası; kenar/kesikli çizgilerin ÜSTÜNE çizilir,
-                        böylece kavşak içindeki çizgiler halka kenarında temiz biçimde kesilir */}
-                    <Circle x={w/2} y={h/2} radius={roadWidth * 0.8} fill={roadColor} stroke={lineColor} strokeWidth={edgeWidth} />
+                    {/* Fillet köşe yamaları */}
+                    {g.fills.map((fl, i) => (
+                      <Rect key={`st4-f${i}`} x={fl[0]} y={fl[1]} width={fl[2]} height={fl[3]} fill={roadColor} />
+                    ))}
+                    {/* Kesikli orta çizgiler — kavşak ağzında kesilir */}
+                    {g.dashes.map((d, i) => (
+                      <Line key={`st4-d${i}`} points={d} stroke={lineColor} strokeWidth={centerLineWidth} dash={centerDash} lineCap="butt" />
+                    ))}
+                    {/* Siyah yol kenarları */}
+                    {g.edges.map((sg, i) => (
+                      <Line key={`st4-e${i}`} points={sg} stroke={lineColor} strokeWidth={edgeWidth} lineCap="butt" />
+                    ))}
+                    {/* Yumuşak kavis filletleri */}
+                    {g.arcPaths.map((d, i) => (
+                      <Path key={`st4-a${i}`} data={d} stroke={lineColor} strokeWidth={edgeWidth} lineCap="butt" />
+                    ))}
                   </Group>
                 );
               }
@@ -1624,6 +1741,7 @@ const IndividualObject = ({
               const w = shapeProps.width;
               const h = shapeProps.height;
               const curvX = shapeProps.curvatureX !== undefined ? shapeProps.curvatureX : w / 2;
+              const edgeBase = Math.max(1.5, h / 20); // kenar kalınlığı — st-3/st-4 ile aynı oran
               
               // Quadratic Bezier adjustment:
               // Peak Y follows the handle directly.
@@ -1632,11 +1750,11 @@ const IndividualObject = ({
               
               return (
                 <Group>
-                  {/* Road Edge (Koyu kenar için biraz daha kalın siyah taban) */}
+                  {/* Road Edge (siyah taban → iki yanda edgeBase kalınlığında yol kenarı) */}
                   <Path
                     data={pathData}
                     stroke="#000000"
-                    strokeWidth={h + 5}
+                    strokeWidth={h + 2 * edgeBase}
                     lineCap="butt"
                     lineJoin="round"
                   />
@@ -1652,7 +1770,7 @@ const IndividualObject = ({
                   <Path
                     data={pathData}
                     stroke="#000000"
-                    strokeWidth={Math.max(1.5, h / 25)}
+                    strokeWidth={edgeBase}
                     dash={[20, 20]}
                     lineCap="butt"
                     lineJoin="round"

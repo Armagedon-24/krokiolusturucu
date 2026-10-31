@@ -1,16 +1,30 @@
 <svg width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <!-- Horizontal Road (beyaz gövde) -->
-  <rect x="0" y="65" width="200" height="70" fill="#ffffff" />
-  <!-- Vertical Road (beyaz gövde) -->
+  <!-- Artı kavşak (st-4): merkez halka yok, birleşimlerde yumuşak kavis filletler -->
+  <!-- Yol gövdeleri (beyaz) -->
   <rect x="65" y="0" width="70" height="200" fill="#ffffff" />
-  <!-- Road edge lines — SİYAH yol kenarları (kütüphanedeki st-1 stiliyle uyumlu) -->
-  <line x1="0" y1="65" x2="200" y2="65" stroke="black" stroke-width="3" />
-  <line x1="0" y1="135" x2="200" y2="135" stroke="black" stroke-width="3" />
-  <line x1="65" y1="0" x2="65" y2="200" stroke="black" stroke-width="3" />
-  <line x1="135" y1="0" x2="135" y2="200" stroke="black" stroke-width="3" />
-  <!-- Center dashed lines (siyah kesikli orta çizgiler) -->
-  <line x1="0" y1="100" x2="200" y2="100" stroke="black" stroke-width="3" stroke-dasharray="15 15" />
-  <line x1="100" y1="0" x2="100" y2="200" stroke="black" stroke-width="3" stroke-dasharray="15 15" />
-  <!-- Roundabout ring — siyah çevirili halka, içteki çizgileri keser -->
-  <circle cx="100" cy="100" r="56" fill="#ffffff" stroke="black" stroke-width="3" />
+  <rect x="0" y="65" width="200" height="70" fill="#ffffff" />
+  <!-- Fillet köşe yamaları (beyaz) -->
+  <rect x="40.5" y="40.5" width="24.5" height="24.5" fill="#ffffff" />
+  <rect x="135" y="40.5" width="24.5" height="24.5" fill="#ffffff" />
+  <rect x="40.5" y="135" width="24.5" height="24.5" fill="#ffffff" />
+  <rect x="135" y="135" width="24.5" height="24.5" fill="#ffffff" />
+  <!-- Kesikli siyah orta çizgiler (kavşak ağzında kesilir) -->
+  <line x1="100" y1="0" x2="100" y2="65" stroke="black" stroke-width="3" stroke-dasharray="15 15" />
+  <line x1="100" y1="135" x2="100" y2="200" stroke="black" stroke-width="3" stroke-dasharray="15 15" />
+  <line x1="0" y1="100" x2="65" y2="100" stroke="black" stroke-width="3" stroke-dasharray="15 15" />
+  <line x1="135" y1="100" x2="200" y2="100" stroke="black" stroke-width="3" stroke-dasharray="15 15" />
+  <!-- Siyah yol kenarları -->
+  <line x1="65" y1="0" x2="65" y2="40.5" stroke="black" stroke-width="3" />
+  <line x1="65" y1="159.5" x2="65" y2="200" stroke="black" stroke-width="3" />
+  <line x1="135" y1="0" x2="135" y2="40.5" stroke="black" stroke-width="3" />
+  <line x1="135" y1="159.5" x2="135" y2="200" stroke="black" stroke-width="3" />
+  <line x1="0" y1="65" x2="40.5" y2="65" stroke="black" stroke-width="3" />
+  <line x1="159.5" y1="65" x2="200" y2="65" stroke="black" stroke-width="3" />
+  <line x1="0" y1="135" x2="40.5" y2="135" stroke="black" stroke-width="3" />
+  <line x1="159.5" y1="135" x2="200" y2="135" stroke="black" stroke-width="3" />
+  <!-- Yumuşak kavis filletleri -->
+  <path d="M 65 40.5 A 24.5 24.5 0 0 1 40.5 65" stroke="black" stroke-width="3" fill="none" />
+  <path d="M 159.5 65 A 24.5 24.5 0 0 1 135 40.5" stroke="black" stroke-width="3" fill="none" />
+  <path d="M 40.5 135 A 24.5 24.5 0 0 1 65 159.5" stroke="black" stroke-width="3" fill="none" />
+  <path d="M 135 159.5 A 24.5 24.5 0 0 1 159.5 135" stroke="black" stroke-width="3" fill="none" />
 </svg>
