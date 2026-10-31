@@ -53,7 +53,7 @@ export const ShadowCalculator: React.FC = () => {
       'Belirsizlik analizi: gölge ucu ±5 cm ve açı ±2° uç değerleriyle min–max nesne boyu hesaplanmıştır.',
     ],
     findings: [
-      `Hesaplanan nesne boyu: ${trNum(objectHeight, 2)} m — muhtemel aralık ${trNum(heightMin, 2)} – ${trNum(heightMax, 2)} m`,
+      `Hesaplanan nesne boyu: ${trNum(objectHeight, 2)} m — aralık ${trNum(heightMin, 2)} – ${trNum(heightMax, 2)} m`,
       `Tahmini zaman dilimi: ${timeEstimate || 'Belirsiz'}`,
     ],
     scenarios: [

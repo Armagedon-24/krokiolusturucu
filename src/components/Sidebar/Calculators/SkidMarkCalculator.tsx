@@ -93,7 +93,8 @@ export const SkidMarkCalculator: React.FC = () => {
       `Hesaplanan nokta hız: ${trNum(speed, 0)} km/s`,
       `Muhtemel hız aralığı: ${trNum(speedMin, 0)} – ${trNum(speedMax, 0)} km/s`,
       `Bu hız fren izinin BAŞLANGIÇ noktasına aittir; çarpma anındaki hız, frenleme sürdüyse bu değerin altındadır.`,
-      `Eğim düzeltmeli alternatifler: %10 rampa yukarı ${trNum(gradeSpeed.up, 0)} km/s, %10 rampa aşağı ${trNum(gradeSpeed.down, 0)} km/s.`,
+      `Eğim +10% (rampa yukarı): ${trNum(gradeSpeed.up, 0)} km/s`,
+      `Eğim −10% (rampa aşağı): ${trNum(gradeSpeed.down, 0)} km/s`,
     ],
     scenarios: [
       'ABS aktif ise tekerlek kilitlenmez, iz kısa/kesik kalır → gerçek hız hesaplanandan DAHA YÜKSEK olabilir (alt sınır yorumu).',

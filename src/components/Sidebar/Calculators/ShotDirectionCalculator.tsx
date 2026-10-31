@@ -123,7 +123,8 @@ export const ShotDirectionCalculator: React.FC = () => {
       `Yatay atış açısı: ${trNum(horizontalAngle, 1)}°`,
       `Dikey atış açısı: ${trNum(impactAngle, 1)}°`,
       `Mermi sapması (deflection): ${trNum(deflectionAngle, 1)}°`,
-      `Tahmini atıcı mesafesi: ~${shooterDistance} m — atıcı yüksekliği: ${shooterHeight} m`,
+      `Tahmini atıcı mesafesi: ~${shooterDistance} m`,
+      `Atıcı yüksekliği: ${shooterHeight} m`,
     ],
     scenarios: [
       'Giriş-çıkış delikleri AYNI mermiye ait olmalıdır; parçalanma/multiple atış durumunda geometri geçersizleşir.',

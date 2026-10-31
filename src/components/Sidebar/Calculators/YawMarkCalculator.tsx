@@ -74,7 +74,7 @@ export const YawMarkCalculator: React.FC = () => {
     const rTxt =
       radiusMode === 'direct'
         ? `Yay yarıçapı (saha ölçümü): R = ${trNum(calcR, 1)} m (ölçüm payı ±%5)`
-        : `Kiriş/orta tepe ölçüsü: C = ${trNum(chord, 1)} m, M = ${trNum(midOrd, 2)} m → R = C²/(8M) + M/2 = ${trNum(calcR, 1)} m`;
+        : `Kiriş/orta tepe ölçüsü: C = ${trNum(chord, 1)} m, M = ${trNum(midOrd, 2)} m → R = ${trNum(calcR, 1)} m`;
     return {
       title: 'YAYILMA (YAW) İZİ — KRİTİK HIZ İNCELEMESİ',
       topic: 'Kaza yerinde tespit edilen yayılma (yaw) izi yarıçapı ile zemin sürtünme katsayısından hareketle, aracın virajda kaymanın başladığı andaki (kritik) hızının adli teknik yönden değerlendirilmesi.',

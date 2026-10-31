@@ -71,7 +71,8 @@ export const CrushEnergyCalculator: React.FC = () => {
       evidence: [
         `Hasar genişliği (deformasyon boyu): L = ${trNum(width, 0)} cm`,
         `Ortalama deformasyon derinliği: c̄ = ${trNum(crush, 1)} cm`,
-        `Araç sınıfı: ${preset.name} — rijitlik katsayıları A = ${trNum(stiffA, 0)} N/cm, B = ${trNum(stiffB, 0)} N/cm²`,
+        `Araç sınıfı: ${preset.name}`,
+        `Rijitlik katsayıları: A = ${trNum(stiffA, 0)} N/cm, B = ${trNum(stiffB, 0)} N/cm²`,
         `Araç kütlesi (boş + yük): ${trNum(mass, 0)} kg`,
       ],
       method: [

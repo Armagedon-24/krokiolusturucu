@@ -4,8 +4,11 @@
  * biçimine (konu → deliller → yöntem → bulgular → ihtimaller →
  * sonuç ve kanaat → şerhler) dönüştürür.
  *
- * Canvas'a eklenecek metin, genişlik 320px / fontSize 11 hedefiyle
- * ~46 karakterde sarılır (CanvasArea wrap yapmadığı için).
+ * formatForensicReport: uzun bilirkişi metni (önizleme/kopya + PDF kaynağı),
+ * ~46 karakterde sarılır.
+ * formatForensicSummary: "TUVALE AKTAR" düğmesinin tuvale eklediği kısa
+ * özet — yalnızca "anahtar: değer" veri satırları, en çok 60 karakter
+ * (tuval metin kutusu 320px / fontSize 10 hedefiyle).
  */
 
 export interface ForensicReport {
@@ -131,14 +134,27 @@ export function trNum(v: number, digits = 1): string {
 
 /* ------------------------------------------------------------------ */
 /* KISA ÖZET — hesaplayıcılardaki "TUVALE AKTAR" düğmesinin doğrudan   */
-/* tuvale aktardığı kısa sonuç. Eski sade biçem gibi yalnızca 4-5      */
-/* satırdan oluşur: başlık, ayraç, 2 girdi ve 2 sonuç satırı. Uzun     */
-/* bilirkişi raporu yalnızca PDF'te yer alır.                          */
+/* tuvale aktardığı kısa sonuç. Eski sade biçemdeki gibi yalnızca      */
+/* veri satırlarından oluşur: girdiler + bulgular ("anahtar: değer").  */
+/* Başlık/ayraç yoktur; yorum cümleleri ve uzun bilirkişi raporu       */
+/* yalnızca PDF'te yer alır.                                           */
 /* ------------------------------------------------------------------ */
 
-/** Sondaki parantezli ölçüm notunu kaldırır: "İz: 20 m (±%5)" → "İz: 20 m". */
+/** Sondaki parantezli notun Ölçüm/tolerans/varsayım notu olup olmadığı. */
+const TRAILING_NOTE_RE = /±|ölçüm|hata payı|belirsizlik|faktörü|varyasyon|varsayım|limit/i;
+
+/** Sondaki parantezli ölçüm notunu kaldırır: "İz: 20 m (ölçüm ±%5)" → "İz: 20 m".
+ *  Veri taşıyan parantezler korunur: "çarpma 45 km/s (30°)" aynen kalır. */
 function stripTrailingNote(s: string): string {
-  return s.replace(/\s*\([^()]*\)\s*\.?\s*$/, '').replace(/\s+/g, ' ').trim();
+  const t = s.replace(/\s+/g, ' ').trim();
+  const m = t.match(/\s*\(([^()]*)\)\s*\.?\s*$/);
+  return m && TRAILING_NOTE_RE.test(m[1]) ? t.slice(0, m.index).trim() : t;
+}
+
+/** Yorum/şerh cümlelerini ayıklar: tuvale yalnızca "anahtar: değer" veri satırları gider. */
+function isDataLine(s: string): boolean {
+  const t = s.trim();
+  return t.includes(':') && !/^Not\s*:/i.test(t);
 }
 
 /** Satırı kelime sınırından kırparak tek satıra (en çok max karakter) indirger. */
@@ -150,15 +166,14 @@ function clipLine(s: string, max: number): string {
   return `${(sp > max * 0.5 ? cut.slice(0, sp) : cut).trimEnd()}…`;
 }
 
-const SUMMARY_SEP = '\u2500'.repeat(24);
+const SUMMARY_LINE_CHARS = 60;
 
-/** Rapor nesnesinden tuvale eklenecek KISA SONUÇ metnini (4-5 satır) üretir. */
+/** Rapor nesnesinden tuvale eklenecek KISA ÖZET metnini üretir:
+ *  tüm girdi (delil) ve bulgu satırları — görseldeki sade liste biçemi. */
 export function formatForensicSummary(r: ForensicReport): string {
-  const lines: string[] = [
-    clipLine(r.title, LINE_CHARS),
-    SUMMARY_SEP,
-    ...r.evidence.slice(0, 2).map((e) => clipLine(stripTrailingNote(e), LINE_CHARS)),
-    ...r.findings.slice(0, 2).map((f) => clipLine(stripTrailingNote(f), LINE_CHARS)),
-  ];
-  return lines.filter((l) => l.length > 0).join('\n');
+  const lines = [...r.evidence, ...r.findings]
+    .filter(isDataLine)
+    .map((l) => clipLine(stripTrailingNote(l), SUMMARY_LINE_CHARS))
+    .filter((l) => l.length > 0);
+  return lines.length > 0 ? lines.join('\n') : clipLine(stripTrailingNote(r.title), SUMMARY_LINE_CHARS);
 }

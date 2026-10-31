@@ -73,7 +73,7 @@ export const BloodstainCalculator: React.FC = () => {
     ],
     findings: [
       `Çarpma açısı (α): ${trNum(angle, 1)}° — muhtemel aralık ${trNum(angleMin, 1)}° – ${trNum(angleMax, 1)}°`,
-      `Kaynak yüksekliği (H): ${trNum(originHeight, 2)} m — muhtemel aralık ${trNum(heightMin, 2)} – ${trNum(heightMax, 2)} m`,
+      `Kaynak yüksekliği (H): ${trNum(originHeight, 2)} m — aralık ${trNum(heightMin, 2)} – ${trNum(heightMax, 2)} m`,
       `Hız sınıflaması (leke morfolojisine göre): ${velocityClass}`,
     ],
     scenarios: [

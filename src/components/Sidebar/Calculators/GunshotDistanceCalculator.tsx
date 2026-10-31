@@ -68,10 +68,10 @@ export const GunshotDistanceCalculator: React.FC = () => {
     const bulgular: string[] = weaponType === 'shotgun'
       ? [`Saçma dağılım çapı: ${spread} cm`, `Namlu şoku (choke): ${choke.name}`]
       : ([
-        hasBurn ? 'Alev/sıcaklık yanığı mevcut' : 'Alev yanığı yok',
-        hasSoot ? 'İs (kurum) lekesi mevcut' : 'İs lekesi yok',
-        hasStippling ? 'Barut dövmesi (stippling) mevcut' : 'Barut dövmesi yok',
-        hasWipe ? 'Giriş halkası/mermi sıyrığı mevcut' : 'Giriş halkası yok',
+        hasBurn ? 'Alev yanığı: mevcut' : 'Alev yanığı: yok',
+        hasSoot ? 'İs (kurum) lekesi: mevcut' : 'İs (kurum) lekesi: yok',
+        hasStippling ? 'Barut dövmesi (stippling): mevcut' : 'Barut dövmesi (stippling): yok',
+        hasWipe ? 'Giriş halkası/sıyrık: mevcut' : 'Giriş halkası/sıyrık: yok',
       ]);
     return ({
       title: 'ATIŞ MESAFESİ İNCELEMESİ (BARUT ARTIĞI)',

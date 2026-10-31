@@ -216,7 +216,7 @@ export const BulletTrajectoryCalculator: React.FC = () => {
           'Belirsizlik analizi: v₀ ±%5, açı ±1° ve yükseklik ±%2 uç değerlerinin 8 kombinasyonuyla min–max mesafe hesaplanmıştır.',
         ],
         findings: [
-          `Tahmini atış mesafesi: ${trNum(distRes, 1)} m — muhtemel aralık ${trNum(distMin, 1)} – ${trNum(distMax, 1)} m`,
+          `Atış mesafesi: ${trNum(distRes, 1)} m — muhtemel aralık ${trNum(distMin, 1)} – ${trNum(distMax, 1)} m`,
           `Bu mesafede balistik düşme: ${trNum(bulletDrop * 100, 1)} cm`,
           `Uçuş süresi: ${trNum(flightTime, 3)} sn`,
         ],

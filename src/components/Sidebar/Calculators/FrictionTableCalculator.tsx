@@ -56,7 +56,9 @@ export const FrictionTableCalculator: React.FC = () => {
       ],
       findings: [
         `Önerilen katsayı aralığı: μ = ${surface.min.toFixed(2)} – ${surface.max.toFixed(2)} (orta değer ${surface.typ.toFixed(2)})`,
-        `${trNum(speed, 0)} km/s hız için frenleme mesafesi: μ_min ile ${trNum(braking.dMax, 1)} m, orta değer ile ${trNum(braking.dTyp, 1)} m, μ_max ile ${trNum(braking.dMin, 1)} m`,
+        `Frenleme mesafesi (${trNum(speed, 0)} km/s), μ_min ile: ${trNum(braking.dMax, 1)} m`,
+        `Frenleme mesafesi (${trNum(speed, 0)} km/s), orta μ ile: ${trNum(braking.dTyp, 1)} m`,
+        `Frenleme mesafesi (${trNum(speed, 0)} km/s), μ_max ile: ${trNum(braking.dMin, 1)} m`,
         'Değerler; kuru/temiz tekerlek, kilitli frenleme ve düz yol varsayımına aittir.',
       ],
       scenarios: [
