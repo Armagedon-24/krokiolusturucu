@@ -51,6 +51,9 @@ export const KrokiPreview: React.FC<KrokiPreviewProps> = ({ scenario, width = 33
   const roads = objects.filter((o) => o.type === 'symbol' && o.symbolId === 'st-1');
   // Duvarlar: PNG kaynak %92 şeffaf olduğundan önizlemede kaybolur — düz çubuk olarak çizilir
   const walls = objects.filter((o) => o.type === 'symbol' && (o.symbolId === 'arch-w1i' || o.symbolId === 'arch-w1vi'));
+  // Kapılar: duvar çubuğu kapı açıklığının üzerinden geçmesin — kapı imajının alt %15'lik
+  // beyaz bandının duvara denk gelen bölgesi, imajla aynı döndürmeyle beyaz olarak çizilir
+  const doors = objects.filter((o) => o.type === 'symbol' && ['arch-d1l', 'arch-d1r', 'arch-d2'].includes(o.symbolId || ''));
   const markers = objects.filter((o) => o.symbolId === 'ev-circle' || o.symbolId === 'ev-square');
   const texts = objects.filter((o) => o.type === 'text');
   const arrows = objects.filter(
@@ -109,6 +112,24 @@ export const KrokiPreview: React.FC<KrokiPreviewProps> = ({ scenario, width = 33
             background: '#2e2e2e',
           }}
         />
+      ))}
+
+      {/* Kapı açıklıkları: duvar çubuğunu kapı boşluğunda kes (imajla aynı döndürme) */}
+      {doors.map((o) => (
+        <div
+          key={`gap-${o.id}`}
+          className="absolute pointer-events-none"
+          style={{
+            left: (o.x || 0) * s,
+            top: (o.y || 0) * s,
+            width: (o.width || 0) * s,
+            height: (o.height || 0) * s,
+            transform: `rotate(${o.rotation || 0}deg)`,
+            transformOrigin: '0 0',
+          }}
+        >
+          <div style={{ position: 'absolute', left: 0, bottom: 0, width: '100%', height: '15%', background: '#ffffff' }} />
+        </div>
       ))}
 
       {/* Semboller */}

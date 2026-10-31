@@ -92,24 +92,28 @@ const innerH = (x: number, y: number, w: number): KrokiPlacement => ({ s: 'arch-
 /** Pencere (duvar üzerine) */
 const win = (x: number, y: number, w = 80, rot = 0): KrokiPlacement => ({ s: 'arch-win', x, y, w, h: 12, rot });
 
-/** Kapı (kanat + açılım yayı). (hx,hy) = MENTEŞE noktası: kapı kanadının duvar MERKEZ
- *  ÇİZGİSİNE birebir oturduğu uç. arch-d1l imgesinde kanat kutunun alt kenarındadır;
- *  yerleşim kanat çizgisi tam duvar çizgisi üzerine gelecek şekilde hesaplanır.
- *  rot: 0 = kanat menteşeden SAĞA, yay YUKARI; 90 = kanat AŞAĞI, yay SAĞA;
- *       180 = kanat SOLA, yay AŞAĞI; 270 = kanat YUKARI, yay SOLA. */
+/** Kapı (kanat + açılım yayı). (hx,hy) = MENTEŞE/jamb noktası: duvar MERKEZ ÇİZGİSİ üzerinde.
+ *  arch-d1l imgesi yeniden çizildi: kanat bandının MERKEZİ kutunun alt kenarından %7,5
+ *  yukarısındadır (0.925h) ve alt %15'lik bant BEYAZ açıklıktır (tuvalde duvarı keser).
+ *  Yerleşim, kanat bandının merkezi tam duvar merkez çizgisine gelecek şekilde ofsetlenir:
+ *  rot 0 = kanat menteşeden SAĞA, yay YUKARI; 90 = kanat AŞAĞI, yay SAĞA;
+ *  180 = kanat SOLA, yay AŞAĞI; 270 = kanat YUKARI, yay SOLA. */
 const door = (hx: number, hy: number, w = 56, rot: 0 | 90 | 180 | 270 = 0): KrokiPlacement => {
-  if (rot === 90) return { s: 'arch-d1l', x: hx + w, y: hy, w, h: w, rot };
-  if (rot === 180) return { s: 'arch-d1l', x: hx, y: hy + w, w, h: w, rot };
-  if (rot === 270) return { s: 'arch-d1l', x: hx - w, y: hy, w, h: w, rot };
-  return { s: 'arch-d1l', x: hx, y: hy - w, w, h: w, rot };
+  const off = Math.round(w * 0.075); // kanat bandı merkezi ↔ duvar merkez çizgisi hizası
+  if (rot === 90) return { s: 'arch-d1l', x: hx + w - off, y: hy, w, h: w, rot };
+  if (rot === 180) return { s: 'arch-d1l', x: hx, y: hy + w - off, w, h: w, rot };
+  if (rot === 270) return { s: 'arch-d1l', x: hx - w + off, y: hy, w, h: w, rot };
+  return { s: 'arch-d1l', x: hx, y: hy - w + off, w, h: w, rot };
 };
 
 /** Çift kanatlı kapı / balkon kapısı. (hx,hy) = kanat diziliminin duvar merkez çizgisine
  *  oturan uç noktası: rot 0 → sol menteşe, kanatlar sağa; rot 90 → üst menteşe, kanatlar aşağı. */
-const doubleDoor = (hx: number, hy: number, w = 70, rot: 0 | 90 = 0): KrokiPlacement =>
-  rot === 90
-    ? { s: 'arch-d2', x: hx + w, y: hy, w, h: w, rot }
-    : { s: 'arch-d2', x: hx, y: hy - w, w, h: w, rot };
+const doubleDoor = (hx: number, hy: number, w = 70, rot: 0 | 90 = 0): KrokiPlacement => {
+  const off = Math.round(w * 0.075);
+  return rot === 90
+    ? { s: 'arch-d2', x: hx + w - off, y: hy, w, h: w, rot }
+    : { s: 'arch-d2', x: hx, y: hy - w + off, w, h: w, rot };
+};
 
 /** Sarı numaratör (Bulgu Listesi'ne işlenir). cx,cy = merkez. */
 const marker = (no: string, desc: string, cx: number, cy: number, size = 34): KrokiPlacement => ({
@@ -508,7 +512,7 @@ const hirsizlik: KrokiScenario[] = [
       // ---- Ölçüler ve açıklamalar
       arrow(420, 396, 520, 420, '105 cm'),
       callout('Çalınan: bisiklet ve elektrikli el aletleri', 240, 610, 11),
-      callout('Koridor kamerası şüpheliyi kaydetti', 950, 560, 11),
+      callout('Koridor kamerası şüpheliyi kaydetti', 900, 592, 11),
       note('Merdiven boşluğu', 1010, 520, 130),
       dash(980, 470, 1060, 545),
       lbl('Bodrum kat planı', 120, 660, 10),
@@ -567,7 +571,7 @@ const hirsizlik: KrokiScenario[] = [
       { s: 'ei-money', x: 442, y: 428, w: 40, h: 28 },
       // ---- Ölçüler ve açıklamalar
       arrow(340, 52, 530, 460, '≈ 6,1 m'),
-      callout('Teras kapısı camı kırılarak sürgü kaldırıldı', 560, 300, 11),
+      callout('Teras kapısı camı kırılarak sürgü kaldırıldı', 660, 300, 11),
       callout('Çekmeceler boşaltıldı; nakit ve takı alındı', 250, 540, 11),
       note('Ganimet: 1 adet dizüstü bilgisayar, takı, 12.000 TL', 680, 560, 280),
       dash(520, 500, 640, 620),
@@ -620,7 +624,7 @@ const hirsizlik: KrokiScenario[] = [
       lbl('Kombi', 650, 107, 9),
       // ---- Ölçüler ve açıklamalar
       arrow(750, 404, 508, 180, '≈ 3,4 m'),
-      callout('Balkon kapısı sürgüsü dışarıdan kaldırılmış', 640, 240, 11),
+      callout('Balkon kapısı sürgüsü dışarıdan kaldırılmış', 780, 262, 11),
       note('Banyo karıştırılmamış.', 640, 210, 140, 9),
       note('Yangın merdiveni üzerinden kaçış', 850, 480, 200),
       dash(820, 440, 950, 560),
@@ -1635,7 +1639,7 @@ const otoHirsizligi: KrokiScenario[] = [
       marker('6', 'Durak kamerası', 1120, 180, 30),
       // Ölçüler + açıklamalar
       arrow(400, 400, 590, 400, '≈ 4,2 m'),
-      callout('Valiz 23.40 sıralarında alınmış', 300, 400, 11),
+      callout('Valiz 23.40 sıralarında alınmış', 300, 442, 11),
       callout('Şoför bagajı kontrol etmeden kalktı', 900, 480, 11),
       note('Kamera kaydında şüpheli yürüyerek istikamet değiştirdi.', 40, 560, 280, 9),
     ],
@@ -1802,7 +1806,7 @@ const isyeriHirsizligi: KrokiScenario[] = [
       // Ölçüler + açıklamalar
       arrow(160, 620, 1100, 620, 'Cephe ≈ 10 m'),
       callout('Cam taşla kırıldı; alarm 03.12 de çaldı', 700, 170, 11),
-      callout('Kasada 4.850 TL bulunduğu bildirildi', 240, 620, 11),
+      callout('Kasada 4.850 TL bulunduğu bildirildi', 500, 660, 11),
       note('Raf 2 deki ürünlerin ENVANTER farkı tutanağa geçirildi.', 60, 660, 300, 9),
     ],
   },
@@ -1908,8 +1912,8 @@ const isyeriHirsizligi: KrokiScenario[] = [
       marker('6', 'Salon kamerası', 300, 175, 30),
       // Ölçüler + açıklamalar
       arrow(200, 620, 1000, 620, 'Cephe ≈ 8,4 m'),
-      callout('Kilit sökme aletiyle zorlanmış', 700, 620, 11),
-      callout('Kasada ≈ 3.200 TL bulunuyordu', 240, 620, 11),
+      callout('Kilit sökme aletiyle zorlanmış', 700, 658, 11),
+      callout('Kasada ≈ 3.200 TL bulunuyordu', 470, 658, 11),
       note('Kamera kaydı 01.40-02.05 arası inceleniyor.', 60, 655, 270, 9),
     ],
   },
@@ -2023,7 +2027,7 @@ const bicaklaYaralama: KrokiScenario[] = [
       marker('6', 'Kaçış yönü', 215, 590),
       // Ölçüler + açıklamalar
       arrow(700, 480, 830, 480, '≈ 1,4 m'),
-      callout('Mağdur karın ve kol bölgesinden yaralandı', 380, 620, 11),
+      callout('Mağdur karın ve kol bölgesinden yaralandı', 460, 652, 11),
       callout('Şüpheli tanıdı; görüntü çalışması sürüyor', 800, 620, 11),
       note('Bıçak 12 cm bıçak boyu, mutfak tipi.', 60, 650, 230, 9),
     ],
