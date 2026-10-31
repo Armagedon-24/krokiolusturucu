@@ -133,17 +133,17 @@ const box = (x: number, y: number, w = 65, h = 45, label?: string): KrokiPlaceme
   return out;
 };
 
-/** Yatay yol bandı — merkez çizgisi cy, bant genişliği bw, x0..x1 (st-1 SVG oranına göre) */
-const roadH = (x0: number, x1: number, cy: number, bw = 150): KrokiPlacement => {
-  const h = Math.round(bw / 0.3);
-  return { s: 'st-1', x: x0, y: Math.round(cy - h / 2), w: x1 - x0, h };
-};
+/** Yatay yol bandı — merkez çizgisi cy, x0..x1. Tuvaldeki dinamik yol motoru bandı
+ *  h genişliğinde çizer; bu yüzden h doğrudan bant genişliğidir (bw). */
+const roadH = (x0: number, x1: number, cy: number, bw = 150): KrokiPlacement => ({
+  s: 'st-1', x: x0, y: Math.round(cy - bw / 2), w: x1 - x0, h: bw,
+});
 
-/** Dikey yol bandı — merkez çizgisi cx, y0..y1 (st-1 rotasyonu 90°) */
+/** Dikey yol bandı — merkez çizgisi cx, y0..y1 (90° döndürülmüş). Motor bant genişliği h:
+ *  90° döndürmede bandın cx üzerinde ortalanması için x = cx + bw/2. */
 const roadV = (cx: number, y0: number, y1: number, bw = 150): KrokiPlacement => {
-  const h = Math.round(bw / 0.3);
   const L = y1 - y0;
-  return { s: 'st-1', x: Math.round(cx + h / 2), y: y0, w: L, h, rot: 90 };
+  return { s: 'st-1', x: Math.round(cx + bw / 2), y: y0, w: L, h: bw, rot: 90 };
 };
 
 /* ------------------------------------------------------------------ */
@@ -157,6 +157,44 @@ SYMBOL_CATEGORIES.forEach((cat) => {
     SYMBOL_INDEX[sym.id] = { ...sym, categoryId: cat.id } as SymbolEntry & { categoryId: string };
   });
 });
+
+/**
+ * Kroki çizimlerinde kullanılacak sembol görselini seçer.
+ * Varsa sembolün uygulamanın KARAKALEM (çizgi teknikli, şeffaf zeminli) görseli
+ * tercih edilir: renkli/realistik PNG ve basit SVG dolgular yerine klasik kroki
+ * görünümü sağlar; üst üste binen sembollerde okunabilirliği korur.
+ * İstisna: st-1 (Düz Yol) — büyük ölçekte vektör SVG netliği korur.
+ */
+const KROKI_SRC_VECTOR = new Set(['st-1']);
+const krokiSrc = (sym: SymbolEntry): string => {
+  const th = (sym as { thumbnail?: unknown }).thumbnail;
+  if (typeof th === 'string' && th.includes('/karakalem/') && !KROKI_SRC_VECTOR.has(sym.id)) return th;
+  return sym.src;
+};
+
+/**
+ * Realistik/iz ailesi semboller (kan, fren izi, ıslak zemin, krater, enkaz, cam,
+ * duman, alev, lastik izi vb.) kroki çizimlerinde yarı saydam (kurşun kalem tarama
+ * etkisi) kullanılır: altlarındaki nesneleri kapatmadan klasik kroki okunabilirliği sağlar.
+ */
+const KROKI_SOFT_RE = /realistic|blood|skid|tire[_-]?track|liquid|mud|fingerprint|crack|crater|blast|debris|shattered|broken[_-]?wall|smoke|fire/i;
+const KROKI_SOFT_IDS = new Set(['st-wet', 'st-ice']);
+const krokiOpacity = (sym: SymbolEntry): number | undefined => {
+  const hay = `${sym.id} ${sym.src} ${String((sym as { thumbnail?: unknown }).thumbnail ?? '')}`;
+  return KROKI_SOFT_RE.test(hay) || KROKI_SOFT_IDS.has(sym.id) ? 0.5 : undefined;
+};
+
+/**
+ * Kroki senaryolarında dolgulu (silüet) görünen sembollerin, uygulamanın mevcut
+ * ÇİZGİ (karakalem) karşılıklarıyla değiştirilmesi — üst üste binmede okunabilirlik
+ * ve klasik kroki görünümü için. Değiştirilen nesne orijinal sembol adını korur.
+ */
+const KROKI_SYMBOL_SUBSTITUTE: Record<string, string> = {
+  'v-sedan': 'v-hatchback',     // Binek otomobil → çizgi binek otomobil
+  'v-police': 'v-gendarmerie',  // Polis aracı → çizgi jandarma aracı (ışık barlı)
+  'v-ambulance': 'v-panelvan',  // Ambulans → çizgi panelvan gövdeli ambulans
+  'v-truck': 'v-dump',          // Kamyon → çizgi damperli kamyon
+};
 
 /** Tasarım koordinatlarını gerçek çizim alanına çevirip tuval nesnelerini üretir. */
 export function buildScenarioObjects(
@@ -228,16 +266,19 @@ export function buildScenarioObjects(
       continue;
     }
     if (p.s) {
-      const sym = SYMBOL_INDEX[p.s];
+      const origSym = SYMBOL_INDEX[p.s];
+      const subId = KROKI_SYMBOL_SUBSTITUTE[p.s];
+      const sym = (subId ? SYMBOL_INDEX[subId] : undefined) || origSym;
       if (!sym) continue; // bilinmeyen sembol atlanır (uygulama güncellendiğinde dayanıklılık)
       const w = p.w ?? (typeof sym.width === 'number' ? sym.width : 100);
       const h = p.h ?? (typeof sym.height === 'number' ? sym.height : 100);
       out.push({
-        id: uuidv4(), type: 'symbol', name: p.name || sym.name || p.s,
-        symbolId: sym.id, categoryId: sym.categoryId, src: sym.src,
+        id: uuidv4(), type: 'symbol', name: p.name || origSym?.name || sym.name || p.s,
+        symbolId: sym.id, categoryId: sym.categoryId, src: krokiSrc(sym),
         x: ox + (p.x ?? 0), y: oy + (p.y ?? 0),
         width: w, height: h,
         rotation: p.rot ?? 0, scaleX: 1, scaleY: 1,
+        opacity: krokiOpacity(sym),
         findingNo: p.findingNo, findingDesc: p.findingDesc,
         distanceColor: '#000000', zIndex: z++,
       });

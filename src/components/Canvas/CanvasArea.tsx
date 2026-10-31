@@ -4,7 +4,6 @@ import { useStore } from '../../store/useStore';
 import useImage from 'use-image';
 import { 
   Trash2, 
-  X, 
   Upload, 
   Target, 
   Grid, 
@@ -1313,8 +1312,8 @@ const IndividualObject = ({
               const w = shapeProps.width;
               const h = shapeProps.height;
               const roadWidth = Math.min(w, h) * 0.35;
-              const roadColor = "#2a2a2a"; // Matched to st-1
-              const lineColor = "#ffffff";
+              const roadColor = "#ffffff"; // Klasik kroki: beyaz yol gövdesi (st-1 ile uyumlu)
+              const lineColor = "#000000";
               const centerDash = [20, 20]; // Matched to st-1
               const centerLineWidth = Math.max(1.5, roadWidth / 20);
               
@@ -1375,19 +1374,27 @@ const IndividualObject = ({
               
               return (
                 <Group>
-                  {/* Road Surface (Base) */}
+                  {/* Road Edge (Koyu kenar için biraz daha kalın siyah taban) */}
                   <Path
                     data={pathData}
-                    stroke="#2a2a2a"
+                    stroke="#000000"
+                    strokeWidth={h + 5}
+                    lineCap="butt"
+                    lineJoin="round"
+                  />
+                  {/* Road Surface (Beyaz kroki zemini) */}
+                  <Path
+                    data={pathData}
+                    stroke="#ffffff"
                     strokeWidth={h}
                     lineCap="butt"
                     lineJoin="round"
                   />
-                  {/* Center Dashed Line */}
+                  {/* Center Dashed Line (Siyah şerit çizgisi) */}
                   <Path
                     data={pathData}
-                    stroke="white"
-                    strokeWidth={Math.max(1, h / 25)}
+                    stroke="#000000"
+                    strokeWidth={Math.max(1.5, h / 25)}
                     dash={[20, 20]}
                     lineCap="butt"
                     lineJoin="round"
@@ -2560,6 +2567,7 @@ const IndividualObject = ({
             image={image}
             width={shapeProps.width}
             height={shapeProps.height}
+            opacity={shapeProps.opacity ?? 1}
             globalCompositeOperation="source-over"
             draggable={false}
             imageSmoothingEnabled={true}
@@ -5652,64 +5660,6 @@ export const CanvasArea: React.FC = () => {
         />
       </div>
 
-      {/* Finding List Panel */}
-      {objects.some(o => o.findingNo) && (
-        <div className="fixed right-4 top-32 bg-[#1e1e1e]/90 backdrop-blur-md border border-[#F5C518]/30 rounded-lg shadow-2xl p-3 w-64 z-40 animate-in fade-in slide-in-from-right-4">
-          <div className="flex items-center gap-2 mb-3 border-b border-[#333] pb-2">
-            <div className="w-2 h-2 rounded-full bg-[#F5C518] animate-pulse" />
-            <h3 className="text-[11px] font-black text-[#F5C518] uppercase tracking-wider">Bulgu Listesi</h3>
-          </div>
-          <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-1 custom-scrollbar">
-            {objects
-              .filter(o => o.findingNo)
-              .sort((a, b) => (a.findingNo || '').localeCompare(b.findingNo || '', undefined, { numeric: true }))
-              .map((obj) => (
-                <div 
-                  key={obj.id}
-                  className={`flex items-center gap-2 bg-[#111] p-2 rounded border transition-colors group cursor-pointer ${
-                    selectedId === obj.id ? 'border-[#F5C518] bg-[#F5C518]/5' : 'border-[#333] hover:border-[#F5C518]/50'
-                  }`}
-                  onClick={() => setSelectedId(obj.id)}
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[10px] text-gray-300 truncate font-bold">
-                      Bulgu No. {obj.findingNo}: <span className="text-[#F5C518] font-black ml-1">{obj.findingDesc || obj.name}</span>
-                    </p>
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setFindingModalState({
-                          isOpen: true,
-                          symbol: obj,
-                          pos: { x: obj.x + 20, y: obj.y + 20 }
-                        });
-                      }}
-                      className="p-1 hover:bg-[#F5C518]/20 text-gray-500 hover:text-[#F5C518] rounded transition-colors"
-                      title="Düzenle"
-                    >
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                      </svg>
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        removeObject(obj.id);
-                      }}
-                      className="p-1 hover:bg-red-500/20 text-gray-500 hover:text-red-500 rounded transition-colors"
-                      title="Sil"
-                    >
-                      <X size={10} />
-                    </button>
-                  </div>
-                </div>
-              ))}
-          </div>
-        </div>
-      )}
 
       <Suspense fallback={null}>
         <FindingModal

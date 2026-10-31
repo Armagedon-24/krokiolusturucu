@@ -27,8 +27,10 @@ export const KrokiPreview: React.FC<KrokiPreviewProps> = ({ scenario, width = 32
   );
 
   const symbols = objects.filter(
-    (o) => o.type === 'symbol' && o.src && !['a-4', 'a-5', 'ev-callout', 'ev-circle', 'ev-square'].includes(o.symbolId || ''),
+    (o) => o.type === 'symbol' && o.src && !['a-4', 'a-5', 'ev-callout', 'ev-circle', 'ev-square', 'st-1'].includes(o.symbolId || ''),
   );
+  // Düz yollar tuvaldeki dinamik motorla aynı biçimde çizilir (beyaz bant + siyah kenar/şerit)
+  const roads = objects.filter((o) => o.type === 'symbol' && o.symbolId === 'st-1');
   const markers = objects.filter((o) => o.symbolId === 'ev-circle' || o.symbolId === 'ev-square');
   const texts = objects.filter((o) => o.type === 'text');
   const arrows = objects.filter(
@@ -42,6 +44,35 @@ export const KrokiPreview: React.FC<KrokiPreviewProps> = ({ scenario, width = 32
       style={{ width, height }}
       title="Kroki önizlemesi — tuvale aktarınca düzenlenebilir"
     >
+      {/* Düz yollar (dinamik yol motoruyla birebir) */}
+      {roads.map((o) => (
+        <div
+          key={o.id}
+          className="absolute pointer-events-none"
+          style={{
+            left: (o.x || 0) * s,
+            top: (o.y || 0) * s,
+            width: (o.width || 0) * s,
+            height: (o.height || 0) * s,
+            transform: `rotate(${o.rotation || 0}deg)`,
+            transformOrigin: '0 0',
+            background: '#ffffff',
+            borderTop: '2px solid #000000',
+            borderBottom: '2px solid #000000',
+          }}
+        >
+          <div
+            style={{
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              top: '50%',
+              borderTop: '2px dashed #000000',
+            }}
+          />
+        </div>
+      ))}
+
       {/* Semboller */}
       {symbols.map((o) => (
         <img
@@ -58,6 +89,7 @@ export const KrokiPreview: React.FC<KrokiPreviewProps> = ({ scenario, width = 32
             transform: `rotate(${o.rotation || 0}deg)`,
             transformOrigin: '0 0',
             mixBlendMode: 'multiply',
+            opacity: o.opacity ?? 1,
           }}
           onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
         />
