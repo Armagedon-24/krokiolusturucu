@@ -10,14 +10,14 @@ import {
   ChevronRight,
   CheckCircle2,
   Settings2,
-  Play,
+  BookOpen,
   CloudDownload,
 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { v4 as uuidv4 } from 'uuid';
 import { Lock, Calculator } from 'lucide-react';
 import { CalculatorIndex } from './Calculators/CalculatorIndex';
-import { AnimationIndex } from './Animations/AnimationIndex';
+import { ExampleCaseIndex } from './Examples/ExampleCaseIndex';
 import { processUploadedSymbolImage } from '../../utils/canvasUtils';
 import { getOptimizedCloudinaryUrl } from '../../lib/cloudinary';
 import { CloudGalleryModal } from './CloudGalleryModal';
@@ -304,7 +304,7 @@ export const Sidebar: React.FC = () => {
   const tabs = [
     { id: 'symbols' as const, label: 'SEMBOLLER', icon: <Package size={18} /> },
     { id: 'uploads' as const, label: 'YÜKLENENLER', icon: <ImageIcon size={18} /> },
-    { id: 'animations' as const, label: 'ANİMASYON', icon: <Play size={18} /> },
+    { id: 'animations' as const, label: 'ÖRNEK OLAYLAR', icon: <BookOpen size={18} /> },
     { id: 'calculators' as const, label: 'HESAPLAYICI', icon: <Calculator size={18} /> },
   ];
 
@@ -806,7 +806,7 @@ export const Sidebar: React.FC = () => {
           )}
 
           {activeTab === 'animations' && (
-            <AnimationIndex />
+            <ExampleCaseIndex />
           )}
           {activeTab === 'calculators' && (
             <CalculatorIndex />

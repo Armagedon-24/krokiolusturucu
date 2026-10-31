@@ -15,6 +15,9 @@ import {
   Bike,
   Eye,
   Table2,
+  Car,
+  Activity,
+  Crosshair,
 } from 'lucide-react';
 import { SkidMarkCalculator } from './SkidMarkCalculator';
 import { BloodstainCalculator } from './BloodstainCalculator';
@@ -30,6 +33,10 @@ import { CrushEnergyCalculator } from './CrushEnergyCalculator';
 import { MotorcycleSlideCalculator } from './MotorcycleSlideCalculator';
 import { SightDistanceCalculator } from './SightDistanceCalculator';
 import { FrictionTableCalculator } from './FrictionTableCalculator';
+import { AccidentReconstructionCalculator } from './AccidentReconstructionCalculator';
+import { FallCalculator } from '../FallCalculator';
+import { PedestrianLaunchCalculator } from './PedestrianLaunchCalculator';
+import { ShotDirectionCalculator } from './ShotDirectionCalculator';
 
 type CalculatorType =
   | 'skid'
@@ -45,7 +52,11 @@ type CalculatorType =
   | 'crush'
   | 'moto'
   | 'sight'
-  | 'friction';
+  | 'friction'
+  | 'accident'
+  | 'fall'
+  | 'plaunch'
+  | 'shotdir';
 
 export const CalculatorIndex: React.FC = () => {
   const [activeCalc, setActiveCalc] = useState<CalculatorType>('skid');
@@ -66,6 +77,10 @@ export const CalculatorIndex: React.FC = () => {
     { id: 'gunshot', name: 'Atış Mesafesi (Barut İzi)', icon: <Flame size={14} />, component: <GunshotDistanceCalculator /> },
     { id: 'shadow', name: 'Gölge / Zaman', icon: <Sun size={14} />, component: <ShadowCalculator /> },
     { id: 'algor', name: 'Ölüm Saati (Vücut Isısı)', icon: <Thermometer size={14} />, component: <AlgorMortisCalculator /> },
+    { id: 'accident', name: 'Kaza Yeniden Canlandırma', icon: <Car size={14} />, component: <AccidentReconstructionCalculator /> },
+    { id: 'fall', name: 'Yüksekten Düşme Analizi', icon: <Activity size={14} />, component: <FallCalculator /> },
+    { id: 'plaunch', name: 'Yaya Fırlatma Analizi', icon: <Zap size={14} />, component: <PedestrianLaunchCalculator /> },
+    { id: 'shotdir', name: 'Atış Yönü Tespiti', icon: <Crosshair size={14} />, component: <ShotDirectionCalculator /> },
   ];
 
   const activeCalculator = calculators.find(c => c.id === activeCalc);
