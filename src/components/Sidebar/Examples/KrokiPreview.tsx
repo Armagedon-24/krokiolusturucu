@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef, useState, useEffect } from 'react';
 import { buildScenarioObjects, type KrokiScenario } from '../../../data/krokiScenarios';
 
 /** Senaryoların tasarlandığı yerleşim alanı (landscape kroki şablonu). */
@@ -16,9 +16,27 @@ interface KrokiPreviewProps {
  * Senaryo krokisinin küçük önizlemesi. buildScenarioObjects ile üretilen TÜYLE
  * BİREBİR AYNI nesneleri (aynı semboller, konumlar, döndürmeler) ölçekleyerek
  * HTML/CSS ile çizer — böylece kartta görülen kroki, tuvale aktarılan krokidir.
+ * Kart genişliğine göre ölçeklenir (duyarlı genişlik): dar kenar çubuğunda da
+ * okunabilirlik korunur.
  */
-export const KrokiPreview: React.FC<KrokiPreviewProps> = ({ scenario, width = 320, className = '' }) => {
-  const s = width / DESIGN_W;
+export const KrokiPreview: React.FC<KrokiPreviewProps> = ({ scenario, width = 330, className = '' }) => {
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [cw, setCw] = useState(width);
+
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const update = () => {
+      const w = el.clientWidth;
+      if (w > 50) setCw(w);
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const s = cw / DESIGN_W;
   const height = Math.round(DESIGN_H * s);
 
   const objects = useMemo(
@@ -27,10 +45,12 @@ export const KrokiPreview: React.FC<KrokiPreviewProps> = ({ scenario, width = 32
   );
 
   const symbols = objects.filter(
-    (o) => o.type === 'symbol' && o.src && !['a-4', 'a-5', 'ev-callout', 'ev-circle', 'ev-square', 'st-1'].includes(o.symbolId || ''),
+    (o) => o.type === 'symbol' && o.src && !['a-4', 'a-5', 'ev-callout', 'ev-circle', 'ev-square', 'st-1', 'arch-w1i', 'arch-w1vi'].includes(o.symbolId || ''),
   );
   // Düz yollar tuvaldeki dinamik motorla aynı biçimde çizilir (beyaz bant + siyah kenar/şerit)
   const roads = objects.filter((o) => o.type === 'symbol' && o.symbolId === 'st-1');
+  // Duvarlar: PNG kaynak %92 şeffaf olduğundan önizlemede kaybolur — düz çubuk olarak çizilir
+  const walls = objects.filter((o) => o.type === 'symbol' && (o.symbolId === 'arch-w1i' || o.symbolId === 'arch-w1vi'));
   const markers = objects.filter((o) => o.symbolId === 'ev-circle' || o.symbolId === 'ev-square');
   const texts = objects.filter((o) => o.type === 'text');
   const arrows = objects.filter(
@@ -40,8 +60,9 @@ export const KrokiPreview: React.FC<KrokiPreviewProps> = ({ scenario, width = 32
 
   return (
     <div
-      className={`relative bg-white border border-[#444] rounded-lg overflow-hidden shadow-inner ${className}`}
-      style={{ width, height }}
+      ref={wrapRef}
+      className={`relative bg-white border border-[#444] rounded-lg overflow-hidden shadow-inner w-full ${className}`}
+      style={{ height }}
       title="Kroki önizlemesi — tuvale aktarınca düzenlenebilir"
     >
       {/* Düz yollar (dinamik yol motoruyla birebir) */}
@@ -71,6 +92,23 @@ export const KrokiPreview: React.FC<KrokiPreviewProps> = ({ scenario, width = 32
             }}
           />
         </div>
+      ))}
+
+      {/* Duvarlar (karakalem PNG önizlemede kaybolduğundan düz çubuk) */}
+      {walls.map((o) => (
+        <div
+          key={o.id}
+          className="absolute pointer-events-none"
+          style={{
+            left: (o.x || 0) * s,
+            top: (o.y || 0) * s,
+            width: (o.width || 0) * s,
+            height: (o.height || 0) * s,
+            transform: `rotate(${o.rotation || 0}deg)`,
+            transformOrigin: '0 0',
+            background: '#2e2e2e',
+          }}
+        />
       ))}
 
       {/* Semboller */}
@@ -130,7 +168,7 @@ export const KrokiPreview: React.FC<KrokiPreviewProps> = ({ scenario, width = 32
             left: (o.x || 0) * s,
             top: (o.y || 0) * s,
             width: (o.width || 220) * s,
-            fontSize: Math.max((o.fontSize || 10) * s, 3),
+            fontSize: Math.max((o.fontSize || 10) * s, 4),
             fontWeight: o.fontStyle === 'bold' ? 800 : 400,
             textAlign: (o.align as 'left' | 'center' | 'right') || 'left',
             color: '#111',
@@ -173,9 +211,9 @@ export const KrokiPreview: React.FC<KrokiPreviewProps> = ({ scenario, width = 32
       {/* Ölçü / yön okları */}
       <svg
         className="absolute inset-0 pointer-events-none"
-        width={width}
+        width={cw}
         height={height}
-        viewBox={`0 0 ${width} ${height}`}
+        viewBox={`0 0 ${cw} ${height}`}
       >
         <defs>
           <marker id="kroki-prev-arr" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto">

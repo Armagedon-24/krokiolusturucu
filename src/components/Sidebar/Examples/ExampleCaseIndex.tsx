@@ -236,7 +236,7 @@ export const ExampleCaseIndex: React.FC = () => {
                 </div>
 
                 {/* Kroki önizlemesi */}
-                <KrokiPreview scenario={sc} width={330} className="w-full" />
+                <KrokiPreview scenario={sc} className="w-full" />
 
                 <p className="text-[10px] text-gray-400 leading-relaxed">{sc.story}</p>
 

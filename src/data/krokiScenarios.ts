@@ -174,15 +174,26 @@ const krokiSrc = (sym: SymbolEntry): string => {
 
 /**
  * Realistik/iz ailesi semboller (kan, fren izi, ıslak zemin, krater, enkaz, cam,
- * duman, alev, lastik izi vb.) kroki çizimlerinde yarı saydam (kurşun kalem tarama
+ * duman, alev, lastik izi vb.) kroki çizimlerinde hafif saydam (kurşun kalem tarama
  * etkisi) kullanılır: altlarındaki nesneleri kapatmadan klasik kroki okunabilirliği sağlar.
+ * 0.7 seçildi: 0.5 krokide zor seçiliyordu; 0.7 hem saydamlığı korur hem belirginleştirir.
  */
 const KROKI_SOFT_RE = /realistic|blood|skid|tire[_-]?track|liquid|mud|fingerprint|crack|crater|blast|debris|shattered|broken[_-]?wall|smoke|fire/i;
 const KROKI_SOFT_IDS = new Set(['st-wet', 'st-ice']);
 const krokiOpacity = (sym: SymbolEntry): number | undefined => {
   const hay = `${sym.id} ${sym.src} ${String((sym as { thumbnail?: unknown }).thumbnail ?? '')}`;
-  return KROKI_SOFT_RE.test(hay) || KROKI_SOFT_IDS.has(sym.id) ? 0.5 : undefined;
+  return KROKI_SOFT_RE.test(hay) || KROKI_SOFT_IDS.has(sym.id) ? 0.7 : undefined;
 };
+
+/**
+ * Minik delil/iz sembolleri (ayakkabı, telefon, anahtar, kovan, mermi izi vb.)
+ * kroki okunabilirliği için asgari boyuta büyütülür (en uzun kenar < 34 px ise 34'e).
+ * Yapısal semboller (duvar/kapı/pencere, yol, ip, kutu, numaratör, ok) muaf tutulur.
+ */
+const KROKI_MIN_SIZE = 34;
+const KROKI_MIN_EXEMPT_PREFIX = ['arch-', 'st-', 'ev-rope', 'ev-rect-hollow', 'ev-circle', 'ev-square', 'ev-callout', 'a-4', 'a-5'];
+const krokiMinSizeExempt = (id: string): boolean =>
+  KROKI_MIN_EXEMPT_PREFIX.some((p) => id === p || id.startsWith(p));
 
 /**
  * Kroki senaryolarında dolgulu (silüet) görünen sembollerin, uygulamanın mevcut
@@ -270,12 +281,23 @@ export function buildScenarioObjects(
       const subId = KROKI_SYMBOL_SUBSTITUTE[p.s];
       const sym = (subId ? SYMBOL_INDEX[subId] : undefined) || origSym;
       if (!sym) continue; // bilinmeyen sembol atlanır (uygulama güncellendiğinde dayanıklılık)
-      const w = p.w ?? (typeof sym.width === 'number' ? sym.width : 100);
-      const h = p.h ?? (typeof sym.height === 'number' ? sym.height : 100);
+      let w = p.w ?? (typeof sym.width === 'number' ? sym.width : 100);
+      let h = p.h ?? (typeof sym.height === 'number' ? sym.height : 100);
+      let px = p.x ?? 0;
+      let py = p.y ?? 0;
+      if (!krokiMinSizeExempt(sym.id)) {
+        const m = Math.max(w, h);
+        if (m > 0 && m < KROKI_MIN_SIZE) {
+          const k = KROKI_MIN_SIZE / m;
+          const nw = Math.round(w * k), nh = Math.round(h * k);
+          px += (w - nw) / 2; py += (h - nh) / 2; // merkez sabit
+          w = nw; h = nh;
+        }
+      }
       out.push({
         id: uuidv4(), type: 'symbol', name: p.name || origSym?.name || sym.name || p.s,
         symbolId: sym.id, categoryId: sym.categoryId, src: krokiSrc(sym),
-        x: ox + (p.x ?? 0), y: oy + (p.y ?? 0),
+        x: ox + px, y: oy + py,
         width: w, height: h,
         rotation: p.rot ?? 0, scaleX: 1, scaleY: 1,
         opacity: krokiOpacity(sym),
@@ -336,9 +358,9 @@ const hirsizlik: KrokiScenario[] = [
       marker('2', 'Kapı sökülmesinde kullanılan levye', 260, 502),
       { s: 'tr-3', x: 345, y: 6, w: 26, h: 26 },
       marker('3', 'Pencere kasasından parmak izi', 396, 14),
-      { s: 'tr-footprint', x: 300, y: 378, w: 20, h: 36, rot: -15 },
-      { s: 'tr-footprint', x: 346, y: 390, w: 20, h: 36, rot: 8 },
-      { s: 'tr-footprint', x: 392, y: 376, w: 20, h: 36, rot: -5 },
+      { s: 'tr-footprint', x: 297, y: 375, w: 26, h: 42, rot: -15 },
+      { s: 'tr-footprint', x: 343, y: 387, w: 26, h: 42, rot: 8 },
+      { s: 'tr-footprint', x: 389, y: 373, w: 26, h: 42, rot: -5 },
       marker('4', 'Salon zemininde toz ayak izleri', 442, 386),
       { s: 'ei-cigarette', x: 528, y: 416, w: 32, h: 14, rot: 10 },
       marker('5', 'Kapı yanında sigara izmariti', 578, 424),
@@ -387,9 +409,9 @@ const hirsizlik: KrokiScenario[] = [
       { s: 'f-11', x: 322, y: 468, w: 70, h: 45, name: 'Paspas' },
       // ---- İzler ve deliller
       { s: 'tr-mud', x: 158, y: 148, w: 70, h: 45, rot: 15 },
-      { s: 'tr-footprint', x: 240, y: 180, w: 20, h: 38, rot: 20 },
-      { s: 'tr-footprint', x: 282, y: 212, w: 20, h: 38, rot: -10 },
-      { s: 'tr-footprint', x: 322, y: 252, w: 20, h: 38, rot: 5 },
+      { s: 'tr-footprint', x: 237, y: 176, w: 26, h: 46, rot: 20 },
+      { s: 'tr-footprint', x: 279, y: 208, w: 26, h: 46, rot: -10 },
+      { s: 'tr-footprint', x: 319, y: 248, w: 26, h: 46, rot: 5 },
       { s: 'tr-3', x: 124, y: 214, w: 22, h: 22 },
       { s: 'ex-4', x: 58, y: 138, w: 46, h: 32 },
       { s: 'ei-brick', x: 52, y: 206, w: 30, h: 22 },
@@ -457,9 +479,9 @@ const hirsizlik: KrokiScenario[] = [
       // ---- Koridor delilleri
       { s: 'ei-crowbar', x: 520, y: 420, w: 18, h: 44, rot: 30 },
       marker('2', 'Koridorda bulunan levye', 560, 430),
-      { s: 'tr-footprint', x: 610, y: 415, w: 20, h: 36, rot: -10 },
-      { s: 'tr-footprint', x: 650, y: 428, w: 20, h: 36, rot: 6 },
-      { s: 'tr-footprint', x: 690, y: 414, w: 20, h: 36, rot: -4 },
+      { s: 'tr-footprint', x: 607, y: 412, w: 26, h: 42, rot: -10 },
+      { s: 'tr-footprint', x: 647, y: 425, w: 26, h: 42, rot: 6 },
+      { s: 'tr-footprint', x: 687, y: 411, w: 26, h: 42, rot: -4 },
       marker('4', 'Koridor zemininde ayakkabı izleri', 738, 424),
       { s: 'v-bicycle', x: 780, y: 420, w: 95, h: 32 },
       marker('5', 'Koridorda terk edilmiş bisiklet', 900, 430),
@@ -516,9 +538,9 @@ const hirsizlik: KrokiScenario[] = [
       { s: 'ex-4', x: 512, y: 424, w: 60, h: 40 },
       marker('1', 'Kırılan teras kapısı camı', 596, 442),
       { s: 'tr-mud', x: 292, y: 62, w: 80, h: 50, rot: 10 },
-      { s: 'tr-footprint', x: 330, y: 118, w: 20, h: 36, rot: 8 },
+      { s: 'tr-footprint', x: 327, y: 115, w: 26, h: 42, rot: 8 },
       marker('2', 'Çit altında çamur izleri', 402, 96),
-      { s: 'tr-footprint', x: 520, y: 424, w: 20, h: 36, rot: -8 },
+      { s: 'tr-footprint', x: 517, y: 421, w: 26, h: 42, rot: -8 },
       marker('3', 'Salon zemininde ayakkabı izleri', 468, 430),
       { s: 'tr-3', x: 478, y: 448, w: 22, h: 22 },
       marker('4', 'Teras kapısı kasasından parmak izi', 636, 500),
@@ -578,8 +600,8 @@ const hirsizlik: KrokiScenario[] = [
       marker('3', 'Zeminde şüpheliye ait şapka', 306, 190),
       { s: 'ei-phone', x: 538, y: 298, w: 24, h: 36 },
       marker('4', 'Şüphelinin unuttuğu telefon', 584, 312),
-      { s: 'tr-footprint', x: 300, y: 402, w: 20, h: 36, rot: 6 },
-      { s: 'tr-footprint', x: 344, y: 414, w: 20, h: 36, rot: -10 },
+      { s: 'tr-footprint', x: 297, y: 399, w: 26, h: 42, rot: 6 },
+      { s: 'tr-footprint', x: 341, y: 411, w: 26, h: 42, rot: -10 },
       marker('5', 'Zeminde ayakkabı taban izleri', 396, 418),
       { s: 'ev-rect-hollow', x: 630, y: 90, w: 40, h: 34 },
       lbl('Kombi', 650, 107, 9),
@@ -971,7 +993,7 @@ const cinayet: KrokiScenario[] = [
       { s: 'tr-bullet-wall', x: 92, y: 148, w: 16, h: 16 },
       { s: 'tr-bullet-wall', x: 92, y: 190, w: 16, h: 16 },
       // Ayakkabı izi (pencere altı)
-      { s: 'tr-footprint', x: 470, y: 82, w: 20, h: 36, rot: -10 },
+      { s: 'tr-footprint', x: 467, y: 79, w: 26, h: 42, rot: -10 },
       // Numaratörler
       marker('1', 'Mağdur cesedi (yüzüstü)', 168, 320),
       marker('2', '3 adet boş kovan (9 mm)', 428, 428),
@@ -1019,8 +1041,8 @@ const cinayet: KrokiScenario[] = [
       { s: 'ei-phone', x: 248, y: 318, w: 24, h: 36 },
       { s: 'ei-keys', x: 518, y: 298, w: 20, h: 26 },
       { s: 'ei-watch', x: 500, y: 338, w: 24, h: 24 },
-      { s: 'tr-footprint', x: 198, y: 380, w: 20, h: 36, rot: 10 },
-      { s: 'tr-footprint', x: 244, y: 394, w: 20, h: 36, rot: -12 },
+      { s: 'tr-footprint', x: 195, y: 377, w: 26, h: 42, rot: 10 },
+      { s: 'tr-footprint', x: 241, y: 391, w: 26, h: 42, rot: -12 },
       // Numaratörler
       marker('1', 'Mağdur cesedi (yan pozisyon)', 342, 160),
       marker('2', 'Boyun bölgesinde ekimozlar', 486, 150, 30),
@@ -1170,27 +1192,27 @@ const intihar: KrokiScenario[] = [
       win(320, 56, 80, 0),
       // Gardırop + ip
       { s: 'f-13', x: 116, y: 76, w: 130, h: 55, name: 'Gardırop' },
-      { s: 'ev-rope', x: 240, y: 120, w: 120, h: 30, rot: 90, name: 'İp' },
-      lbl('Bağlantı noktası', 300, 108, 9),
-      // Mağdur (ipin altında, asılı konum)
-      { s: 'p-9', x: 240, y: 140, w: 100, h: 50, rot: 90, name: 'Mağdur (asılı)' },
+      { s: 'ev-rope', x: 306, y: 92, w: 78, h: 12, rot: 90, name: 'İp' },
+      lbl('Bağlantı noktası', 430, 88, 9),
+      // Mağdur (ipin ucunda, asılı konum — uygulama içi asılı beden figürü)
+      { s: 'p-hanged', x: 235, y: 162, w: 130, h: 130, name: 'Mağdur (asılı)' },
       // Devrik tabure
-      { s: 'f-5', x: 280, y: 176, w: 80, h: 75, rot: 35, name: 'Devrik tabure' },
+      { s: 'f-5', x: 336, y: 330, w: 80, h: 75, rot: 35, name: 'Devrik tabure' },
       // Deliller
       { s: 'cl-shoe', x: 150, y: 382, w: 24, h: 24 },
       { s: 'cl-shoe', x: 186, y: 392, w: 24, h: 24, rot: 20 },
-      { s: 'ei-phone', x: 330, y: 330, w: 24, h: 36 },
+      { s: 'ei-phone', x: 250, y: 324, w: 30, h: 44 },
       { s: 'ei-documents', x: 380, y: 300, w: 46, h: 40 },
       { s: 'f-9', x: 420, y: 240, w: 200, h: 140, name: 'Halı' },
       // Numaratörler
       marker('1', 'Mağdur (asılı konum)', 200, 210),
-      marker('2', 'İp bağlantı noktası', 330, 70, 30),
+      marker('2', 'İp bağlantı noktası', 368, 106, 30),
       marker('3', 'El yazısı intihar notu', 452, 282, 30),
-      marker('4', 'Telefon (veda mesajı taslağı)', 376, 372),
+      marker('4', 'Telefon (veda mesajı taslağı)', 300, 350),
       marker('5', 'Çıkarılmış ayakkabılar', 128, 430, 30),
-      marker('6', 'Devrik tabure', 402, 190, 30),
+      marker('6', 'Devrik tabure', 452, 386, 30),
       // Ölçüler
-      arrow(320, 200, 260, 170, '≈ 60 cm'),
+      arrow(246, 132, 294, 132, '≈ 50 cm'),
       arrow(116, 430, 116, 130, '≈ 3,1 m'),
       // Açıklamalar
       callout('Mağdur ayakları yerden 8 cm yukarıda (asılı)', 520, 220, 11),
@@ -1221,25 +1243,25 @@ const intihar: KrokiScenario[] = [
       lbl('Duş teknesi', 275, 130, 9),
       // Lavabo dolabı (sağ duvar)
       { s: 'f-3', x: 564, y: 110, w: 90, h: 50, rot: 90, name: 'Lavabo dolabı' },
-      // İp + mağdur
-      { s: 'ev-rope', x: 352, y: 86, w: 55, h: 22, rot: 90, name: 'İp' },
-      { s: 'p-9', x: 348, y: 118, w: 90, h: 46, rot: 90, name: 'Mağdur (asılı)' },
+      // İp + mağdur (duş teline bağlı, asılı beden figürü)
+      { s: 'ev-rope', x: 296, y: 90, w: 58, h: 12, rot: 90, name: 'İp' },
+      { s: 'p-hanged', x: 227, y: 142, w: 125, h: 125, name: 'Mağdur (asılı)' },
       // Deliller
       { s: 'ei-documents', x: 505, y: 226, w: 42, h: 36 },
-      { s: 'ei-phone', x: 528, y: 138, w: 22, h: 34 },
-      { s: 'tr-liquid-pool', x: 276, y: 260, w: 70, h: 45 },
+      { s: 'ei-phone', x: 522, y: 132, w: 28, h: 42 },
+      { s: 'tr-liquid-pool', x: 232, y: 300, w: 70, h: 45 },
       { s: 'cl-shoe', x: 376, y: 428, w: 24, h: 24 },
       { s: 'cl-shoe', x: 408, y: 434, w: 24, h: 24, rot: 15 },
       // Numaratörler
       marker('1', 'Mağdur (asılı konum)', 300, 190),
-      marker('2', 'İp bağlantı noktası: duş teli', 380, 70, 30),
+      marker('2', 'İp bağlantı noktası: duş teli', 352, 84, 30),
       marker('3', 'Katlanmış intihar notu', 560, 260, 30),
       marker('4', 'Telefon (lavabo üstü)', 580, 120, 30),
-      marker('5', 'Çıkarılmış ayakkabılar', 450, 440, 30),
-      marker('6', 'Duş suyu birikintisi', 240, 330, 30),
+      marker('5', 'Çıkarılmış ayakkabılar', 480, 448, 30),
+      marker('6', 'Duş suyu birikintisi', 330, 330, 30),
       // Ölçüler
       arrow(345, 170, 385, 395, '≈ 2,3 m'),
-      arrow(200, 80, 200, 396, '≈ 3,3 m'),
+      arrow(214, 84, 214, 392, '≈ 3,3 m'),
       // Açıklamalar
       callout('Kapı içeriden kilitli, tornavida ile açıldı', 640, 340, 11),
       callout('Bağlantı noktası: duş teli (metal)', 260, 560, 11),
@@ -1268,11 +1290,11 @@ const intihar: KrokiScenario[] = [
       { s: 'arch-6-v4', x: 290, y: 250, w: 110, h: 220, rot: -90, name: 'Merdiven (üst uçuş)' },
       // Korkuluk
       { s: 'out-fence', x: 390, y: 136, w: 130, h: 50, name: 'Korkuluk' },
-      // İp + mağdur
-      { s: 'ev-rope', x: 455, y: 152, w: 70, h: 24, rot: 90, name: 'İp' },
-      { s: 'p-9', x: 452, y: 180, w: 95, h: 48, rot: 90, name: 'Mağdur (asılı)' },
+      // İp + mağdur (korkuluğa bağlı, asılı beden figürü)
+      { s: 'ev-rope', x: 476, y: 148, w: 60, h: 12, rot: 90, name: 'İp' },
+      { s: 'p-hanged', x: 405, y: 200, w: 130, h: 130, name: 'Mağdur (asılı)' },
       // Deliller
-      { s: 'ei-phone', x: 250, y: 396, w: 24, h: 36 },
+      { s: 'ei-phone', x: 244, y: 390, w: 30, h: 44 },
       { s: 'ei-keys', x: 300, y: 424, w: 20, h: 26 },
       { s: 'ei-documents', x: 196, y: 414, w: 44, h: 38 },
       { s: 'cl-shoe', x: 330, y: 148, w: 22, h: 22 },
@@ -1281,13 +1303,13 @@ const intihar: KrokiScenario[] = [
       door(600, 500, 54, 0),
       lbl('Giriş kapısı', 660, 520, 9),
       // Numaratörler
-      marker('1', 'Mağdur (asılı konum)', 500, 230),
+      marker('1', 'Mağdur (asılı konum)', 585, 250),
       marker('2', 'İp bağlantı noktası: korkuluk', 380, 110, 30),
       marker('3', 'Katlanmış intihar notu', 150, 470, 30),
-      marker('4', 'Telefon ve anahtarlar (sahanlık)', 330, 460, 30),
+      marker('4', 'Telefon ve anahtarlar (sahanlık)', 356, 458, 30),
       marker('5', 'Çıkarılmış ayakkabılar', 310, 200, 30),
       // Ölçüler
-      arrow(460, 240, 250, 420, '≈ 3,1 m'),
+      arrow(470, 338, 280, 430, '≈ 3,1 m'),
       arrow(150, 80, 150, 340, '≈ 2,7 m'),
       // Açıklamalar
       callout('Mağdur korkuluk demirine ip bağlamış', 700, 200, 11),
@@ -1316,31 +1338,31 @@ const intihar: KrokiScenario[] = [
       // Çatı kirişi
       { s: 'arch-w1i', x: 200, y: 238, w: 420, h: 6 },
       lbl('Çatı kirişi', 410, 224, 9),
-      // İp + mağdur
-      { s: 'ev-rope', x: 410, y: 244, w: 110, h: 26, rot: 90, name: 'İp' },
-      { s: 'p-9', x: 406, y: 300, w: 100, h: 50, rot: 90, name: 'Mağdur (asılı)' },
+      // İp + mağdur (kirişe bağlı, asılı beden figürü)
+      { s: 'ev-rope', x: 436, y: 246, w: 56, h: 12, rot: 90, name: 'İp' },
+      { s: 'p-hanged', x: 367, y: 294, w: 125, h: 125, name: 'Mağdur (asılı)' },
       // Devrik tabure
-      { s: 'f-5', x: 436, y: 336, w: 80, h: 75, rot: 40, name: 'Devrik tabure' },
+      { s: 'f-5', x: 560, y: 340, w: 80, h: 75, rot: 40, name: 'Devrik tabure' },
       // Deliller
       { s: 'ei-documents', x: 250, y: 330, w: 46, h: 40 },
       { s: 'ei-id-card', x: 320, y: 350, w: 24, h: 24 },
       { s: 'ei-keys', x: 508, y: 300, w: 20, h: 26 },
-      { s: 'ei-phone', x: 560, y: 326, w: 24, h: 36 },
-      { s: 'tr-footprint', x: 300, y: 200, w: 20, h: 36 },
-      { s: 'tr-footprint', x: 346, y: 190, w: 20, h: 36, rot: 12 },
+      { s: 'ei-phone', x: 520, y: 330, w: 30, h: 44 },
+      { s: 'tr-footprint', x: 297, y: 197, w: 26, h: 42 },
+      { s: 'tr-footprint', x: 343, y: 187, w: 26, h: 42, rot: 12 },
       // Koliler
       ...box(680, 120, 70, 50, 'Koli'),
       ...box(772, 140, 60, 45),
       ...box(706, 220, 65, 48),
       // Numaratörler
       marker('1', 'Mağdur (asılı konum)', 340, 330),
-      marker('2', 'İp bağlantı noktası: kiriş', 330, 250, 30),
+      marker('2', 'İp bağlantı noktası: kiriş', 470, 270, 30),
       marker('3', 'İntihar notu', 210, 370, 30),
       marker('4', 'Kimlik ve anahtarlar', 300, 420, 30),
-      marker('5', 'Devrik tabure', 540, 400, 30),
+      marker('5', 'Devrik tabure', 668, 400, 30),
       marker('6', 'Toz tabakada ayakkabı izleri', 380, 170, 30),
       // Ölçüler
-      arrow(480, 360, 420, 330, '≈ 45 cm'),
+      arrow(496, 390, 556, 390, '≈ 45 cm'),
       arrow(60, 250, 200, 250, '1,5 m'),
       // Açıklamalar
       callout('Depo kapısı sürgüsü dışarıdan kilitli; anahtar mağdurda', 700, 420, 11),
@@ -1377,26 +1399,26 @@ const intihar: KrokiScenario[] = [
       { s: 'out-street-light', x: 856, y: 176, w: 40, h: 54 },
       // Ağaç + ip + mağdur
       { s: 'out-tree-1', x: 500, y: 216, w: 90, h: 90, name: 'Ceviz ağacı' },
-      { s: 'ev-rope', x: 545, y: 240, w: 120, h: 24, rot: 90, name: 'İp' },
-      { s: 'p-9', x: 540, y: 286, w: 95, h: 48, rot: 90, name: 'Mağdur (asılı)' },
+      { s: 'ev-rope', x: 566, y: 246, w: 58, h: 12, rot: 90, name: 'İp' },
+      { s: 'p-hanged', x: 495, y: 298, w: 130, h: 130, name: 'Mağdur (asılı)' },
       // Devrik bahçe taburesi
-      { s: 'out-bench', x: 620, y: 256, w: 80, h: 36, rot: 25, name: 'Devrik tabure' },
+      { s: 'out-bench', x: 660, y: 260, w: 80, h: 36, rot: 25, name: 'Devrik tabure' },
       // Deliller
-      { s: 'cl-shoe', x: 450, y: 336, w: 24, h: 24 },
-      { s: 'cl-shoe', x: 482, y: 346, w: 24, h: 24, rot: 18 },
-      { s: 'ei-documents', x: 598, y: 396, w: 44, h: 38 },
+      { s: 'cl-shoe', x: 416, y: 340, w: 24, h: 24 },
+      { s: 'cl-shoe', x: 448, y: 352, w: 24, h: 24, rot: 18 },
+      { s: 'ei-documents', x: 645, y: 412, w: 44, h: 38 },
       { s: 'out-bench', x: 700, y: 420, w: 90, h: 38, name: 'Bank' },
-      { s: 'ei-phone', x: 726, y: 394, w: 24, h: 36 },
+      { s: 'ei-phone', x: 722, y: 386, w: 30, h: 44 },
       { s: 'tr-mud', x: 300, y: 420, w: 80, h: 50 },
-      { s: 'tr-footprint', x: 380, y: 400, w: 20, h: 36 },
-      { s: 'tr-footprint', x: 420, y: 384, w: 20, h: 36, rot: -10 },
+      { s: 'tr-footprint', x: 377, y: 397, w: 26, h: 42 },
+      { s: 'tr-footprint', x: 417, y: 381, w: 26, h: 42, rot: -10 },
       // Numaratörler
-      marker('1', 'Mağdur (asılı konum)', 470, 250),
+      marker('1', 'Mağdur (asılı konum)', 430, 262),
       marker('2', 'İp bağlantı noktası: ana dal', 560, 190, 30),
-      marker('3', 'Katlanmış intihar notu', 670, 370, 30),
+      marker('3', 'Katlanmış intihar notu', 670, 380, 30),
       marker('4', 'Telefon (bank üstü)', 790, 380, 30),
-      marker('5', 'Çıkarılmış ayakkabılar', 418, 372, 30),
-      marker('6', 'Bahçede çamur izleri', 320, 480, 30),
+      marker('5', 'Çıkarılmış ayakkabılar', 390, 330, 30),
+      marker('6', 'Bahçede çamur izleri', 340, 500, 30),
       // Ölçüler
       arrow(545, 260, 1005, 300, '≈ 5,2 m'),
       arrow(200, 300, 500, 280, '≈ 3,2 m'),

@@ -1500,6 +1500,18 @@ const IndividualObject = ({
               );
             })()}
           </Group>
+        ) : ['arch-w1i', 'arch-w1vi'].includes(shapeProps.symbolId || '') ? (
+          // Duvar motoru: karakalem duvar PNG'si %92 şeffaf olduğundan (sadece ince bir
+          // çizgi içerir) duvar, klasik kroki görünümüyle DÜZ KOYU ÇUBUK olarak çizilir.
+          // Önizlemedeki (KrokiPreview) duvar çubuklarıyla birebir aynı görünüm.
+          <Group>
+            <Rect
+              width={shapeProps.width}
+              height={shapeProps.height}
+              fill="#2e2e2e"
+              strokeEnabled={false}
+            />
+          </Group>
         ) : ['arch-d1r', 'arch-d1l', 'arch-win', 'arch-d2'].includes(shapeProps.symbolId || '') ? (
           <Group>
             {shapeProps.symbolId === 'arch-win' ? (
