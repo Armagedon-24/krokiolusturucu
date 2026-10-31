@@ -137,7 +137,7 @@ export const BloodstainCalculator: React.FC = () => {
       fontFamily: 'Inter',
       fontStyle: 'bold',
     });
-    addNotification({ type: 'success', message: 'Şema ve kısa özet rapora (kroki) eklendi' });
+    addNotification({ type: 'success', message: 'Şema ve kısa özet tuvale aktarıldı' });
   };
 
   return (
@@ -250,7 +250,7 @@ export const BloodstainCalculator: React.FC = () => {
                 className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-red-600 text-white rounded-2xl font-black text-[9px] uppercase tracking-widest hover:bg-red-700 transition-all active:scale-95"
               >
                 <PlusCircle size={13} />
-                ANALİZİ RAPORA EKLE
+                TUVALE AKTAR
               </button>
               <ForensicPdfButton report={report} />
             </div>

@@ -130,10 +130,10 @@ export function trNum(v: number, digits = 1): string {
 }
 
 /* ------------------------------------------------------------------ */
-/* KISA ÖZET — "RAPORA EKLE" düğmesinin krokideki tuvale eklediği      */
-/* kısa sonuç. Eski sade biçem gibi yalnızca 4-5 satırdan oluşur:      */
-/* başlık, ayraç, 2 girdi ve 2 sonuç satırı. Uzun bilirkişi raporu     */
-/* yalnızca PDF'te yer alır.                                           */
+/* KISA ÖZET — hesaplayıcılardaki "TUVALE AKTAR" düğmesinin doğrudan   */
+/* tuvale aktardığı kısa sonuç. Eski sade biçem gibi yalnızca 4-5      */
+/* satırdan oluşur: başlık, ayraç, 2 girdi ve 2 sonuç satırı. Uzun     */
+/* bilirkişi raporu yalnızca PDF'te yer alır.                          */
 /* ------------------------------------------------------------------ */
 
 /** Sondaki parantezli ölçüm notunu kaldırır: "İz: 20 m (±%5)" → "İz: 20 m". */

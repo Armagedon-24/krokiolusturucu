@@ -181,7 +181,7 @@ export const CollisionSpeedCalculator: React.FC = () => {
       fontFamily: 'Inter',
       fontStyle: 'bold',
     });
-    addNotification({ type: 'success', message: 'Şema ve kısa özet rapora (kroki) eklendi' });
+    addNotification({ type: 'success', message: 'Şema ve kısa özet tuvale aktarıldı' });
   };
 
   return (
@@ -349,7 +349,7 @@ export const CollisionSpeedCalculator: React.FC = () => {
               className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-[#F5C518] text-black rounded-2xl font-black text-[9px] uppercase tracking-widest hover:bg-[#ffcf24] transition-all active:scale-95"
             >
               <PlusCircle size={13} />
-              HIZ ANALİZİNİ KROKİYE EKLE
+              TUVALE AKTAR
             </button>
             <ForensicPdfButton report={report} />
           </div>

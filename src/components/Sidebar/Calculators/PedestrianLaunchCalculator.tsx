@@ -242,7 +242,7 @@ export const PedestrianLaunchCalculator: React.FC = () => {
       currentTime: 0,
       duration: flightTime,
     });
-    addNotification({ type: 'success', message: 'Şema ve kısa özet rapora (kroki) eklendi' });
+    addNotification({ type: 'success', message: 'Şema ve kısa özet tuvale aktarıldı' });
   };
 
   const launchData: PedestrianLaunchData = {
@@ -473,9 +473,9 @@ export const PedestrianLaunchCalculator: React.FC = () => {
           <button
             onClick={handleAddToCanvas}
             className="flex items-center gap-1.5 px-3 py-2 text-[10px] font-bold text-gray-400 hover:text-[#F5C518] border border-[#333] hover:border-[#F5C518]/50 rounded-lg transition-all"
-            title="Şema ve kısa özeti rapora (kroki) ekler"
+            title="Şema ve kısa özeti tuvale aktarır"
           >
-            RAPORA EKLE
+            TUVALE AKTAR
           </button>
           <ForensicPdfButton report={report} />
           <button

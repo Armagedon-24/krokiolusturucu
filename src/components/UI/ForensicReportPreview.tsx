@@ -125,7 +125,7 @@ const PaperView: React.FC<{ report: ForensicReport }> = ({ report }) => {
 };
 
 /**
- * Kompakt kurumsal PDF indirme düğmesi — hesaplayıcılarda "Rapora Ekle"
+ * Kompakt kurumsal PDF indirme düğmesi — hesaplayıcılarda "Tuvale Aktar"
  * düğmesinin yanında kullanılır. Yükleme/hata durumlarını kendisi yönetir.
  */
 export const ForensicPdfButton: React.FC<{ report: ForensicReport }> = ({ report }) => {
@@ -175,7 +175,7 @@ export const ForensicPdfButton: React.FC<{ report: ForensicReport }> = ({ report
 
 /**
  * Bilirkişi raporu önizlemesi: sekmeli görünüm.
- * - "Kısa Özet" sekmesi: "RAPORA EKLE" düğmesinin krokideki rapora
+ * - "Kısa Özet" sekmesi: "TUVALE AKTAR" düğmesinin doğrudan tuvale
  *   eklediği kompakt metni birebir gösterir.
  * - "Detaylı Analiz" sekmesi: PDF ile aynı içerikte belge görünümlü düzen.
  */
