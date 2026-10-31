@@ -511,17 +511,18 @@ const IndividualObject = ({
     node.scaleY(1);
     
     if (shapeProps.type === 'text') {
+      // Kullanıcı isteği: tutamaçla ölçekleme puntoyu DEĞİŞTİRMESİN.
+      // Yalnızca metin kutusu genişliği değişir, yazı aynı puntoyla yeniden sarılır.
+      // Punto yalnızca özellik panelindeki 'Punto' alanından büyütülür/küçültülür.
       const newWidth = Math.max(20, node.width() * scaleX);
-      const scale = Math.max(Math.abs(scaleX), Math.abs(scaleY));
-      const newFontSize = Math.max(2, (shapeProps.fontSize || 20) * scale);
-      
+
       onChange({
         ...shapeProps,
         x: node.x(),
         y: node.y(),
         rotation: node.rotation(),
         width: newWidth,
-        fontSize: newFontSize,
+        fontSize: shapeProps.fontSize || 20,
         scaleX: 1,
         scaleY: 1,
       });
@@ -2692,13 +2693,19 @@ const IndividualObject = ({
             shapeProps.type !== 'line' && 
             !['arch-1', 'arch-1v'].includes(shapeProps.symbolId || '')
           }
-          enabledAnchors={[
-            // Tüm nesnelerde köşe + kenar (orta) tutamaçları aktif.
-            // Kenar tutamaçları Konva'da keepRatio'dan bağımsız tek eksen ölçekler.
-            'top-left', 'top-center', 'top-right',
-            'middle-left', 'middle-right',
-            'bottom-left', 'bottom-center', 'bottom-right',
-          ]}
+          enabledAnchors={
+            shapeProps.type === 'text'
+              ? // Metin nesneleri: yalnızca yan (orta) tutamaçlar — köşe tutamağı yok,
+                // böylece punto tutamaçla büyüp bozulmaz; kutu genişliği değişir, yazı sarılır.
+                ['middle-left', 'middle-right']
+              : [
+                // Tüm nesnelerde köşe + kenar (orta) tutamaçları aktif.
+                // Kenar tutamaçları Konva'da keepRatio'dan bağımsız tek eksen ölçekler.
+                'top-left', 'top-center', 'top-right',
+                'middle-left', 'middle-right',
+                'bottom-left', 'bottom-center', 'bottom-right',
+              ]
+          }
           keepRatio={shapeProps.categoryId === 'furniture' ? true : !isStretchable}
           boundBoxFunc={(oldBox, newBox) => {
             if (Math.abs(newBox.width) < 5 || Math.abs(newBox.height) < 5) {
