@@ -117,8 +117,8 @@ export const SYMBOL_CATEGORIES = [
         thumbnail: '/assets/symbols/karakalem/figures/p_child_lying.png', type: 'symbol', width: 130, height: 56, description: 'Yerde yatan çocuk figürü.' },
       { id: 'kk-injured', name: 'Yaralı (Yarı Kalkmış)', src: '/assets/symbols/figures/p_injured.png',
         thumbnail: '/assets/symbols/karakalem/figures/p_injured.png', type: 'symbol', width: 105, height: 70, description: 'Dirseği üzerinde yarı kalkmış yaralı kişi silueti.' },
-      { id: 'p-hanged', name: 'Asılı Beden (Ası)', src: '/assets/symbols/hanged_body_clean.png',
-        type: 'symbol', width: 130, height: 130, description: 'Ası suretiyle intihar olaylarında ip ile asılı duran beden figürü (kalem çizimi).' },
+      { id: 'p-hanged', name: 'Asılı İnsan Figürü (İp ile)', src: '/assets/symbols/hanged_man_rope.png',
+        type: 'symbol', width: 54, height: 281, description: 'Ası suretiyle intihar olaylarında ip ile asılı duran insan figürü (ip + noose dahil, kalem çizimi).' },
       { id: 'p-13', name: 'Kolluk Görevlisi', src: '/assets/symbols/figures/p_officer.png',
         thumbnail: '/assets/symbols/karakalem/figures/p_officer.png', type: 'symbol', width: 70, height: 91, description: 'Şapkalı kolluk (polis/jandarma) görevlisi figürü.' },
     ]

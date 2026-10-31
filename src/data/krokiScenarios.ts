@@ -1192,23 +1192,22 @@ const intihar: KrokiScenario[] = [
       win(320, 56, 80, 0),
       // Gardırop + ip
       { s: 'f-13', x: 116, y: 76, w: 130, h: 55, name: 'Gardırop' },
-      { s: 'ev-rope', x: 306, y: 92, w: 78, h: 12, rot: 90, name: 'İp' },
       lbl('Bağlantı noktası', 430, 88, 9),
-      // Mağdur (ipin ucunda, asılı konum — uygulama içi asılı beden figürü)
-      { s: 'p-hanged', x: 235, y: 162, w: 130, h: 130, name: 'Mağdur (asılı)' },
+      // Mağdur (ipin ucunda, asılı konum — uygulama içi ASILI İNSAN FİGÜRÜ; ip figürle birlikte çizilir)
+      { s: 'p-hanged', x: 278, y: 92, w: 47, h: 245, name: 'Mağdur (asılı)' },
       // Devrik tabure
       { s: 'f-5', x: 336, y: 330, w: 80, h: 75, rot: 35, name: 'Devrik tabure' },
       // Deliller
       { s: 'cl-shoe', x: 150, y: 382, w: 24, h: 24 },
       { s: 'cl-shoe', x: 186, y: 392, w: 24, h: 24, rot: 20 },
-      { s: 'ei-phone', x: 250, y: 324, w: 30, h: 44 },
+      { s: 'ei-phone', x: 242, y: 324, w: 30, h: 44 },
       { s: 'ei-documents', x: 380, y: 300, w: 46, h: 40 },
       { s: 'f-9', x: 420, y: 240, w: 200, h: 140, name: 'Halı' },
       // Numaratörler
       marker('1', 'Mağdur (asılı konum)', 200, 210),
       marker('2', 'İp bağlantı noktası', 368, 106, 30),
       marker('3', 'El yazısı intihar notu', 452, 282, 30),
-      marker('4', 'Telefon (veda mesajı taslağı)', 300, 350),
+      marker('4', 'Telefon (veda mesajı taslağı)', 262, 364),
       marker('5', 'Çıkarılmış ayakkabılar', 128, 430, 30),
       marker('6', 'Devrik tabure', 452, 386, 30),
       // Ölçüler
@@ -1243,13 +1242,12 @@ const intihar: KrokiScenario[] = [
       lbl('Duş teknesi', 275, 130, 9),
       // Lavabo dolabı (sağ duvar)
       { s: 'f-3', x: 564, y: 110, w: 90, h: 50, rot: 90, name: 'Lavabo dolabı' },
-      // İp + mağdur (duş teline bağlı, asılı beden figürü)
-      { s: 'ev-rope', x: 296, y: 90, w: 58, h: 12, rot: 90, name: 'İp' },
-      { s: 'p-hanged', x: 227, y: 142, w: 125, h: 125, name: 'Mağdur (asılı)' },
+      // Mağdur (duş teline bağlı, asılı insan figürü — ip figürle birlikte çizilir)
+      { s: 'p-hanged', x: 268, y: 90, w: 47, h: 245, name: 'Mağdur (asılı)' },
       // Deliller
       { s: 'ei-documents', x: 505, y: 226, w: 42, h: 36 },
       { s: 'ei-phone', x: 522, y: 132, w: 28, h: 42 },
-      { s: 'tr-liquid-pool', x: 232, y: 300, w: 70, h: 45 },
+      { s: 'tr-liquid-pool', x: 330, y: 300, w: 70, h: 45 },
       { s: 'cl-shoe', x: 376, y: 428, w: 24, h: 24 },
       { s: 'cl-shoe', x: 408, y: 434, w: 24, h: 24, rot: 15 },
       // Numaratörler
@@ -1290,9 +1288,8 @@ const intihar: KrokiScenario[] = [
       { s: 'arch-6-v4', x: 290, y: 250, w: 110, h: 220, rot: -90, name: 'Merdiven (üst uçuş)' },
       // Korkuluk
       { s: 'out-fence', x: 390, y: 136, w: 130, h: 50, name: 'Korkuluk' },
-      // İp + mağdur (korkuluğa bağlı, asılı beden figürü)
-      { s: 'ev-rope', x: 476, y: 148, w: 60, h: 12, rot: 90, name: 'İp' },
-      { s: 'p-hanged', x: 405, y: 200, w: 130, h: 130, name: 'Mağdur (asılı)' },
+      // Mağdur (korkuluğa bağlı, asılı insan figürü — ip figürle birlikte çizilir)
+      { s: 'p-hanged', x: 448, y: 148, w: 47, h: 245, name: 'Mağdur (asılı)' },
       // Deliller
       { s: 'ei-phone', x: 244, y: 390, w: 30, h: 44 },
       { s: 'ei-keys', x: 300, y: 424, w: 20, h: 26 },
@@ -1309,7 +1306,7 @@ const intihar: KrokiScenario[] = [
       marker('4', 'Telefon ve anahtarlar (sahanlık)', 356, 458, 30),
       marker('5', 'Çıkarılmış ayakkabılar', 310, 200, 30),
       // Ölçüler
-      arrow(470, 338, 280, 430, '≈ 3,1 m'),
+      arrow(470, 402, 280, 452, '≈ 3,1 m'),
       arrow(150, 80, 150, 340, '≈ 2,7 m'),
       // Açıklamalar
       callout('Mağdur korkuluk demirine ip bağlamış', 700, 200, 11),
@@ -1336,11 +1333,10 @@ const intihar: KrokiScenario[] = [
       ...room(60, 80, 900, 340),
       win(500, 76, 80, 0),
       // Çatı kirişi
-      { s: 'arch-w1i', x: 200, y: 238, w: 420, h: 6 },
-      lbl('Çatı kirişi', 410, 224, 9),
-      // İp + mağdur (kirişe bağlı, asılı beden figürü)
-      { s: 'ev-rope', x: 436, y: 246, w: 56, h: 12, rot: 90, name: 'İp' },
-      { s: 'p-hanged', x: 367, y: 294, w: 125, h: 125, name: 'Mağdur (asılı)' },
+      { s: 'arch-w1i', x: 200, y: 180, w: 420, h: 6 },
+      lbl('Çatı kirişi', 410, 166, 9),
+      // Mağdur (kirişe bağlı, asılı insan figürü — ip figürle birlikte çizilir)
+      { s: 'p-hanged', x: 410, y: 188, w: 44, h: 230, name: 'Mağdur (asılı)' },
       // Devrik tabure
       { s: 'f-5', x: 560, y: 340, w: 80, h: 75, rot: 40, name: 'Devrik tabure' },
       // Deliller
@@ -1355,15 +1351,15 @@ const intihar: KrokiScenario[] = [
       ...box(772, 140, 60, 45),
       ...box(706, 220, 65, 48),
       // Numaratörler
-      marker('1', 'Mağdur (asılı konum)', 340, 330),
-      marker('2', 'İp bağlantı noktası: kiriş', 470, 270, 30),
+      marker('1', 'Mağdur (asılı konum)', 378, 330),
+      marker('2', 'İp bağlantı noktası: kiriş', 472, 212, 30),
       marker('3', 'İntihar notu', 210, 370, 30),
       marker('4', 'Kimlik ve anahtarlar', 300, 420, 30),
       marker('5', 'Devrik tabure', 668, 400, 30),
-      marker('6', 'Toz tabakada ayakkabı izleri', 380, 170, 30),
+      marker('6', 'Toz tabakada ayakkabı izleri', 390, 225, 30),
       // Ölçüler
       arrow(496, 390, 556, 390, '≈ 45 cm'),
-      arrow(60, 250, 200, 250, '1,5 m'),
+      arrow(60, 183, 200, 183, '1,5 m'),
       // Açıklamalar
       callout('Depo kapısı sürgüsü dışarıdan kilitli; anahtar mağdurda', 700, 420, 11),
       callout('Pencere içeriden kilitli', 600, 120, 11),
@@ -1399,8 +1395,8 @@ const intihar: KrokiScenario[] = [
       { s: 'out-street-light', x: 856, y: 176, w: 40, h: 54 },
       // Ağaç + ip + mağdur
       { s: 'out-tree-1', x: 500, y: 216, w: 90, h: 90, name: 'Ceviz ağacı' },
-      { s: 'ev-rope', x: 566, y: 246, w: 58, h: 12, rot: 90, name: 'İp' },
-      { s: 'p-hanged', x: 495, y: 298, w: 130, h: 130, name: 'Mağdur (asılı)' },
+      // Mağdur (ağaç ana dalına bağlı, asılı insan figürü — ip figürle birlikte çizilir)
+      { s: 'p-hanged', x: 538, y: 246, w: 47, h: 245, name: 'Mağdur (asılı)' },
       // Devrik bahçe taburesi
       { s: 'out-bench', x: 660, y: 260, w: 80, h: 36, rot: 25, name: 'Devrik tabure' },
       // Deliller
