@@ -24,6 +24,7 @@ import type { TileMode } from '../types';
 /** Kütüphane sembolleri için desen modu metadata'sı (symbolId → mod). */
 export const SYMBOL_TILE_MODES: Record<string, TileMode> = {
   // ——— Şerit semboller (uzatılabilir çizgiler) ———
+  'st-1': 'strip-auto',              // Düz Yol (şerit çizgileri X'te tekrar eder)
   'tr-2': 'strip-auto',              // Lastik izi
   'tr-skid-straight': 'strip-auto',  // Fren izi
   'st-median': 'strip-auto',         // Orta refüj

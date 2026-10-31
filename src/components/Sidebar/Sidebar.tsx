@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Package,
   ImageIcon,
@@ -12,6 +12,8 @@ import {
   Settings2,
   BookOpen,
   CloudDownload,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { v4 as uuidv4 } from 'uuid';
@@ -38,6 +40,34 @@ const cleanSymbolName = (raw: string): string =>
 /** Düz SVG data-URI ikonlar sarı tint alır; karakalem/foto PNG varlıklar beyaz kağıt üzerinde doğal gösterilir.
  *  brightness(0) tint'i detaylı çizimleri (karakalem, gerçekçi PNG) düz lekeye çevirdiği için bu ikili ayırım şart. */
 const isFlatSvgIcon = (src: unknown): boolean => String(src || '').startsWith('data:image/svg');
+
+/** Metni panoya kopyalar — güvenli olmayan bağlamlar için execCommand yedeğiyle.
+ *  Dönen değer kopyalamanın başarııp başarılı olmadığını bildirir. */
+const copyTextToClipboard = async (text: string): Promise<boolean> => {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    // Aşağıdaki yedeğe düş
+  }
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    return ok;
+  } catch {
+    return false;
+  }
+};
 
 export const Sidebar: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'symbols' | 'uploads' | 'animations' | 'calculators'>('symbols');
@@ -69,6 +99,30 @@ export const Sidebar: React.FC = () => {
   const [showAllUploads, setShowAllUploads] = useState(false);
   const [cloudGalleryOpen, setCloudGalleryOpen] = useState(false);
   const [hoveredSymbol, setHoveredSymbol] = useState<{ id: string, name: string, description?: string, rect: DOMRect } | null>(null);
+  // ADMİN: tıklayınca panoya kopyalanan sembol ID'si (geri bildirim rozeti için)
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /** ADMİN: sembol ID'sini panoya kopyalar; rozet kısaca "KOPYALANDI" durumuna geçer. */
+  const handleCopyId = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    copyTextToClipboard(id).then((ok) => {
+      setCopiedId(ok ? id : null);
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+      copiedTimerRef.current = setTimeout(() => setCopiedId(null), 1400);
+      if (ok) {
+        addNotification({
+          type: 'success',
+          message: 'ID Kopyalandı',
+          description: `"${id}" panoya kopyalandı.`
+        });
+      }
+    });
+  };
+
+  useEffect(() => () => {
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+  }, []);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -593,6 +647,26 @@ export const Sidebar: React.FC = () => {
                                       </span>
                                     </div>
 
+                                    {/* ADMİN: Sembol ID rozeti — sol üst köşede kalıcı görünür, tıkla → panoya kopyala */}
+                                    {isAdmin && (
+                                      <button
+                                        onClick={(e) => handleCopyId(e, item.id)}
+                                        onDoubleClick={(e) => e.stopPropagation()}
+                                        draggable={false}
+                                        title={`Sembol ID: ${item.id} — tıkla, otomatik kopyalansın`}
+                                        className={`absolute top-0.5 left-1 z-20 max-w-[calc(100%-8px)] flex items-center gap-0.5 rounded border px-1 py-[1px] font-mono font-bold leading-none transition-all ${
+                                          copiedId === item.id
+                                            ? 'bg-emerald-500/90 border-emerald-300 text-white'
+                                            : 'bg-black/80 border-white/25 text-gray-300 hover:border-[#F5C518] hover:text-[#F5C518]'
+                                        }`}
+                                      >
+                                        {copiedId === item.id
+                                          ? <Check size={8} className="flex-shrink-0" />
+                                          : <Copy size={8} className="flex-shrink-0" />}
+                                        <span className="truncate">{copiedId === item.id ? 'KOPYALANDI' : item.id}</span>
+                                      </button>
+                                    )}
+
                                     {isAdmin && (
                                       <div className="absolute -top-1.5 -right-1.5 flex gap-1 opacity-0 group-hover:opacity-100 transition-all z-20">
                                         {item.isUpload && (
@@ -722,6 +796,21 @@ export const Sidebar: React.FC = () => {
                                 {img.name}
                               </p>
                             )}
+                            {/* ADMİN: Görsel ID — tıkla, tam ID panoya kopyalanır */}
+                            <button
+                              onClick={(e) => handleCopyId(e, img.id)}
+                              title={`Görsel ID: ${img.id} — tıkla, otomatik kopyalansın`}
+                              className={`self-start flex items-center gap-1 rounded border px-1 py-[1px] font-mono font-bold leading-none transition-all w-fit ${
+                                copiedId === img.id
+                                  ? 'bg-emerald-500/90 border-emerald-300 text-white'
+                                  : 'bg-black/60 border-[#333] text-gray-500 hover:border-[#F5C518] hover:text-[#F5C518]'
+                              }`}
+                            >
+                              {copiedId === img.id
+                                ? <Check size={8} className="flex-shrink-0" />
+                                : <Copy size={8} className="flex-shrink-0" />}
+                              <span>{copiedId === img.id ? 'KOPYALANDI' : `ID: ${img.id.slice(0, 8)}…`}</span>
+                            </button>
                             <div className="flex flex-col gap-1">
                               <div className="flex gap-1">
                                 <select
