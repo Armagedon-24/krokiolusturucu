@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FileText, ChevronDown, Copy, Check, Download, Loader2, AlertTriangle } from 'lucide-react';
+import { FileText, ChevronDown, Copy, Check, Download, Loader2, AlertTriangle, FileBarChart } from 'lucide-react';
 import type { ForensicReport } from '../../utils/forensicReport';
 import { reportMeta } from '../../utils/forensicReport';
 import { downloadForensicPdf } from '../../utils/forensicPdf';
@@ -7,6 +7,8 @@ import { downloadForensicPdf } from '../../utils/forensicPdf';
 interface Props {
   /** formatForensicReport çıktısı (kopyalama + yapılandırılmamış geri dönüş) */
   text: string;
+  /** formatForensicSummary çıktısı — verilirse sekmeli önizleme etkinleşir */
+  summaryText?: string;
   label?: string;
   /** Verilirse belge görünümlü önizleme ve kurumsal PDF indirme etkinleşir. */
   report?: ForensicReport;
@@ -152,7 +154,7 @@ export const ForensicPdfButton: React.FC<{ report: ForensicReport }> = ({ report
       onKeyDown={(e) => {
         if (e.key === 'Enter') handlePdf();
       }}
-      title="Kurumsal PDF olarak indir"
+      title="Detaylı analiz raporunu PDF olarak indir"
       className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-black text-[9px] uppercase tracking-widest transition-all active:scale-95 cursor-pointer select-none ${
         error
           ? 'border border-red-500/40 bg-red-500/10 text-red-400'
@@ -172,17 +174,22 @@ export const ForensicPdfButton: React.FC<{ report: ForensicReport }> = ({ report
 };
 
 /**
- * Bilirkişi raporu önizlemesi: belge görünümlü kurumsal düzen ve
- * kopyala düğmesi. PDF indirme, hesaplayıcı ekranlarındaki kompakt
- * ForensicPdfButton üzerinden yapılır.
+ * Bilirkişi raporu önizlemesi: sekmeli görünüm.
+ * - "Kısa Özet" sekmesi: "RAPORA EKLE" düğmesinin krokideki rapora
+ *   eklediği kompakt metni birebir gösterir.
+ * - "Detaylı Analiz" sekmesi: PDF ile aynı içerikte belge görünümlü düzen.
  */
-export const ForensicReportPreview: React.FC<Props> = ({ text, label = 'BİLİRKİŞİ RAPORU ÖNİZLEME', report }) => {
+export const ForensicReportPreview: React.FC<Props> = ({ text, summaryText, label = 'RAPOR ÖNİZLEME', report }) => {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [tab, setTab] = useState<'summary' | 'detail'>('summary');
+
+  const hasTabs = Boolean(report && summaryText);
+  const activeText = hasTabs && tab === 'summary' ? summaryText! : text;
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(activeText);
       setCopied(true);
       setTimeout(() => setCopied(false), 1800);
     } catch {
@@ -223,9 +230,33 @@ export const ForensicReportPreview: React.FC<Props> = ({ text, label = 'BİLİRK
       </button>
       {open && (
         <div className="p-3 bg-[#f7f6f2] max-h-80 overflow-y-auto custom-scrollbar">
-          {report ? <PaperView report={report} /> : (
+          {hasTabs && (
+            <div className="flex gap-1 mb-3 bg-[#e4e2da] rounded-lg p-0.5 w-max">
+              <button
+                onClick={() => setTab('summary')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[8.5px] font-black uppercase tracking-wider transition-all ${
+                  tab === 'summary' ? 'bg-[#16181D] text-white shadow' : 'text-gray-500 hover:text-gray-800'
+                }`}
+              >
+                <FileText size={10} />
+                Kısa Özet
+              </button>
+              <button
+                onClick={() => setTab('detail')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[8.5px] font-black uppercase tracking-wider transition-all ${
+                  tab === 'detail' ? 'bg-[#16181D] text-white shadow' : 'text-gray-500 hover:text-gray-800'
+                }`}
+              >
+                <FileBarChart size={10} />
+                Detaylı Analiz
+              </button>
+            </div>
+          )}
+          {report && (!hasTabs || tab === 'detail') ? (
+            <PaperView report={report} />
+          ) : (
             <pre className="text-[9px] leading-[1.45] font-mono text-[#1c1c1c] whitespace-pre-wrap break-words">
-              {text}
+              {hasTabs ? summaryText : text}
             </pre>
           )}
         </div>

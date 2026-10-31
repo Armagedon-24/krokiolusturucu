@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Hammer, Info, PlusCircle, AlertTriangle } from 'lucide-react';
 import { useStore } from '../../../store/useStore';
 import { HelpTooltip } from '../../UI/HelpTooltip';
-import { formatForensicReport, trNum } from '../../../utils/forensicReport';
+import { formatForensicReport, formatForensicSummary, trNum } from '../../../utils/forensicReport';
 import { ForensicReportPreview, ForensicPdfButton } from '../../UI/ForensicReportPreview';
 
 /** CRASH3 yaklaşımı — araç sınıfı rijitlik katsayısı ön ayarları (kullanıcı düzeltebilir). */
@@ -27,7 +27,7 @@ export const CrushEnergyCalculator: React.FC = () => {
 
   const preset = STIFFNESS_PRESETS.find((p) => p.id === presetId)!;
 
-  const { addObject } = useStore();
+  const { addObject, addNotification } = useStore();
 
   useEffect(() => {
     const p = STIFFNESS_PRESETS.find((x) => x.id === presetId);
@@ -107,11 +107,12 @@ export const CrushEnergyCalculator: React.FC = () => {
     [energyKJ, ebs, ebsMin, ebsMax, width, crush, mass, stiffA, stiffB, preset],
   );
   const reportText = useMemo(() => formatForensicReport(report), [report]);
+  const summaryText = useMemo(() => formatForensicSummary(report), [report]);
 
   const handleAddToCanvas = () => {
     addObject({
       type: 'text',
-      text: reportText,
+      text: summaryText,
       x: 300,
       y: 300,
       width: 360,
@@ -120,6 +121,7 @@ export const CrushEnergyCalculator: React.FC = () => {
       fontFamily: 'Inter',
       fontStyle: 'bold',
     });
+    addNotification({ type: 'success', message: 'Hesaplama kısa özeti rapora (kroki) eklendi' });
   };
 
   const inputCls = 'w-full bg-[#111] border border-[#333] rounded-xl px-4 py-3 text-sm text-white focus:border-[#F5C518]/50 outline-none transition-all font-mono';
@@ -245,7 +247,7 @@ export const CrushEnergyCalculator: React.FC = () => {
           </div>
         </div>
 
-        <ForensicReportPreview text={reportText} report={report} />
+        <ForensicReportPreview text={reportText} summaryText={summaryText} report={report} />
 
         <div className="p-4 bg-orange-500/5 border border-orange-500/10 rounded-2xl flex gap-3 items-start">
           <AlertTriangle size={16} className="text-orange-500 mt-0.5 flex-shrink-0" />

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Thermometer, Clock, Info, PlusCircle, Wind, Waves, Shirt } from 'lucide-react';
 import { useStore } from '../../../store/useStore';
 import { HelpTooltip } from '../../UI/HelpTooltip';
-import { formatForensicReport, trNum } from '../../../utils/forensicReport';
+import { formatForensicReport, formatForensicSummary, trNum } from '../../../utils/forensicReport';
 import { ForensicReportPreview, ForensicPdfButton } from '../../UI/ForensicReportPreview';
 
 const CORRECTION_FACTORS = [
@@ -21,7 +21,7 @@ export const AlgorMortisCalculator: React.FC = () => {
   const [hoursMin, setHoursMin] = useState<number>(0);
   const [hoursMax, setHoursMax] = useState<number>(0);
   
-  const { addObject } = useStore();
+  const { addObject, addNotification } = useStore();
 
   useEffect(() => {
     const baseCoolingRate = 1.5;
@@ -94,11 +94,12 @@ export const AlgorMortisCalculator: React.FC = () => {
     ],
   }), [bodyTemp, ambientTemp, condition, hours, hoursMin, hoursMax, reliability]);
   const reportText = useMemo(() => formatForensicReport(report), [report]);
+  const summaryText = useMemo(() => formatForensicSummary(report), [report]);
 
   const handleAddToCanvas = () => {
     addObject({
       type: 'text',
-      text: reportText,
+      text: summaryText,
       x: 300,
       y: 300,
       width: 360,
@@ -107,6 +108,7 @@ export const AlgorMortisCalculator: React.FC = () => {
       fontFamily: 'Inter',
       fontStyle: 'bold'
     });
+    addNotification({ type: 'success', message: 'Hesaplama kısa özeti rapora (kroki) eklendi' });
   };
 
   return (
@@ -210,7 +212,7 @@ export const AlgorMortisCalculator: React.FC = () => {
           </div>
         </div>
 
-        <ForensicReportPreview text={reportText} report={report} />
+        <ForensicReportPreview text={reportText} summaryText={summaryText} report={report} />
 
         <div className="p-4 bg-blue-500/5 border border-blue-500/10 rounded-2xl flex gap-3 items-start shadow-inner">
           <Info size={16} className="text-blue-900 mt-0.5 flex-shrink-0" />

@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Eye, Info, PlusCircle, AlertTriangle } from 'lucide-react';
 import { useStore } from '../../../store/useStore';
 import { HelpTooltip } from '../../UI/HelpTooltip';
-import { formatForensicReport, trNum } from '../../../utils/forensicReport';
+import { formatForensicReport, formatForensicSummary, trNum } from '../../../utils/forensicReport';
 import { ForensicReportPreview, ForensicPdfButton } from '../../UI/ForensicReportPreview';
 
 type Maneuver = 'cross_left' | 'right';
@@ -21,7 +21,7 @@ export const SightDistanceCalculator: React.FC = () => {
   const [available, setAvailable] = useState<number>(0); // ölçülen mevcut görüş mesafesi (0 = yok)
   const [mu, setMu] = useState<number>(0.7); // SSD için
 
-  const { addObject } = useStore();
+  const { addObject, addNotification } = useStore();
 
   const calc = useMemo(() => {
     const m = MANEUVERS.find((x) => x.id === maneuver)!;
@@ -90,11 +90,12 @@ export const SightDistanceCalculator: React.FC = () => {
     };
   }, [calc, speed, extraLanes, heavy, available, mu]);
   const reportText = useMemo(() => formatForensicReport(report), [report]);
+  const summaryText = useMemo(() => formatForensicSummary(report), [report]);
 
   const handleAddToCanvas = () => {
     addObject({
       type: 'text',
-      text: reportText,
+      text: summaryText,
       x: 300,
       y: 300,
       width: 360,
@@ -103,6 +104,7 @@ export const SightDistanceCalculator: React.FC = () => {
       fontFamily: 'Inter',
       fontStyle: 'bold',
     });
+    addNotification({ type: 'success', message: 'Hesaplama kısa özeti rapora (kroki) eklendi' });
   };
 
   const inputCls = 'w-full bg-[#111] border border-[#333] rounded-xl px-4 py-3 text-sm text-white focus:border-[#F5C518]/50 outline-none transition-all font-mono';
@@ -257,7 +259,7 @@ export const SightDistanceCalculator: React.FC = () => {
           </div>
         </div>
 
-        <ForensicReportPreview text={reportText} report={report} />
+        <ForensicReportPreview text={reportText} summaryText={summaryText} report={report} />
 
         <div className="p-4 bg-orange-500/5 border border-orange-500/10 rounded-2xl flex gap-3 items-start">
           <AlertTriangle size={16} className="text-orange-500 mt-0.5 flex-shrink-0" />

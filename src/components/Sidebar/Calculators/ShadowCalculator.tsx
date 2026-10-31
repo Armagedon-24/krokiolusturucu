@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Sun, Ruler, PlusCircle, Clock, Calendar } from 'lucide-react';
 import { useStore } from '../../../store/useStore';
 import { HelpTooltip } from '../../UI/HelpTooltip';
-import { formatForensicReport, trNum } from '../../../utils/forensicReport';
+import { formatForensicReport, formatForensicSummary, trNum } from '../../../utils/forensicReport';
 import { ForensicReportPreview, ForensicPdfButton } from '../../UI/ForensicReportPreview';
 
 const SEASONAL_PRESETS = [
@@ -19,7 +19,7 @@ export const ShadowCalculator: React.FC = () => {
   const [heightMin, setHeightMin] = useState<number>(0);
   const [heightMax, setHeightMax] = useState<number>(0);
   
-  const { addObject } = useStore();
+  const { addObject, addNotification } = useStore();
 
   useEffect(() => {
     if (shadowLength > 0 && sunAngle > 0) {
@@ -74,11 +74,12 @@ export const ShadowCalculator: React.FC = () => {
     ],
   }), [shadowLength, sunAngle, objectHeight, heightMin, heightMax, timeEstimate]);
   const reportText = useMemo(() => formatForensicReport(report), [report]);
+  const summaryText = useMemo(() => formatForensicSummary(report), [report]);
 
   const handleAddToCanvas = () => {
     addObject({
       type: 'text',
-      text: reportText,
+      text: summaryText,
       x: 300,
       y: 300,
       width: 360,
@@ -87,6 +88,7 @@ export const ShadowCalculator: React.FC = () => {
       fontFamily: 'Inter',
       fontStyle: 'bold'
     });
+    addNotification({ type: 'success', message: 'Hesaplama kısa özeti rapora (kroki) eklendi' });
   };
 
   return (
@@ -188,7 +190,7 @@ export const ShadowCalculator: React.FC = () => {
           </div>
         </div>
 
-        <ForensicReportPreview text={reportText} report={report} />
+        <ForensicReportPreview text={reportText} summaryText={summaryText} report={report} />
       </div>
     </div>
   );

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Scale, PlusCircle, Compass, ShieldAlert } from 'lucide-react';
 import { useStore } from '../../../store/useStore';
 import { HelpTooltip } from '../../UI/HelpTooltip';
-import { formatForensicReport, trNum } from '../../../utils/forensicReport';
+import { formatForensicReport, formatForensicSummary, trNum } from '../../../utils/forensicReport';
 import { ForensicReportPreview, ForensicPdfButton } from '../../UI/ForensicReportPreview';
 
 // 2D momentum çözücüsü (saf fonksiyon — bileşen dışında)
@@ -44,7 +44,7 @@ export const CollisionSpeedCalculator: React.FC = () => {
   const [preSpeed2Min, setPreSpeed2Min] = useState<number>(0);
   const [preSpeed2Max, setPreSpeed2Max] = useState<number>(0);
 
-  const { addObject } = useStore();
+  const { addObject, addNotification } = useStore();
 
   useEffect(() => {
     // 1. Calculate post-impact speeds using skid formula: v' = 15.94 * sqrt(mu * d)
@@ -143,11 +143,12 @@ export const CollisionSpeedCalculator: React.FC = () => {
     ],
   }), [mass1, mass2, distance1, distance2, mu, phi, theta1, theta2, postSpeed1, postSpeed2, preSpeed1, preSpeed2, preSpeed1Min, preSpeed1Max, preSpeed2Min, preSpeed2Max, impactType]);
   const reportText = useMemo(() => formatForensicReport(report), [report]);
+  const summaryText = useMemo(() => formatForensicSummary(report), [report]);
 
   const handleAddToCanvas = () => {
     addObject({
       type: 'text',
-      text: reportText,
+      text: summaryText,
       x: 300,
       y: 300,
       width: 360,
@@ -156,6 +157,7 @@ export const CollisionSpeedCalculator: React.FC = () => {
       fontFamily: 'Inter',
       fontStyle: 'bold'
     });
+    addNotification({ type: 'success', message: 'Hesaplama kısa özeti rapora (kroki) eklendi' });
   };
 
   return (
@@ -329,7 +331,7 @@ export const CollisionSpeedCalculator: React.FC = () => {
           </div>
         </div>
 
-        <ForensicReportPreview text={reportText} report={report} />
+        <ForensicReportPreview text={reportText} summaryText={summaryText} report={report} />
 
         {/* Warning Alert */}
         <div className="p-3 bg-red-500/5 border border-red-500/10 rounded-2xl flex gap-3 items-start">

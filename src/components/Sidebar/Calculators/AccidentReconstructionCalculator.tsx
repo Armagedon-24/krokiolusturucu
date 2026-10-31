@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Car, RotateCcw, Settings, ChevronDown, ChevronUp, AlertTriangle, Eye, User, Plus, Trash2 } from 'lucide-react';
 import { useStore } from '../../../store/useStore';
 import type { VehicleType, VehicleData } from '../../../types';
 import { AccidentAnimationPlayer } from '../../UI/AccidentAnimationPlayer';
-import { formatForensicReport } from '../../../utils/forensicReport';
+import { ForensicReportPreview, ForensicPdfButton } from '../../UI/ForensicReportPreview';
+import { formatForensicReport, formatForensicSummary, type ForensicReport } from '../../../utils/forensicReport';
 
 const VEHICLE_TYPES: { value: VehicleType; label: string }[] = [
   { value: 'car', label: 'Otomobil' },
@@ -56,13 +57,19 @@ const INPUT_CLASS = "w-full bg-[#111] border border-[#333] rounded-lg px-3 py-2 
 const LABEL_CLASS = "block text-[9px] font-bold text-gray-500 uppercase tracking-wide mb-1";
 const SELECT_CLASS = "w-full bg-[#111] border border-[#333] rounded-lg px-3 py-2 text-sm font-bold text-white focus:border-[#F5C518]/50 outline-none transition-all cursor-pointer";
 
+const SURFACE_LABELS: Record<string, string> = {
+  asphalt_dry: 'Asfalt (Kuru)', asphalt_wet: 'Asfalt (Islak)',
+  concrete_dry: 'Beton (Kuru)', concrete_wet: 'Beton (Islak)',
+  gravel: 'Çakıl', soil: 'Toprak', snow: 'Kar', ice: 'Buz',
+};
+
 export const AccidentReconstructionCalculator: React.FC = () => {
   const {
     accidentReconstruction, setAccidentData,
     setAccidentVehicle, setAccidentAnimation,
     accidentAnimation, resetAccidentReconstruction,
     addPedestrian, updatePedestrian, removePedestrian,
-    addObject, showConfirm,
+    addObject, showConfirm, addNotification,
   } = useStore();
 
   const [activeVehicleTab, setActiveVehicleTab] = useState<0 | 1>(0);
@@ -121,6 +128,49 @@ export const AccidentReconstructionCalculator: React.FC = () => {
       setHasSecondVehicle(true);
     }
   };
+
+  const report = useMemo<ForensicReport>(() => ({
+    title: 'KAZA YENİDEN CANLANDIRMA İNCELEMESİ',
+    topic: 'Yol/zemin koşulları ve araç hareket verileri üzerinden kaza öncesi ve sonrası araç hareketlerinin adli teknik yönden yeniden canlandırılması ve değerlendirilmesi.',
+    evidence: [
+      `Yol yüzeyi: ${SURFACE_LABELS[accidentReconstruction.roadSurface] || accidentReconstruction.roadSurface}`, 
+      `Sürtünme katsayısı: μ=${accidentReconstruction.frictionCoefficient}`, 
+      `Hava durumu: ${accidentReconstruction.weather} — aydınlatma: ${accidentReconstruction.lighting}`, 
+      `Hız limiti: ${accidentReconstruction.speedLimit} km/h`, 
+      ...accidentReconstruction.vehicles.filter((v): v is VehicleData => !!v).map((v) =>
+        `${v.name}: başlangıç hızı ${v.initialSpeed} km/s — çarpışma ${v.impactSpeed} km/s (${v.impactAngle}°)`),
+    ],
+    method: [
+      'Fren izi-enerji ilişkisi ve kinematik modellerle araç yörüngeleri yeniden oluşturulmuştur.',
+      'Yüzey μ ve hava/aydınlatma koşulları rekonstrüksiyon girdisi olarak kullanılmıştır.',
+      'Çarpışma öncesi/sonrası hızlar ve yön açıları animasyon verisiyle tutarlıdır.',
+    ],
+    findings: [
+      ...accidentReconstruction.vehicles.filter((v): v is VehicleData => !!v).map((v) =>
+        `${v.name}: çarpışma anında yaklaşık ${v.impactSpeed} km/s (hız limiti ${accidentReconstruction.speedLimit} km/s; ${v.initialSpeed > accidentReconstruction.speedLimit ? 'LİMİT ÜSTÜ' : 'limit uyumlu'})`),
+      'Yol yüzeyi ve μ değeri, frenleme performansını doğrudan etkiler.',
+    ],
+    scenarios: [
+      'Islak/karlı zeminde μ ölçülen değerden %10-30 farklı olabilir → frenleme mesafeleri ve hızlar buna göre kayar.',
+      'Gece/karanlık ve yağmur aydınlatma koşullarında görüş mesafesi kısalır → tepki mesafesi ve sürücü algısı yeniden değerlendirilmelidir.',
+      'Araç ABS’li ise tekerlek kilitlemesi olmaz; fren izleri kısa/kesik kalır → hız tahmini alt sınır verir.',
+      'Hız limiti aşımı; tepki süresi (1-2.5 sn) ve yol tutuşu dikkate alınarak kaçınma imkânı analiziyle birlikte değerlendirilmelidir.',
+      'Yol kamberi/süper devrilme, yük kayması veya patlama gibi ikincil olaylar varsa yörüngeler ek enerji kayıpları içerir.',
+      'Yaya/Yolcu etkileşimi varsa ayrıca yaya fırlatma analizi ile birlikte değerlendirilmelidir.',
+      'Rekonstrüksiyon; başlangıç konum/hız girdilerinin doğruluğuna bağlıdır; tanık ifadesi ve kamera kaydı ile çapraz doğrulama önerilir.',
+    ],
+    conclusion: [
+      `İnceleme sonucunda kaza öncesi hareketler, mevcut yol/zemin koşulları (μ=${accidentReconstruction.frictionCoefficient}, ${accidentReconstruction.weather}) göz önünde bulundurularak yeniden canlandırılmış; araç hızlarının yukarıda belirtilen değerlerde olduğu hesaplanmıştır.`,
+      'Kesin kanaat; saha ölçümleri, araç hasar analizi ve varsa kamera/EDR kayıtlarıyla birlikte oluşturulmalıdır.',
+    ],
+    caveats: [
+      'Animasyon göstergesel yeniden canlandırmadır; fiziksel hassasiyet iddiası taşımaz.',
+      'Sonuçlar; girilen başlangıç konum/hız ve μ değerlerinin saha doğruluğuna bağımlıdır.',
+      'Rapor gösterge niteliğinde olup nihai kanaat bilirkişi değerlendirmesiyle birlikte oluşmalıdır.',
+    ],
+  }), [accidentReconstruction]);
+  const reportText = useMemo(() => formatForensicReport(report), [report]);
+  const summaryText = useMemo(() => formatForensicSummary(report), [report]);
 
   const handleAddToCanvas = () => {
     const baseX = 200;
@@ -219,53 +269,9 @@ export const AccidentReconstructionCalculator: React.FC = () => {
       });
     });
 
-    const surfaceLabels: Record<string, string> = {
-      asphalt_dry: 'Asfalt (Kuru)', asphalt_wet: 'Asfalt (Islak)',
-      concrete_dry: 'Beton (Kuru)', concrete_wet: 'Beton (Islak)',
-      gravel: 'Çakıl', soil: 'Toprak', snow: 'Kar', ice: 'Buz',
-    };
     addObject({
       type: 'text',
-      text: formatForensicReport({
-        title: 'KAZA YENİDEN CANLANDIRMA İNCELEMESİ',
-        topic: 'Yol/zemin koşulları ve araç hareket verileri üzerinden kaza öncesi ve sonrası araç hareketlerinin adli teknik yönden yeniden canlandırılması ve değerlendirilmesi.',
-        evidence: [
-          `Yol yüzeyi: ${surfaceLabels[accidentReconstruction.roadSurface] || accidentReconstruction.roadSurface}`, 
-          `Sürtünme katsayısı: μ=${accidentReconstruction.frictionCoefficient}`, 
-          `Hava durumu: ${accidentReconstruction.weather} — aydınlatma: ${accidentReconstruction.lighting}`, 
-          `Hız limiti: ${accidentReconstruction.speedLimit} km/h`, 
-          ...accidentReconstruction.vehicles.filter((v): v is VehicleData => !!v).map((v) =>
-            `${v.name}: başlangıç hızı ${v.initialSpeed} km/s — çarpışma ${v.impactSpeed} km/s (${v.impactAngle}°)`),
-        ],
-        method: [
-          'Fren izi-enerji ilişkisi ve kinematik modellerle araç yörüngeleri yeniden oluşturulmuştur.',
-          'Yüzey μ ve hava/aydınlatma koşulları rekonstrüksiyon girdisi olarak kullanılmıştır.',
-          'Çarpışma öncesi/sonrası hızlar ve yön açıları animasyon verisiyle tutarlıdır.',
-        ],
-        findings: [
-          ...accidentReconstruction.vehicles.filter((v): v is VehicleData => !!v).map((v) =>
-            `${v.name}: çarpışma anında yaklaşık ${v.impactSpeed} km/s (hız limiti ${accidentReconstruction.speedLimit} km/s; ${v.initialSpeed > accidentReconstruction.speedLimit ? 'LİMİT ÜSTÜ' : 'limit uyumlu'})`),
-          'Yol yüzeyi ve μ değeri, frenleme performansını doğrudan etkiler.',
-        ],
-        scenarios: [
-          'Islak/karlı zeminde μ ölçülen değerden %10-30 farklı olabilir → frenleme mesafeleri ve hızlar buna göre kayar.',
-          'Gece/karanlık ve yağmur aydınlatma koşullarında görüş mesafesi kısalır → tepki mesafesi ve sürücü algısı yeniden değerlendirilmelidir.',
-          'Araç ABS’li ise tekerlek kilitlemesi olmaz; fren izleri kısa/kesik kalır → hız tahmini alt sınır verir.',
-          'Hız limiti aşımı; tepki süresi (1-2.5 sn) ve yol tutuşu dikkate alınarak kaçınma imkânı analiziyle birlikte değerlendirilmelidir.',
-          'Yol kamberi/süper devrilme, yük kayması veya patlama gibi ikincil olaylar varsa yörüngeler ek enerji kayıpları içerir.',
-          'Yaya/Yolcu etkileşimi varsa ayrıca yaya fırlatma analizi ile birlikte değerlendirilmelidir.',
-          'Rekonstrüksiyon; başlangıç konum/hız girdilerinin doğruluğuna bağlıdır; tanık ifadesi ve kamera kaydı ile çapraz doğrulama önerilir.',
-        ],
-        conclusion: [
-          `İnceleme sonucunda kaza öncesi hareketler, mevcut yol/zemin koşulları (μ=${accidentReconstruction.frictionCoefficient}, ${accidentReconstruction.weather}) göz önünde bulundurularak yeniden canlandırılmış; araç hızlarının yukarıda belirtilen değerlerde olduğu hesaplanmıştır.`,
-          'Kesin kanaat; saha ölçümleri, araç hasar analizi ve varsa kamera/EDR kayıtlarıyla birlikte oluşturulmalıdır.',
-        ],
-        caveats: [
-          'Animasyon göstergesel yeniden canlandırmadır; fiziksel hassasiyet iddiası taşımaz.',
-          'Sonuçlar; girilen başlangıç konum/hız ve μ değerlerinin saha doğruluğuna bağımlıdır.',
-          'Rapor gösterge niteliğinde olup nihai kanaat bilirkişi değerlendirmesiyle birlikte oluşmalıdır.',
-        ],
-      }),
+      text: summaryText,
       x: baseX + 10,
       y: baseY - 80,
       width: 320,
@@ -323,6 +329,7 @@ export const AccidentReconstructionCalculator: React.FC = () => {
         fontStyle: 'bold',
       });
     });
+    addNotification({ type: 'success', message: 'Şema ve kısa özet rapora (kroki) eklendi' });
   };
 
   return (
@@ -748,6 +755,8 @@ export const AccidentReconstructionCalculator: React.FC = () => {
           </div>
         </div>
 
+        <ForensicReportPreview text={reportText} summaryText={summaryText} report={report} />
+
         {/* Controls Bar — always at top */}
         <div className="sticky top-0 px-4 py-3 bg-[#1a1a1a] border-b border-[#2a2a2a] flex items-center justify-between z-20">
           <div className="flex items-center gap-2">
@@ -764,10 +773,11 @@ export const AccidentReconstructionCalculator: React.FC = () => {
             <button
               onClick={handleAddToCanvas}
               className="flex items-center gap-1.5 px-3 py-2 text-[10px] font-bold text-gray-400 hover:text-[#F5C518] border border-[#333] hover:border-[#F5C518]/50 rounded-lg transition-all"
-              title="Tuvale Aktar"
+              title="Şema ve kısa özeti rapora (kroki) ekler"
             >
-              TUVALE AKTAR
+              RAPORA EKLE
             </button>
+            <ForensicPdfButton report={report} />
             <button
               onClick={() => setShowPlayer(true)}
               className="flex items-center gap-2 px-5 py-2 bg-[#F5C518] hover:bg-[#E2B616] text-black text-xs font-black rounded-md transition-all shadow-lg active:scale-95"

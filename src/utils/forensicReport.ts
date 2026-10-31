@@ -95,7 +95,7 @@ function section(no: number, heading: string, items: string[]): string[] {
   return out;
 }
 
-/** Raporu canvas'a uygun düz metne dönüştürür. */
+/** Raporu canvas'a uygun düz metne dönüştürür (DETAYLI ANALİZ — PDF ile aynı içerik). */
 export function formatForensicReport(r: ForensicReport): string {
   const { dosyaNo, tarih, saat } = reportMeta();
 
@@ -127,4 +127,38 @@ export function formatForensicReport(r: ForensicReport): string {
 /** Sayıyı Türk formatında yazar (nokta binlik, virgül ondalık). */
 export function trNum(v: number, digits = 1): string {
   return v.toLocaleString('tr-TR', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+}
+
+/* ------------------------------------------------------------------ */
+/* KISA ÖZET — "RAPORA EKLE" düğmesinin krokideki tuvale eklediği      */
+/* kısa sonuç. Eski sade biçem gibi yalnızca 4-5 satırdan oluşur:      */
+/* başlık, ayraç, 2 girdi ve 2 sonuç satırı. Uzun bilirkişi raporu     */
+/* yalnızca PDF'te yer alır.                                           */
+/* ------------------------------------------------------------------ */
+
+/** Sondaki parantezli ölçüm notunu kaldırır: "İz: 20 m (±%5)" → "İz: 20 m". */
+function stripTrailingNote(s: string): string {
+  return s.replace(/\s*\([^()]*\)\s*\.?\s*$/, '').replace(/\s+/g, ' ').trim();
+}
+
+/** Satırı kelime sınırından kırparak tek satıra (en çok max karakter) indirger. */
+function clipLine(s: string, max: number): string {
+  const t = s.replace(/\s+/g, ' ').trim();
+  if (t.length <= max) return t;
+  const cut = t.slice(0, max - 1);
+  const sp = cut.lastIndexOf(' ');
+  return `${(sp > max * 0.5 ? cut.slice(0, sp) : cut).trimEnd()}…`;
+}
+
+const SUMMARY_SEP = '\u2500'.repeat(24);
+
+/** Rapor nesnesinden tuvale eklenecek KISA SONUÇ metnini (4-5 satır) üretir. */
+export function formatForensicSummary(r: ForensicReport): string {
+  const lines: string[] = [
+    clipLine(r.title, LINE_CHARS),
+    SUMMARY_SEP,
+    ...r.evidence.slice(0, 2).map((e) => clipLine(stripTrailingNote(e), LINE_CHARS)),
+    ...r.findings.slice(0, 2).map((f) => clipLine(stripTrailingNote(f), LINE_CHARS)),
+  ];
+  return lines.filter((l) => l.length > 0).join('\n');
 }

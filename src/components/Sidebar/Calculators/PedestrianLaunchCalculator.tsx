@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Ruler, Info, Weight, Zap, TrendingUp, Eye, Footprints, Gauge } from 'lucide-react';
 import { useStore } from '../../../store/useStore';
 import { HelpTooltip } from '../../UI/HelpTooltip';
 import { PedestrianLaunchAnimationPlayer } from '../../UI/PedestrianLaunchAnimationPlayer';
-import { formatForensicReport, trNum } from '../../../utils/forensicReport';
+import { ForensicReportPreview, ForensicPdfButton } from '../../UI/ForensicReportPreview';
+import { formatForensicReport, formatForensicSummary, trNum, type ForensicReport } from '../../../utils/forensicReport';
 import type { PedestrianLaunchData } from '../../../types';
 
 const G = 9.81;
@@ -26,7 +27,7 @@ export const PedestrianLaunchCalculator: React.FC = () => {
   const [landingSpeed, setLandingSpeed] = useState(0);
   const [maxHeight, setMaxHeight] = useState(0);
 
-  const { addObject, setPedestrianLaunch, pedestrianLaunch } = useStore();
+  const { addObject, setPedestrianLaunch, pedestrianLaunch, addNotification } = useStore();
 
   useEffect(() => {
     const hCm = (pedestrianHeight * 0.55) / 100;
@@ -77,6 +78,49 @@ export const PedestrianLaunchCalculator: React.FC = () => {
     setMaxHeight(Math.max(maxH, hCm));
     setPedestrianLaunch({ duration: totalTime });
   }, [throwDistInput, pedestrianHeight, launchAngle, pedestrianState]);
+
+  const report = useMemo<ForensicReport>(() => ({
+    title: 'YAYA FIRLATMA İNCELEMESİ (SEARLE)',
+    topic: 'Yaya çarpması sonrası fırlatma/savrulma mesafesinden hareketle, aracın çarpışma anındaki hızının adli teknik yönden tahmin edilmesi.',
+    evidence: [
+      `Fırlatma-savrulma mesafesi: ${trNum(throwDistInput, 1)} m`,
+      `Yaya boyu: ${pedestrianHeight} cm — ağırlık: ${pedestrianWeight} kg`,
+      `Yaya durumu: ${pedestrianState === 'stationary' ? 'Duran' : pedestrianState === 'walking_same' ? 'Aynı yönde yürüyen (+5 km/s)' : pedestrianState === 'walking_opposite' ? 'Ters yönde yürüyen (−5 km/s)' : pedestrianState === 'running_same' ? 'Aynı yönde koşan (+10 km/s)' : 'Ters yönde koşan (−10 km/s)'}`,
+      `Savrulma sürtünme katsayısı: μ=${MU} (kuru asfalt varsayımı)`,
+    ],
+    method: [
+      'Searle denklemi (ters çözüm): d = v·√(2h/g) + v²/(2μg) → v = μg·[√(2h/g + 2d/μg) − √(2h/g)].',
+      'Araç hızı = kapanış (çarpma) hızı ± yaya hareket hızı bileşeni.',
+      'Uçuş ve savrulma bileşenleri ayrı ayrı hesaplanmıştır (uçuş: v·√(2h/g), savrulma: v²/2μg).',
+    ],
+    findings: [
+      `Araç hızı (çarpışma anı): ${trNum(calculatedSpeed, 0)} km/s`,
+      `Uçuş mesafesi: ${trNum(flightDistance, 2)} m — savrulma: ${trNum(slideDistance, 2)} m`,
+      `Uçuş süresi: ${trNum(flightTime, 2)} sn — iniş hızı: ${trNum(landingSpeed, 0)} km/s`,
+      `Toplam fırlatma mesafesi: ${trNum(throwDistance, 2)} m`,
+    ],
+    scenarios: [
+      'μ=0.7 varsayımı kuru asfalt içindir: ıslak/buzlu/karlı zeminde μ düşer → araç hızı tahmini DÜŞÜK çıkar (μ=0.5 için hız ~%20 artar).',
+      'Araç frenlemesi yapılmışsa fırlatma mesafesi kısalır → Searle sonucu gerçek hızın alt sınırını verir; frenlemesizse üst sınıra yakınsır.',
+      'Fırlatma mesafesi İLK TEMAS noktasına göre ölçülmeli; son dinlenme konumu kullanılırsa yaya savrulması eklendiğinden hız fazla çıkar.',
+      'Kaput/ön cam teması (yüksek önü araçlar dahil) fırlatma dinamiklerini değiştirir; klasik Searle düşük önü araçlar için geçerlidir.',
+      'Yaya duruşu bilgisi (duran/yürüyen/koşan) kapanış hızını ±5–10 km/s kaydırır; tanık ifadeleriyle doğrulanmalıdır.',
+      'Çift temas (ikinci çarpma) veya araç üstünde taşınma toplam mesafeyi uzatır → hız yüksek çıkar.',
+      'Eğimli zeminde savrulma boyu değişir; rampa aşağı savrulmada mesafe uzar → hız fazla hesaplanır.',
+      'Boyu/ağırlığı bilinmeyen yaya için h değeri varsayımsaldır; sonucun duyarlılığı h’ye bağlıdır.',
+    ],
+    conclusion: [
+      `İnceleme sonucunda aracın çarpışma anındaki hızının yaklaşık ${trNum(calculatedSpeed, 0)} km/s bulunduğu; savrulma sürtünmesi ve yaya durumu belirsizlikleri hesaba katıldığında sonucun gösterge niteliğinde olduğu kanaatine varılmıştır.`,
+      'Kesin hız tespiti için araç hasar paterni, EDR verisi ve yol üzerindeki kan/iz bulgularıyla birlikte değerlendirme yapılmalıdır.',
+    ],
+    caveats: [
+      'Searle modeli; tek temas, düz zemin ve sabit μ varsayımına dayanan ampirik bir yöntemdir.',
+      'Sonuç; fırlatma mesafesi ölçümü, yaya boyu ve zemin koşulları bilgisinin doğruluğuna bağımlıdır.',
+      'Rapor gösterge niteliğinde olup nihai kanaat kaza rekonstrüksiyon uzmanı değerlendirmesiyle birlikte oluşmalıdır.',
+    ],
+  }), [throwDistInput, pedestrianHeight, pedestrianWeight, pedestrianState, calculatedSpeed, throwDistance, flightDistance, slideDistance, flightTime, landingSpeed]);
+  const reportText = useMemo(() => formatForensicReport(report), [report]);
+  const summaryText = useMemo(() => formatForensicSummary(report), [report]);
 
   const handleAddToCanvas = () => {
     const scale = 15;
@@ -182,46 +226,7 @@ export const PedestrianLaunchCalculator: React.FC = () => {
 
     addObject({
       type: 'text',
-      text: formatForensicReport({
-        title: 'YAYA FIRLATMA İNCELEMESİ (SEARLE)',
-        topic: 'Yaya çarpması sonrası fırlatma/savrulma mesafesinden hareketle, aracın çarpışma anındaki hızının adli teknik yönden tahmin edilmesi.',
-        evidence: [
-          `Fırlatma-savrulma mesafesi: ${trNum(throwDistInput, 1)} m`,
-          `Yaya boyu: ${pedestrianHeight} cm — ağırlık: ${pedestrianWeight} kg`,
-          `Yaya durumu: ${pedestrianState === 'stationary' ? 'Duran' : pedestrianState === 'walking_same' ? 'Aynı yönde yürüyen (+5 km/s)' : pedestrianState === 'walking_opposite' ? 'Ters yönde yürüyen (−5 km/s)' : pedestrianState === 'running_same' ? 'Aynı yönde koşan (+10 km/s)' : 'Ters yönde koşan (−10 km/s)'}`,
-          `Savrulma sürtünme katsayısı: μ=${MU} (kuru asfalt varsayımı)`,
-        ],
-        method: [
-          'Searle denklemi (ters çözüm): d = v·√(2h/g) + v²/(2μg) → v = μg·[√(2h/g + 2d/μg) − √(2h/g)].',
-          'Araç hızı = kapanış (çarpma) hızı ± yaya hareket hızı bileşeni.',
-          'Uçuş ve savrulma bileşenleri ayrı ayrı hesaplanmıştır (uçuş: v·√(2h/g), savrulma: v²/2μg).',
-        ],
-        findings: [
-          `Araç hızı (çarpışma anı): ${trNum(calculatedSpeed, 0)} km/s`,
-          `Uçuş mesafesi: ${trNum(flightDistance, 2)} m — savrulma: ${trNum(slideDistance, 2)} m`,
-          `Uçuş süresi: ${trNum(flightTime, 2)} sn — iniş hızı: ${trNum(landingSpeed, 0)} km/s`,
-          `Toplam fırlatma mesafesi: ${trNum(throwDistance, 2)} m`,
-        ],
-        scenarios: [
-          'μ=0.7 varsayımı kuru asfalt içindir: ıslak/buzlu/karlı zeminde μ düşer → araç hızı tahmini DÜŞÜK çıkar (μ=0.5 için hız ~%20 artar).',
-          'Araç frenlemesi yapılmışsa fırlatma mesafesi kısalır → Searle sonucu gerçek hızın alt sınırını verir; frenlemesizse üst sınıra yakınsır.',
-          'Fırlatma mesafesi İLK TEMAS noktasına göre ölçülmeli; son dinlenme konumu kullanılırsa yaya savrulması eklendiğinden hız fazla çıkar.',
-          'Kaput/ön cam teması (yüksek önü araçlar dahil) fırlatma dinamiklerini değiştirir; klasik Searle düşük önü araçlar için geçerlidir.',
-          'Yaya duruşu bilgisi (duran/yürüyen/koşan) kapanış hızını ±5–10 km/s kaydırır; tanık ifadeleriyle doğrulanmalıdır.',
-          'Çift temas (ikinci çarpma) veya araç üstünde taşınma toplam mesafeyi uzatır → hız yüksek çıkar.',
-          'Eğimli zeminde savrulma boyu değişir; rampa aşağı savrulmada mesafe uzar → hız fazla hesaplanır.',
-          'Boyu/ağırlığı bilinmeyen yaya için h değeri varsayımsaldır; sonucun duyarlılığı h’ye bağlıdır.',
-        ],
-        conclusion: [
-          `İnceleme sonucunda aracın çarpışma anındaki hızının yaklaşık ${trNum(calculatedSpeed, 0)} km/s bulunduğu; savrulma sürtünmesi ve yaya durumu belirsizlikleri hesaba katıldığında sonucun gösterge niteliğinde olduğu kanaatine varılmıştır.`,
-          'Kesin hız tespiti için araç hasar paterni, EDR verisi ve yol üzerindeki kan/iz bulgularıyla birlikte değerlendirme yapılmalıdır.',
-        ],
-        caveats: [
-          'Searle modeli; tek temas, düz zemin ve sabit μ varsayımına dayanan ampirik bir yöntemdir.',
-          'Sonuç; fırlatma mesafesi ölçümü, yaya boyu ve zemin koşulları bilgisinin doğruluğuna bağımlıdır.',
-          'Rapor gösterge niteliğinde olup nihai kanaat kaza rekonstrüksiyon uzmanı değerlendirmesiyle birlikte oluşmalıdır.',
-        ],
-      }),
+      text: summaryText,
       x: baseX - 20,
       y: baseY + 40,
       width: 320,
@@ -237,6 +242,7 @@ export const PedestrianLaunchCalculator: React.FC = () => {
       currentTime: 0,
       duration: flightTime,
     });
+    addNotification({ type: 'success', message: 'Şema ve kısa özet rapora (kroki) eklendi' });
   };
 
   const launchData: PedestrianLaunchData = {
@@ -451,6 +457,8 @@ export const PedestrianLaunchCalculator: React.FC = () => {
         </div>
       </div>
 
+      <ForensicReportPreview text={reportText} summaryText={summaryText} report={report} />
+
       {/* Controls Bar — always at top */}
       <div className="sticky top-0 px-4 py-3 bg-[#1a1a1a] border-b border-[#2a2a2a] flex items-center justify-between z-20">
         <div className="flex items-center gap-2">
@@ -465,9 +473,11 @@ export const PedestrianLaunchCalculator: React.FC = () => {
           <button
             onClick={handleAddToCanvas}
             className="flex items-center gap-1.5 px-3 py-2 text-[10px] font-bold text-gray-400 hover:text-[#F5C518] border border-[#333] hover:border-[#F5C518]/50 rounded-lg transition-all"
+            title="Şema ve kısa özeti rapora (kroki) ekler"
           >
-            TUVALE AKTAR
+            RAPORA EKLE
           </button>
+          <ForensicPdfButton report={report} />
           <button
             onClick={() => setShowPlayer(true)}
             className="flex items-center gap-2 px-5 py-2 bg-[#F5C518] hover:bg-[#E2B616] text-black text-xs font-black rounded-md transition-all shadow-lg active:scale-95"

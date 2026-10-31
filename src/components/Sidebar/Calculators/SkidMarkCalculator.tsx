@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Zap, Activity, Info, PlusCircle, TrendingUp, AlertTriangle, Truck, Car, Bike } from 'lucide-react';
 import { useStore } from '../../../store/useStore';
 import { HelpTooltip } from '../../UI/HelpTooltip';
-import { formatForensicReport, trNum } from '../../../utils/forensicReport';
+import { formatForensicReport, formatForensicSummary, trNum } from '../../../utils/forensicReport';
 import { ForensicReportPreview, ForensicPdfButton } from '../../UI/ForensicReportPreview';
 
 const SURFACE_TYPES = [
@@ -32,7 +32,7 @@ export const SkidMarkCalculator: React.FC = () => {
   const [speedMax, setSpeedMax] = useState<number>(0);
   const [gradeSpeed, setGradeSpeed] = useState<{ up: number; down: number }>({ up: 0, down: 0 });
   
-  const { addObject } = useStore();
+  const { addObject, addNotification } = useStore();
 
   useEffect(() => {
     setEfficiency(vehicleType.efficiency);
@@ -116,11 +116,12 @@ export const SkidMarkCalculator: React.FC = () => {
     ],
   }), [speed, speedMin, speedMax, gradeSpeed, distance, mu, efficiency, vehicleType]);
   const reportText = useMemo(() => formatForensicReport(report), [report]);
+  const summaryText = useMemo(() => formatForensicSummary(report), [report]);
 
   const handleAddToCanvas = () => {
     addObject({
       type: 'text',
-      text: reportText,
+      text: summaryText,
       x: 300,
       y: 300,
       width: 360,
@@ -129,6 +130,7 @@ export const SkidMarkCalculator: React.FC = () => {
       fontFamily: 'Inter',
       fontStyle: 'bold'
     });
+    addNotification({ type: 'success', message: 'Hesaplama kısa özeti rapora (kroki) eklendi' });
   };
 
   return (
@@ -266,7 +268,7 @@ export const SkidMarkCalculator: React.FC = () => {
           </div>
         </div>
 
-        <ForensicReportPreview text={reportText} report={report} />
+        <ForensicReportPreview text={reportText} summaryText={summaryText} report={report} />
 
         <div className="p-4 bg-orange-500/5 border border-orange-500/10 rounded-2xl flex gap-3 items-start">
           <AlertTriangle size={16} className="text-orange-500 mt-0.5 flex-shrink-0" />

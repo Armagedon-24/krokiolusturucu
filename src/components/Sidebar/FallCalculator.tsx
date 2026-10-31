@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Ruler, Activity, Info, Weight, Zap, TrendingUp, Eye } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { HelpTooltip } from '../UI/HelpTooltip';
 import { FallAnimationPlayer } from '../UI/FallAnimationPlayer';
-import { formatForensicReport, trNum } from '../../utils/forensicReport';
+import { ForensicReportPreview, ForensicPdfButton } from '../UI/ForensicReportPreview';
+import { formatForensicReport, formatForensicSummary, trNum, type ForensicReport } from '../../utils/forensicReport';
 
 export const FallCalculator: React.FC = () => {
   const [height, setHeight] = useState<number>(10);
@@ -16,7 +17,7 @@ export const FallCalculator: React.FC = () => {
   const [impactEnergy, setImpactEnergy] = useState<number>(0);
   
   const [isAnimationOpen, setIsAnimationOpen] = useState<boolean>(false);
-  const { addObject, setFallAnimation, fallAnimation } = useStore();
+  const { addObject, setFallAnimation, fallAnimation, addNotification } = useStore();
 
   const presets = [
     { label: 'Adım Atma', value: 0.8, description: 'Yavaşça kenardan adım atma' },
@@ -48,6 +49,47 @@ export const FallCalculator: React.FC = () => {
     setImpactEnergy(energy);
     setFallAnimation({ duration: t });
   }, [height, velocity, weight, useDrag]);
+
+  const report = useMemo<ForensicReport>(() => ({
+    title: 'YÜKSEKTEN DÜŞME İNCELEMESİ',
+    topic: 'Yüksekten düşme olayında düşme süresi, çarpma hızı ve enerjisinin adli teknik yönünden değerlendirilmesi.',
+    evidence: [
+      `Düşme yüksekliği: ${height} m`,
+      `Ayrılma (yatay) hızı: ${velocity} m/s`,
+      `Vücut ağırlığı: ${weight} kg`,
+      `Hava direnci modeli: ${useDrag ? 'Dahil (terminal hız ~54 m/s)' : 'Hariç (vakum modeli)'}`,
+    ],
+    method: [
+      'Vakum modeli: t=√(2h/g), v=g·t. Hava direnci modeli: terminal hız asimptotlu (vterm=54 m/s) hiperbolik çözüm.',
+      'Çarpma enerjisi: E = ½·m·v² (Joule).',
+    ],
+    findings: [
+      `Düşme süresi: ${trNum(time, 2)} sn`,
+      `Yatay (izdüşüm) mesafe: ${trNum(distance, 2)} m`,
+      `Çarpma (dikey) hızı: ${trNum(impactVelocity, 0)} km/s`,
+      `Çarpma enerjisi: ${trNum(impactEnergy, 0)} J (≈ ${trNum(impactEnergy / weight, 0)} J/kg)`,
+    ],
+    scenarios: [
+      'Ayrılma hızı; adım atma/zıplama/koşu senaryolarında farklıdır: fırlatma mesafesi, ayrılma şeklinin ayırt edici göstergesidir.',
+      'İtilme/atılma ihtimalinde başlangıç hızı vektörü ve gövde konumu kendiliğinden düşmeden farklıdır; bulunduğu yer ve duruş analizi gerekir.',
+      '30 m üzeri düşüşlerde hava direnci belirginleşir: hız terminal değere (~195 km/s) yakınsar → vakum modeli gerçekçi değildir.',
+      'Ara temas (balkon, ağaç, saçak) enerjinin bir kısmını absorbe eder → çarpma enerjisi hesaptan düşük çıkar.',
+      'Çarpma yüzeyi (beton/asfalt/toprak) yaralanma şiddetini değiştirir; enerji değerleri yüzeyle birlikte yorumlanmalıdır.',
+      'İlk temas bölgesi (ayak, kafa, gövde) sonucu belirler; ölümcül yaralanma eşiği kişi başına enerji yoğunluğuyla ilgilidir.',
+      'Yer değiştirme (düşme sonrası savrulma/sıçrama) ölçülen mesafeyle hesaplanan izdüşümü farklılaştırabilir.',
+    ],
+    conclusion: [
+      `İnceleme sonucunda ${height} m yükseklikten düşen vücudun ${trNum(time, 2)} sn sürede ${trNum(distance, 2)} m ilerleyerek ${trNum(impactVelocity, 0)} km/s hızla ve yaklaşık ${trNum(impactEnergy, 0)} J kinetik enerjiyle zemine çarptığı hesaplanmıştır.`,
+      'Düşmenin kendiliğinden mi yoksa dış etkiyle mi gerçekleştiği; ayrılma hızı, duruş ve yaralanma paterni birlikte değerlendirilerek yorumlanmalıdır.',
+    ],
+    caveats: [
+      'Hesaplar; ideal vücut ağırlığı, dik/düz düşme ve bilinen yükseklik varsayımlarına dayanır.',
+      'Vücut duruşu (gerdirilmiş/kıvırılmış) hava direncini değiştirir; sonuçlar yaklaşık değerlerdir.',
+      'Rapor gösterge niteliğinde olup nihai kanaat otopsi ve saha bulgularıyla birlikte oluşmalıdır.',
+    ],
+  }), [height, velocity, weight, useDrag, time, distance, impactVelocity, impactEnergy]);
+  const reportText = useMemo(() => formatForensicReport(report), [report]);
+  const summaryText = useMemo(() => formatForensicSummary(report), [report]);
 
   const handleAddToCanvas = () => {
     const scale = 20;
@@ -170,44 +212,7 @@ export const FallCalculator: React.FC = () => {
 
     addObject({
       type: 'text',
-      text: formatForensicReport({
-        title: 'YÜKSEKTEN DÜŞME İNCELEMESİ',
-        topic: 'Yüksekten düşme olayında düşme süresi, çarpma hızı ve enerjisinin adli teknik yönünden değerlendirilmesi.',
-        evidence: [
-          `Düşme yüksekliği: ${height} m`,
-          `Ayrılma (yatay) hızı: ${velocity} m/s`,
-          `Vücut ağırlığı: ${weight} kg`,
-          `Hava direnci modeli: ${useDrag ? 'Dahil (terminal hız ~54 m/s)' : 'Hariç (vakum modeli)'}`,
-        ],
-        method: [
-          'Vakum modeli: t=√(2h/g), v=g·t. Hava direnci modeli: terminal hız asimptotlu (vterm=54 m/s) hiperbolik çözüm.',
-          'Çarpma enerjisi: E = ½·m·v² (Joule).',
-        ],
-        findings: [
-          `Düşme süresi: ${trNum(time, 2)} sn`,
-          `Yatay (izdüşüm) mesafe: ${trNum(distance, 2)} m`,
-          `Çarpma (dikey) hızı: ${trNum(impactVelocity, 0)} km/s`,
-          `Çarpma enerjisi: ${trNum(impactEnergy, 0)} J (≈ ${trNum(impactEnergy / weight, 0)} J/kg)`,
-        ],
-        scenarios: [
-          'Ayrılma hızı; adım atma/zıplama/koşu senaryolarında farklıdır: fırlatma mesafesi, ayrılma şeklinin ayırt edici göstergesidir.',
-          'İtilme/atılma ihtimalinde başlangıç hızı vektörü ve gövde konumu kendiliğinden düşmeden farklıdır; bulunduğu yer ve duruş analizi gerekir.',
-          '30 m üzeri düşüşlerde hava direnci belirginleşir: hız terminal değere (~195 km/s) yakınsar → vakum modeli gerçekçi değildir.',
-          'Ara temas (balkon, ağaç, saçak) enerjinin bir kısmını absorbe eder → çarpma enerjisi hesaptan düşük çıkar.',
-          'Çarpma yüzeyi (beton/asfalt/toprak) yaralanma şiddetini değiştirir; enerji değerleri yüzeyle birlikte yorumlanmalıdır.',
-          'İlk temas bölgesi (ayak, kafa, gövde) sonucu belirler; ölümcül yaralanma eşiği kişi başına enerji yoğunluğuyla ilgilidir.',
-          'Yer değiştirme (düşme sonrası savrulma/sıçrama) ölçülen mesafeyle hesaplanan izdüşümü farklılaştırabilir.',
-        ],
-        conclusion: [
-          `İnceleme sonucunda ${height} m yükseklikten düşen vücudun ${trNum(time, 2)} sn sürede ${trNum(distance, 2)} m ilerleyerek ${trNum(impactVelocity, 0)} km/s hızla ve yaklaşık ${trNum(impactEnergy, 0)} J kinetik enerjiyle zemine çarptığı hesaplanmıştır.`,
-          'Düşmenin kendiliğinden mi yoksa dış etkiyle mi gerçekleştiği; ayrılma hızı, duruş ve yaralanma paterni birlikte değerlendirilerek yorumlanmalıdır.',
-        ],
-        caveats: [
-          'Hesaplar; ideal vücut ağırlığı, dik/düz düşme ve bilinen yükseklik varsayımlarına dayanır.',
-          'Vücut duruşu (gerdirilmiş/kıvırılmış) hava direncini değiştirir; sonuçlar yaklaşık değerlerdir.',
-          'Rapor gösterge niteliğinde olup nihai kanaat otopsi ve saha bulgularıyla birlikte oluşmalıdır.',
-        ],
-      }),
+      text: summaryText,
       x: baseX - 20,
       y: baseY + 50,
       width: 320,
@@ -218,6 +223,8 @@ export const FallCalculator: React.FC = () => {
     });
 
     setFallAnimation({ canvasData: undefined, isPlaying: false, currentTime: 0 });
+
+    addNotification({ type: 'success', message: 'Şema ve kısa özet rapora (kroki) eklendi' });
   };
 
   return (
@@ -390,6 +397,8 @@ export const FallCalculator: React.FC = () => {
         </div>
       </div>
       
+      <ForensicReportPreview text={reportText} summaryText={summaryText} report={report} />
+
       {/* Controls Bar — always at top */}
       <div className="sticky top-0 px-4 py-3 bg-[#1a1a1a] border-b border-[#2a2a2a] flex items-center justify-between z-20">
         <div className="flex items-center gap-2">
@@ -404,9 +413,11 @@ export const FallCalculator: React.FC = () => {
           <button
             onClick={handleAddToCanvas}
             className="flex items-center gap-1.5 px-3 py-2 text-[10px] font-bold text-gray-400 hover:text-[#F5C518] border border-[#333] hover:border-[#F5C518]/50 rounded-lg transition-all"
+            title="Şema ve kısa özeti rapora (kroki) ekler"
           >
-            TUVALE AKTAR
+            RAPORA EKLE
           </button>
+          <ForensicPdfButton report={report} />
           <button
             onClick={() => setIsAnimationOpen(true)}
             className="flex items-center gap-2 px-5 py-2 bg-[#F5C518] hover:bg-[#E2B616] text-black text-xs font-black rounded-md transition-all shadow-lg active:scale-95"

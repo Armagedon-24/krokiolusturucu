@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Crosshair, Info, Eye, Target } from 'lucide-react';
 import { useStore } from '../../../store/useStore';
 import { HelpTooltip } from '../../UI/HelpTooltip';
 import { ShotDirectionAnimationPlayer } from '../../UI/ShotDirectionAnimationPlayer';
-import { formatForensicReport, trNum } from '../../../utils/forensicReport';
+import { ForensicReportPreview, ForensicPdfButton } from '../../UI/ForensicReportPreview';
+import { formatForensicReport, formatForensicSummary, trNum, type ForensicReport } from '../../../utils/forensicReport';
 import type { ShotDirectionData } from '../../../types';
 
 const SURFACE_TYPES = [
@@ -45,7 +46,7 @@ export const ShotDirectionCalculator: React.FC = () => {
   const [deflectionAngle, setDeflectionAngle] = useState(0);
   const [trajectoryLength, setTrajectoryLength] = useState(0);
 
-  const { addObject, setShotDirection } = useStore();
+  const { addObject, setShotDirection, addNotification } = useStore();
 
   useEffect(() => {
     const dx = exitX - entryX;
@@ -104,49 +105,53 @@ export const ShotDirectionCalculator: React.FC = () => {
     entrySurface: surface.id as ShotDirectionData['entrySurface'],
   };
 
+  const report = useMemo<ForensicReport>(() => ({
+    title: 'ATIŞ YÖNÜ TESPİT İNCELEMESİ',
+    topic: 'Giriş ve çıkış deliklerinin konumundan hareketle, atışın yatay/dikey yönü ve atıcı konumunun adli balistik yönünden değerlendirilmesi.',
+    evidence: [
+      `Giriş deliği: (${entryX}, ${entryY}, ${entryZ}) cm`,
+      `Çıkış deliği: (${exitX}, ${exitY}, ${exitZ}) cm`,
+      `Geçilen yüzey: ${surface.name} (sapma faktörü ${surface.deflectionFactor}x)`,
+      `Mühimmat: ${bulletType.name}`, 
+    ],
+    method: [
+      'Giriş-çıkış geometrisi: iki nokta arasındaki vektörün yatay/dikey düzlemlere izdüşümüyle açı hesabı.',
+      "Yüzey sapması: delikler arası hat, ${surface.name.toLowerCase()} yüzeyindeki sapma faktörüyle düzeltilmiştir.",
+      'Atıcı konumu: yön doğrultusunda geriye doğru projeksiyon.',
+    ],
+    findings: [
+      `Yatay atış açısı: ${trNum(horizontalAngle, 1)}°`,
+      `Dikey atış açısı: ${trNum(impactAngle, 1)}°`,
+      `Mermi sapması (deflection): ${trNum(deflectionAngle, 1)}°`,
+      `Tahmini atıcı mesafesi: ~${shooterDistance} m — atıcı yüksekliği: ${shooterHeight} m`,
+    ],
+    scenarios: [
+      'Giriş-çıkış delikleri AYNI mermiye ait olmalıdır; parçalanma/multiple atış durumunda geometri geçersizleşir.',
+      `${surface.name} yüzeyinde mermi yolunu saptırabilir: sapma faktörü ${surface.deflectionFactor}x uygulandı; gerçek delikler arası hat ile atış yönü arasında fark olabilir.`,
+      'Alçıpan/cam gibi kırılgan yüzeylerde sapma daha büyük; betonda daha küçüktür → farklı yüzey senaryoları ayrıca test edilmelidir.',
+      'Delik konum ölçümlerindeki ±2 cm hata, açılarda ~2-3° ve atıcı mesafesinde metrelere varan kayma yaratabilir.',
+      'Mermi stabilitesi (yalpalama/yaw) giriş açısını etkiler; çarpma anında mermi stabilize değilse açı ölçümü yanıltıcıdır.',
+      'Atıcı mesafesi tahmini, atışın düz bir hat izlediği varsayımına dayanır; yerçekimi düşmesi mesafeye göre düzeltme gerektirir.',
+      'Atıcı yüksekliği tahmini; aracın/düşük yükseklikten atışın (rakım farkı) veya eğimli zeminin dikkate alınmaması durumunda kayar.',
+      'Kesin yön tespiti için giriş deliğinin eliptikliği (açı) ve GSR/parafin bulguları birlikte kullanılmalıdır.',
+    ],
+    conclusion: [
+      `İnceleme sonucunda atışın yatay düzlemde ${trNum(horizontalAngle, 1)}°, dikey düzlemde ${trNum(impactAngle, 1)}° doğrultudan geldiği; mermi sapması düzeltmesi sonrası atıcının yaklaşık ${shooterDistance} m mesafede ve ${shooterHeight} m yükseklikte konumlanmış olabileceği kanaatine varılmıştır.`,
+      'Atıcı konumu; yüzey sapması, mermi davranışı ve delik ölçüm hassasiyetine bağlı gösterge niteliğindedir.',
+    ],
+    caveats: [
+      'Hesap; iki delik noktasının doğru eşleştirilmesine ve ölçümlerin cm hassasiyetinde alınmasına bağlıdır.',
+      'Yüzey sapma faktörleri ampirik ortalama değerlerdir; laboratuvar atış testleriyle doğrulanmalıdır.',
+      'Rapor gösterge niteliğinde olup nihai kanaat adli balistik uzmanı değerlendirmesiyle birlikte oluşmalıdır.',
+    ],
+  }), [entryX, entryY, entryZ, exitX, exitY, exitZ, hasExitWound, surface, bulletType, impactAngle, horizontalAngle, shooterDistance, shooterHeight, deflectionAngle]);
+  const reportText = useMemo(() => formatForensicReport(report), [report]);
+  const summaryText = useMemo(() => formatForensicSummary(report), [report]);
+
   const handleAddToCanvas = () => {
     addObject({
       type: 'text',
-      text: formatForensicReport({
-        title: 'ATIŞ YÖNÜ TESPİT İNCELEMESİ',
-        topic: 'Giriş ve çıkış deliklerinin konumundan hareketle, atışın yatay/dikey yönü ve atıcı konumunun adli balistik yönünden değerlendirilmesi.',
-        evidence: [
-          `Giriş deliği: (${entryX}, ${entryY}, ${entryZ}) cm`,
-          `Çıkış deliği: (${exitX}, ${exitY}, ${exitZ}) cm`,
-          `Geçilen yüzey: ${surface.name} (sapma faktörü ${surface.deflectionFactor}x)`,
-          `Mühimmat: ${bulletType.name}`, 
-        ],
-        method: [
-          'Giriş-çıkış geometrisi: iki nokta arasındaki vektörün yatay/dikey düzlemlere izdüşümüyle açı hesabı.',
-          "Yüzey sapması: delikler arası hat, ${surface.name.toLowerCase()} yüzeyindeki sapma faktörüyle düzeltilmiştir.",
-          'Atıcı konumu: yön doğrultusunda geriye doğru projeksiyon.',
-        ],
-        findings: [
-          `Yatay atış açısı: ${trNum(horizontalAngle, 1)}°`,
-          `Dikey atış açısı: ${trNum(impactAngle, 1)}°`,
-          `Mermi sapması (deflection): ${trNum(deflectionAngle, 1)}°`,
-          `Tahmini atıcı mesafesi: ~${shooterDistance} m — atıcı yüksekliği: ${shooterHeight} m`,
-        ],
-        scenarios: [
-          'Giriş-çıkış delikleri AYNI mermiye ait olmalıdır; parçalanma/multiple atış durumunda geometri geçersizleşir.',
-          `${surface.name} yüzeyinde mermi yolunu saptırabilir: sapma faktörü ${surface.deflectionFactor}x uygulandı; gerçek delikler arası hat ile atış yönü arasında fark olabilir.`,
-          'Alçıpan/cam gibi kırılgan yüzeylerde sapma daha büyük; betonda daha küçüktür → farklı yüzey senaryoları ayrıca test edilmelidir.',
-          'Delik konum ölçümlerindeki ±2 cm hata, açılarda ~2-3° ve atıcı mesafesinde metrelere varan kayma yaratabilir.',
-          'Mermi stabilitesi (yalpalama/yaw) giriş açısını etkiler; çarpma anında mermi stabilize değilse açı ölçümü yanıltıcıdır.',
-          'Atıcı mesafesi tahmini, atışın düz bir hat izlediği varsayımına dayanır; yerçekimi düşmesi mesafeye göre düzeltme gerektirir.',
-          'Atıcı yüksekliği tahmini; aracın/düşük yükseklikten atışın (rakım farkı) veya eğimli zeminin dikkate alınmaması durumunda kayar.',
-          'Kesin yön tespiti için giriş deliğinin eliptikliği (açı) ve GSR/parafin bulguları birlikte kullanılmalıdır.',
-        ],
-        conclusion: [
-          `İnceleme sonucunda atışın yatay düzlemde ${trNum(horizontalAngle, 1)}°, dikey düzlemde ${trNum(impactAngle, 1)}° doğrultudan geldiği; mermi sapması düzeltmesi sonrası atıcının yaklaşık ${shooterDistance} m mesafede ve ${shooterHeight} m yükseklikte konumlanmış olabileceği kanaatine varılmıştır.`,
-          'Atıcı konumu; yüzey sapması, mermi davranışı ve delik ölçüm hassasiyetine bağlı gösterge niteliğindedir.',
-        ],
-        caveats: [
-          'Hesap; iki delik noktasının doğru eşleştirilmesine ve ölçümlerin cm hassasiyetinde alınmasına bağlıdır.',
-          'Yüzey sapma faktörleri ampirik ortalama değerlerdir; laboratuvar atış testleriyle doğrulanmalıdır.',
-          'Rapor gösterge niteliğinde olup nihai kanaat adli balistik uzmanı değerlendirmesiyle birlikte oluşmalıdır.',
-        ],
-      }),
+      text: summaryText,
       x: 300,
       y: 300,
       width: 360,
@@ -155,6 +160,7 @@ export const ShotDirectionCalculator: React.FC = () => {
       fontFamily: 'Inter',
       fontStyle: 'bold'
     });
+    addNotification({ type: 'success', message: 'Şema ve kısa özet rapora (kroki) eklendi' });
   };
 
   const handleAnimationOpen = () => {
@@ -346,6 +352,8 @@ export const ShotDirectionCalculator: React.FC = () => {
         </div>
       </div>
 
+      <ForensicReportPreview text={reportText} summaryText={summaryText} report={report} />
+
       {/* Controls Bar — always at top */}
       <div className="sticky top-0 px-4 py-3 bg-[#1a1a1a] border-b border-[#2a2a2a] flex items-center justify-between z-20">
         <div className="flex items-center gap-2">
@@ -360,9 +368,11 @@ export const ShotDirectionCalculator: React.FC = () => {
           <button
             onClick={handleAddToCanvas}
             className="flex items-center gap-1.5 px-3 py-2 text-[10px] font-bold text-gray-400 hover:text-[#F5C518] border border-[#333] hover:border-[#F5C518]/50 rounded-lg transition-all"
+            title="Şema ve kısa özeti rapora (kroki) ekler"
           >
-            TUVALE AKTAR
+            RAPORA EKLE
           </button>
+          <ForensicPdfButton report={report} />
           <button
             onClick={handleAnimationOpen}
             className="flex items-center gap-2 px-5 py-2 bg-[#F5C518] hover:bg-[#E2B616] text-black text-xs font-black rounded-md transition-all shadow-lg active:scale-95"

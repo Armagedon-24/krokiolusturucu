@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Target, PlusCircle, Flame, Droplet, Shield, Info, AlertTriangle } from 'lucide-react';
 import { useStore } from '../../../store/useStore';
 import { HelpTooltip } from '../../UI/HelpTooltip';
-import { formatForensicReport } from '../../../utils/forensicReport';
+import { formatForensicReport, formatForensicSummary } from '../../../utils/forensicReport';
 import { ForensicReportPreview, ForensicPdfButton } from '../../UI/ForensicReportPreview';
 
 const CHOKE_TYPES = [
@@ -25,7 +25,7 @@ export const GunshotDistanceCalculator: React.FC = () => {
   const [estimatedDistance, setEstimatedDistance] = useState<string>('Belirsiz');
   const [classification, setClassification] = useState<string>('Bulgu Seçiniz');
 
-  const { addObject } = useStore();
+  const { addObject, addNotification } = useStore();
 
   useEffect(() => {
     if (weaponType === 'shotgun') {
@@ -111,11 +111,12 @@ export const GunshotDistanceCalculator: React.FC = () => {
     });
   }, [weaponType, spread, choke, hasBurn, hasSoot, hasStippling, hasWipe, classification, estimatedDistance]);
   const reportText = useMemo(() => formatForensicReport(report), [report]);
+  const summaryText = useMemo(() => formatForensicSummary(report), [report]);
 
   const handleAddToCanvas = () => {
     addObject({
       type: 'text',
-      text: reportText,
+      text: summaryText,
       x: 300,
       y: 300,
       width: 360,
@@ -124,6 +125,7 @@ export const GunshotDistanceCalculator: React.FC = () => {
       fontFamily: 'Inter',
       fontStyle: 'bold'
     });
+    addNotification({ type: 'success', message: 'Hesaplama kısa özeti rapora (kroki) eklendi' });
   };
 
   return (
@@ -298,7 +300,7 @@ export const GunshotDistanceCalculator: React.FC = () => {
           </div>
         </div>
 
-        <ForensicReportPreview text={reportText} report={report} />
+        <ForensicReportPreview text={reportText} summaryText={summaryText} report={report} />
 
         {/* Info Box */}
         <div className="p-4 bg-orange-500/5 border border-orange-500/10 rounded-2xl flex gap-3 items-start shadow-inner">
