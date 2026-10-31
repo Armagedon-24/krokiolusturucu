@@ -121,47 +121,19 @@ export const YawMarkCalculator: React.FC = () => {
   const summaryText = useMemo(() => formatForensicSummary(report), [report]);
 
   const handleAddToCanvas = () => {
-    const seg = (ax: number, ay: number, bx: number, by: number, color: string, th = 3) => {
-      const dx = bx - ax, dy = by - ay;
-      addObject({ type: 'rect', x: ax, y: ay, width: Math.max(2, Math.sqrt(dx * dx + dy * dy)), height: th, rotation: (Math.atan2(dy, dx) * 180) / Math.PI, fill: color, stroke: color, strokeWidth: 0.5 });
-    };
-
-    const Rm = radiusMode === 'chord' ? radiusFromChord(chord, midOrd) : radius;
-    const scale = Math.min(5, 330 / Math.max(1, Rm));
-    const R = Math.max(60, Rm * scale);
-    const baseX = 260;
-    const baseY = 330;
-    const cx = baseX;
-    const cy = baseY - R;
-    const half = (50 * Math.PI) / 180;
-
-    // Yaw izi (yay — rect parçalarıyla)
-    const N = 14;
-    for (let i = 0; i < N; i++) {
-      const t1 = -half + (i / N) * 2 * half;
-      const t2 = -half + ((i + 1) / N) * 2 * half;
-      seg(cx + R * Math.sin(t1), cy + R * Math.cos(t1), cx + R * Math.sin(t2), cy + R * Math.cos(t2), '#263238', 4);
-    }
-    // Yarıçap çizgisi (kesikli, dikey)
-    addObject({ type: 'line', x: cx, y: cy, width: 2, height: R, dash: [5, 5], fill: '#9E9E9E' });
-    addObject({ type: 'text', text: `R = ${trNum(Rm, 1)} m`, x: cx + 10, y: cy + R / 2 - 8, width: 120, fontSize: 10, fill: '#37474F', fontFamily: 'Inter', fontStyle: 'bold' });
-    // Araç (yay başında)
-    addObject({ type: 'rect', x: cx + R * Math.sin(-half) - 24, y: cy + R * Math.cos(-half) - 10, width: 48, height: 20, rotation: -50, cornerRadius: 4, fill: '#1565C0', stroke: '#0D47A1', strokeWidth: 2 });
-    // Sonuç
-    addObject({ type: 'text', text: `≈ ${trNum(speed, 0)} km/s (${trNum(speedMin, 0)}–${trNum(speedMax, 0)})`, x: cx + R * Math.sin(half) + 16, y: baseY - 26, width: 180, fontSize: 13, fill: '#B71C1C', fontFamily: 'Inter', fontStyle: 'bold' });
-
+    // Yalnızca kısa özet metni tuvale eklenir (şema/çizim eklenmez)
     addObject({
       type: 'text',
       text: summaryText,
-      x: baseX - 20,
-      y: baseY + 34,
-      width: 320,
+      x: 200,
+      y: 300,
+      width: 340,
       fontSize: 10,
       fill: '#000000',
       fontFamily: 'Inter',
       fontStyle: 'bold',
     });
-    addNotification({ type: 'success', message: 'Şema ve kısa özet tuvale aktarıldı' });
+    addNotification({ type: 'success', message: 'Kısa özet tuvale aktarıldı' });
   };
 
   const inputCls = 'w-full bg-[#111] border border-[#333] rounded-xl px-4 py-3 text-sm text-white focus:border-[#F5C518]/50 outline-none transition-all font-mono';

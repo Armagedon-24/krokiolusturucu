@@ -93,39 +93,20 @@ export const SightDistanceCalculator: React.FC = () => {
   const summaryText = useMemo(() => formatForensicSummary(report), [report]);
 
   const handleAddToCanvas = () => {
-    const scale = Math.min(5, 340 / Math.max(1, Math.max(calc.isd, available || calc.isd)));
-    const baseX = 220;
-    const baseY = 300;
-    const isdPx = Math.max(90, calc.isd * scale);
-
-    // Ana yol
-    addObject({ type: 'rect', x: baseX - 50, y: baseY + 20, width: isdPx + 140, height: 3, fill: '#616161' });
-    // Gözlemci (taşıt çıkışında)
-    addObject({ type: 'rect', x: baseX - 10, y: baseY - 24, width: 20, height: 20, cornerRadius: 3, fill: '#1565C0', stroke: '#0D47A1', strokeWidth: 1.5 });
-    addObject({ type: 'text', text: 'Gözlemci', x: baseX - 30, y: baseY - 44, width: 80, fontSize: 9, fill: '#0D47A1', fontFamily: 'Inter', fontStyle: 'bold' });
-    // Engel (ana yoldaki taşıt)
-    addObject({ type: 'rect', x: baseX + isdPx - 30, y: baseY - 14, width: 56, height: 22, cornerRadius: 5, fill: '#E53935', stroke: '#B71C1C', strokeWidth: 2 });
-    // Görüş hattı (kesikli)
-    addObject({ type: 'line', x: baseX + 10, y: baseY - 14, width: Math.max(30, isdPx - 42), height: 2, dash: [6, 5], fill: '#455A64' });
-    // Etiketler
-    addObject({ type: 'text', text: `Gerekli görüş (ISD): ${trNum(calc.isd, 0)} m`, x: baseX, y: baseY + 30, width: 230, fontSize: 10, fill: '#37474F', fontFamily: 'Inter', fontStyle: 'bold' });
-    if (available > 0) {
-      addObject({ type: 'text', text: `Mevcut: ${trNum(available, 0)} m — ${calc.verdict === 'ok' ? 'YETERLİ' : 'YETERSİZ'}`, x: baseX, y: baseY + 48, width: 280, fontSize: 11, fill: calc.verdict === 'ok' ? '#1B5E20' : '#B71C1C', fontFamily: 'Inter', fontStyle: 'bold' });
-    }
-
+    // Yalnızca kısa özet metni tuvale eklenir (şema/çizim eklenmez)
     addObject({
       type: 'text',
       text: summaryText,
-      x: baseX - 20,
-      y: baseY + (available > 0 ? 78 : 58),
-      width: 320,
+      x: 200,
+      y: 300,
+      width: 340,
       fontSize: 10,
       fill: '#000000',
       fontFamily: 'Inter',
       fontStyle: 'bold',
     });
-    addNotification({ type: 'success', message: 'Şema ve kısa özet tuvale aktarıldı' });
-  }
+    addNotification({ type: 'success', message: 'Kısa özet tuvale aktarıldı' });
+  };
   const inputCls = 'w-full bg-[#111] border border-[#333] rounded-xl px-4 py-3 text-sm text-white focus:border-[#F5C518]/50 outline-none transition-all font-mono';
 
   return (

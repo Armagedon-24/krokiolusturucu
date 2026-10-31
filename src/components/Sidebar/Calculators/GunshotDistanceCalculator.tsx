@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Target, PlusCircle, Flame, Droplet, Shield, Info, AlertTriangle } from 'lucide-react';
 import { useStore } from '../../../store/useStore';
 import { HelpTooltip } from '../../UI/HelpTooltip';
-import { formatForensicReport, formatForensicSummary, trNum } from '../../../utils/forensicReport';
+import { formatForensicReport, formatForensicSummary } from '../../../utils/forensicReport';
 import { ForensicReportPreview, ForensicPdfButton } from '../../UI/ForensicReportPreview';
 
 const CHOKE_TYPES = [
@@ -114,44 +114,19 @@ export const GunshotDistanceCalculator: React.FC = () => {
   const summaryText = useMemo(() => formatForensicSummary(report), [report]);
 
   const handleAddToCanvas = () => {
-    const seg = (ax: number, ay: number, bx: number, by: number, color: string, th = 3) => {
-      const dx = bx - ax, dy = by - ay;
-      addObject({ type: 'rect', x: ax, y: ay, width: Math.max(2, Math.sqrt(dx * dx + dy * dy)), height: th, rotation: (Math.atan2(dy, dx) * 180) / Math.PI, fill: color, stroke: color, strokeWidth: 0.5 });
-    };
-
-    const baseX = 230;
-    const baseY = 290;
-    const r = Math.max(14, Math.min(60, (spread * 3) / 2));
-    const cx = baseX + 110;
-
-    // Namlu
-    addObject({ type: 'rect', x: baseX - 70, y: baseY - 4, width: 36, height: 8, cornerRadius: 2, fill: '#37474F', stroke: '#263238', strokeWidth: 1 });
-    addObject({ type: 'text', text: 'Namlu', x: baseX - 70, y: baseY + 10, width: 60, fontSize: 9, fill: '#37474F', fontFamily: 'Inter', fontStyle: 'bold' });
-    // Saçma yayılımı (daire — rect parçalarıyla)
-    const N = 18;
-    for (let i = 0; i < N; i++) {
-      const a1 = (i / N) * 2 * Math.PI, a2 = ((i + 1) / N) * 2 * Math.PI;
-      seg(cx + r * Math.cos(a1), baseY + r * Math.sin(a1), cx + r * Math.cos(a2), baseY + r * Math.sin(a2), '#FF5722', 2.5);
-    }
-    addObject({ type: 'text', text: `Yayılım: ${trNum(spread, 1)} cm`, x: cx - 44, y: baseY - r - 22, width: 140, fontSize: 10, fill: '#FF5722', fontFamily: 'Inter', fontStyle: 'bold' });
-    // Hedef levha
-    addObject({ type: 'rect', x: baseX + 220, y: baseY - 55, width: 10, height: 110, fill: '#CFD8DC', stroke: '#90A4AE', strokeWidth: 1.5 });
-    // Mesafe (kesikli)
-    addObject({ type: 'line', x: baseX + 20, y: baseY + 34, width: 200, height: 2, dash: [5, 5], fill: '#546E7A' });
-    addObject({ type: 'text', text: `Tahmini mesafe: ${estimatedDistance}`, x: baseX + 30, y: baseY + 42, width: 240, fontSize: 11, fill: '#37474F', fontFamily: 'Inter', fontStyle: 'bold' });
-
+    // Yalnızca kısa özet metni tuvale eklenir (şema/çizim eklenmez)
     addObject({
       type: 'text',
       text: summaryText,
-      x: baseX - 20,
-      y: baseY + 72,
-      width: 320,
+      x: 200,
+      y: 300,
+      width: 340,
       fontSize: 10,
       fill: '#000000',
       fontFamily: 'Inter',
       fontStyle: 'bold',
     });
-    addNotification({ type: 'success', message: 'Şema ve kısa özet tuvale aktarıldı' });
+    addNotification({ type: 'success', message: 'Kısa özet tuvale aktarıldı' });
   };
 
   return (

@@ -123,126 +123,19 @@ export const PedestrianLaunchCalculator: React.FC = () => {
   const summaryText = useMemo(() => formatForensicSummary(report), [report]);
 
   const handleAddToCanvas = () => {
-    const scale = 15;
-    const baseX = 200;
-    const baseY = 350;
-    const dPx = Math.min(500, throwDistance * scale);
-    const hPx = maxHeight * scale;
-    const vehicleLen = calculatedSpeed * 0.8;
-
-    addObject({
-      type: 'rect',
-      x: baseX - vehicleLen / 2,
-      y: baseY - 20,
-      width: vehicleLen,
-      height: 40,
-      fill: '#E53935',
-      stroke: '#b71c1c',
-      strokeWidth: 2,
-      cornerRadius: 4,
-    });
-
-    addObject({
-      type: 'text',
-      text: `Araç: ${Math.round(calculatedSpeed)} km/h`,
-      x: baseX - 30,
-      y: baseY - 50,
-      width: 100,
-      fontSize: 10,
-      fill: '#E53935',
-      fontFamily: 'Inter',
-      fontStyle: 'bold',
-    });
-
-    addObject({
-      type: 'line',
-      x: baseX,
-      y: baseY,
-      width: dPx + 10,
-      height: hPx + 10,
-      points: (() => {
-        const pts: number[] = [];
-        const segments = 30;
-        for (let i = 0; i <= segments; i++) {
-          const t = i / segments;
-          const px = dPx * t;
-          const py = -hPx * 4 * t * (1 - t);
-          pts.push(px, py);
-        }
-        return pts;
-      })(),
-      dash: [6, 4],
-      stroke: '#FF5722',
-      strokeWidth: 2,
-    });
-
-    addObject({
-      type: 'rect',
-      x: baseX - 5,
-      y: baseY - 5,
-      width: 10,
-      height: 10,
-      rotation: 45,
-      fill: '#1565C0',
-      stroke: '#fff',
-      strokeWidth: 2,
-    });
-
-    addObject({
-      type: 'rect',
-      x: baseX + dPx - 5,
-      y: baseY - 5,
-      width: 10,
-      height: 10,
-      rotation: 45,
-      fill: '#FF5722',
-      stroke: '#fff',
-      strokeWidth: 2,
-    });
-
-    addObject({
-      type: 'text',
-      text: `Fırlatma: ${throwDistance.toFixed(1)}m`,
-      x: baseX + dPx + 12,
-      y: baseY - 12,
-      width: 120,
-      fontSize: 10,
-      fill: '#FF5722',
-      fontFamily: 'Inter',
-      fontStyle: 'bold',
-    });
-
-    addObject({
-      type: 'line',
-      x: baseX,
-      y: baseY + 20,
-      width: dPx,
-      height: 2,
-      points: [0, 0, dPx, 0],
-      stroke: '#FF5722',
-      strokeWidth: 1,
-      dash: [3, 3],
-    });
-
+    // Yalnızca kısa özet metni tuvale eklenir (şema/çizim eklenmez)
     addObject({
       type: 'text',
       text: summaryText,
-      x: baseX - 20,
-      y: baseY + 40,
-      width: 320,
+      x: 200,
+      y: 300,
+      width: 340,
       fontSize: 10,
-      fill: '#000',
+      fill: '#000000',
       fontFamily: 'Inter',
       fontStyle: 'bold',
     });
-
-    setPedestrianLaunch({
-      canvasData: { vehicleSpeed: calculatedSpeed, pedestrianHeight, pedestrianWeight, launchSpeed, launchAngle, throwDistance: throwDistance, flightDistance, slideDistance, flightTime, landingSpeed, maxHeight, pedestrianState },
-      isPlaying: true,
-      currentTime: 0,
-      duration: flightTime,
-    });
-    addNotification({ type: 'success', message: 'Şema ve kısa özet tuvale aktarıldı' });
+    addNotification({ type: 'success', message: 'Kısa özet tuvale aktarıldı' });
   };
 
   const launchData: PedestrianLaunchData = {
@@ -473,7 +366,7 @@ export const PedestrianLaunchCalculator: React.FC = () => {
           <button
             onClick={handleAddToCanvas}
             className="flex items-center gap-1.5 px-3 py-2 text-[10px] font-bold text-gray-400 hover:text-[#F5C518] border border-[#333] hover:border-[#F5C518]/50 rounded-lg transition-all"
-            title="Şema ve kısa özeti tuvale aktarır"
+            title="Kısa özeti tuvale aktarır"
           >
             TUVALE AKTAR
           </button>

@@ -150,39 +150,19 @@ export const ShotDirectionCalculator: React.FC = () => {
   const summaryText = useMemo(() => formatForensicSummary(report), [report]);
 
   const handleAddToCanvas = () => {
-    const baseX = 300;
-    const baseY = 300;
-
-    // Duvar / yüzey
-    addObject({ type: 'rect', x: baseX + 120, y: baseY - 95, width: 10, height: 190, fill: '#CFD8DC', stroke: '#90A4AE', strokeWidth: 1.5 });
-    // Giriş deliği (kırmızı)
-    addObject({ type: 'rect', x: baseX + 114, y: baseY - 6, width: 12, height: 12, rotation: 45, fill: '#B71C1C', stroke: '#fff', strokeWidth: 1 });
-    addObject({ type: 'text', text: 'Giriş', x: baseX + 96, y: baseY + 16, width: 60, fontSize: 9, fill: '#B71C1C', fontFamily: 'Inter', fontStyle: 'bold' });
-    // Çıkış deliği (mavi)
-    if (hasExitWound) {
-      addObject({ type: 'rect', x: baseX + 138, y: baseY - 5, width: 10, height: 10, rotation: 45, fill: '#1565C0', stroke: '#fff', strokeWidth: 1 });
-      addObject({ type: 'text', text: 'Çıkış', x: baseX + 136, y: baseY + 16, width: 60, fontSize: 9, fill: '#0D47A1', fontFamily: 'Inter', fontStyle: 'bold' });
-    }
-    // Atış hattı (kesikli, geriye projeksiyon)
-    addObject({ type: 'line', x: baseX - 170, y: baseY, width: 290, height: 2, dash: [8, 6], fill: '#E53935' });
-    // Atıcı konumu
-    addObject({ type: 'rect', x: baseX - 178, y: baseY - 9, width: 18, height: 18, fill: '#37474F', stroke: '#263238', strokeWidth: 1 });
-    addObject({ type: 'text', text: `Atıcı ≈ ${trNum(shooterDistance, 1)} m / ${trNum(shooterHeight, 1)} m`, x: baseX - 210, y: baseY + 18, width: 230, fontSize: 10, fill: '#37474F', fontFamily: 'Inter', fontStyle: 'bold' });
-    // Açı bilgisi
-    addObject({ type: 'text', text: `Yatay: ${trNum(horizontalAngle, 1)}° · Dikey: ${trNum(impactAngle, 1)}°`, x: baseX - 60, y: baseY - 50, width: 260, fontSize: 11, fill: '#B71C1C', fontFamily: 'Inter', fontStyle: 'bold' });
-
+    // Yalnızca kısa özet metni tuvale eklenir (şema/çizim eklenmez)
     addObject({
       type: 'text',
       text: summaryText,
-      x: baseX - 20,
-      y: baseY + 52,
-      width: 320,
+      x: 200,
+      y: 300,
+      width: 340,
       fontSize: 10,
       fill: '#000000',
       fontFamily: 'Inter',
       fontStyle: 'bold',
     });
-    addNotification({ type: 'success', message: 'Şema ve kısa özet tuvale aktarıldı' });
+    addNotification({ type: 'success', message: 'Kısa özet tuvale aktarıldı' });
   };
 
   const handleAnimationOpen = () => {
@@ -390,7 +370,7 @@ export const ShotDirectionCalculator: React.FC = () => {
           <button
             onClick={handleAddToCanvas}
             className="flex items-center gap-1.5 px-3 py-2 text-[10px] font-bold text-gray-400 hover:text-[#F5C518] border border-[#333] hover:border-[#F5C518]/50 rounded-lg transition-all"
-            title="Şema ve kısa özeti tuvale aktarır"
+            title="Kısa özeti tuvale aktarır"
           >
             TUVALE AKTAR
           </button>

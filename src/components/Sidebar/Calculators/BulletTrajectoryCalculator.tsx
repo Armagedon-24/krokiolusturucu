@@ -290,44 +290,19 @@ export const BulletTrajectoryCalculator: React.FC = () => {
   const summaryText = useMemo(() => formatForensicSummary(report), [report]);
 
   const handleAddToCanvas = () => {
-    const diag = (ax: number, ay: number, bx: number, by: number, color: string, sw = 2) => {
-      addObject({ type: 'symbol', symbolId: 'a-5', x: ax, y: ay, width: Math.max(2, Math.abs(bx - ax)), height: Math.max(2, Math.abs(by - ay)), startX: ax, startY: ay, endX: bx, endY: by, fill: color, stroke: color, strokeWidth: sw });
-    };
-
-    const scale = Math.min(5, 340 / Math.max(1, distance));
-    const baseX = 210;
-    const baseY = 320;
-    const dPx = Math.max(90, distance * scale);
-    const rise = Math.min(130, Math.max(18, dPx * Math.tan((angle * Math.PI) / 180)));
-
-    // Zemin
-    addObject({ type: 'rect', x: baseX - 50, y: baseY + 2, width: dPx + 130, height: 2.5, fill: '#9E9E9E' });
-    // Atış kaynağı
-    addObject({ type: 'rect', x: baseX - 6, y: baseY - 6, width: 12, height: 12, rotation: 45, fill: '#1565C0', stroke: '#fff', strokeWidth: 1 });
-    // Atış hattı (yönlü ok)
-    diag(baseX, baseY, baseX + dPx, baseY - rise, '#E53935', 2);
-    // Hedef nokta
-    addObject({ type: 'rect', x: baseX + dPx - 5, y: baseY - rise - 5, width: 10, height: 10, rotation: 45, fill: '#E53935', stroke: '#fff', strokeWidth: 1 });
-    // Etiketler
-    addObject({ type: 'text', text: `${trNum(angle, 1)}°`, x: baseX + 36, y: baseY - 16, width: 60, fontSize: 10, fill: '#B71C1C', fontFamily: 'Inter', fontStyle: 'bold' });
-    addObject({ type: 'text', text: `${trNum(distance, 1)} m`, x: baseX + dPx / 2 - 22, y: baseY + 12, width: 90, fontSize: 10, fill: '#37474F', fontFamily: 'Inter', fontStyle: 'bold' });
-    const resText = mode === 'height'
-      ? `Kaynak yüksekliği ≈ ${trNum(height, 2)} m (${trNum(heightMin, 2)}–${trNum(heightMax, 2)})`
-      : `Tahmini mesafe ≈ ${trNum(distRes, 1)} m`;
-    addObject({ type: 'text', text: resText, x: baseX + dPx / 2 - 60, y: baseY - rise - 34, width: 280, fontSize: 12, fill: '#B71C1C', fontFamily: 'Inter', fontStyle: 'bold' });
-
+    // Yalnızca kısa özet metni tuvale eklenir (şema/çizim eklenmez)
     addObject({
       type: 'text',
       text: summaryText,
-      x: baseX - 20,
-      y: baseY + 40,
-      width: 320,
+      x: 200,
+      y: 300,
+      width: 340,
       fontSize: 10,
       fill: '#000000',
       fontFamily: 'Inter',
       fontStyle: 'bold',
     });
-    addNotification({ type: 'success', message: 'Şema ve kısa özet tuvale aktarıldı' });
+    addNotification({ type: 'success', message: 'Kısa özet tuvale aktarıldı' });
   };
 
   const inputCls = 'w-full bg-[#111] border border-[#333] rounded-xl px-4 py-3 text-sm text-white focus:border-[#F5C518]/50 outline-none transition-all font-mono';

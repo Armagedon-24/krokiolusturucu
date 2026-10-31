@@ -146,42 +146,19 @@ export const CollisionSpeedCalculator: React.FC = () => {
   const summaryText = useMemo(() => formatForensicSummary(report), [report]);
 
   const handleAddToCanvas = () => {
-    const scale = Math.min(8, 160 / Math.max(1, Math.max(distance1, distance2)));
-    const baseX = 300;
-    const baseY = 300;
-    const d1Px = Math.max(24, distance1 * scale);
-    const d2Px = Math.max(24, distance2 * scale);
-
-    // Araç 1 (sol, mavi)
-    addObject({ type: 'rect', x: baseX - 150, y: baseY - 42, width: 60, height: 24, cornerRadius: 5, fill: '#1565C0', stroke: '#0D47A1', strokeWidth: 2 });
-    addObject({ type: 'text', text: `Araç 1: v₁ ≈ ${trNum(preSpeed1, 0)} km/s (${trNum(mass1, 0)} kg)`, x: baseX - 158, y: baseY - 66, width: 220, fontSize: 10, fill: '#0D47A1', fontFamily: 'Inter', fontStyle: 'bold' });
-    // Araç 2 (sol-alt, kırmızı)
-    addObject({ type: 'rect', x: baseX - 150, y: baseY + 18, width: 60, height: 24, cornerRadius: 5, fill: '#E53935', stroke: '#B71C1C', strokeWidth: 2 });
-    addObject({ type: 'text', text: `Araç 2: v₂ ≈ ${trNum(preSpeed2, 0)} km/s (${trNum(mass2, 0)} kg)`, x: baseX - 158, y: baseY + 50, width: 220, fontSize: 10, fill: '#B71C1C', fontFamily: 'Inter', fontStyle: 'bold' });
-
-    // Çarpışma noktası (çapraz X — iki ince rect)
-    addObject({ type: 'rect', x: baseX - 8, y: baseY - 1, width: 16, height: 2.5, rotation: 45, fill: '#263238', stroke: '#263238', strokeWidth: 0.5 });
-    addObject({ type: 'rect', x: baseX - 8, y: baseY - 1, width: 16, height: 2.5, rotation: -45, fill: '#263238', stroke: '#263238', strokeWidth: 0.5 });
-    addObject({ type: 'text', text: 'ÇARPIŞMA', x: baseX - 32, y: baseY - 20, width: 90, fontSize: 8, fill: '#263238', fontFamily: 'Inter', fontStyle: 'bold' });
-
-    // Çarpışma sonrası savrulma izleri (kesikli)
-    addObject({ type: 'line', x: baseX + 12, y: baseY - 30, width: d1Px, height: 3, dash: [9, 5], fill: '#1565C0' });
-    addObject({ type: 'text', text: `${trNum(distance1, 1)} m`, x: baseX + 12 + d1Px + 6, y: baseY - 36, width: 70, fontSize: 9, fill: '#1565C0', fontFamily: 'Inter', fontStyle: 'bold' });
-    addObject({ type: 'line', x: baseX + 12, y: baseY + 30, width: d2Px, height: 3, dash: [9, 5], fill: '#E53935' });
-    addObject({ type: 'text', text: `${trNum(distance2, 1)} m`, x: baseX + 12 + d2Px + 6, y: baseY + 24, width: 70, fontSize: 9, fill: '#E53935', fontFamily: 'Inter', fontStyle: 'bold' });
-
+    // Yalnızca kısa özet metni tuvale eklenir (şema/çizim eklenmez)
     addObject({
       type: 'text',
       text: summaryText,
-      x: baseX - 20,
-      y: baseY + 76,
-      width: 320,
+      x: 200,
+      y: 300,
+      width: 340,
       fontSize: 10,
       fill: '#000000',
       fontFamily: 'Inter',
       fontStyle: 'bold',
     });
-    addNotification({ type: 'success', message: 'Şema ve kısa özet tuvale aktarıldı' });
+    addNotification({ type: 'success', message: 'Kısa özet tuvale aktarıldı' });
   };
 
   return (

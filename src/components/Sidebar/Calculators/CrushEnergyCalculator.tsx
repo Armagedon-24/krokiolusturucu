@@ -111,34 +111,19 @@ export const CrushEnergyCalculator: React.FC = () => {
   const summaryText = useMemo(() => formatForensicSummary(report), [report]);
 
   const handleAddToCanvas = () => {
-    const baseX = 220;
-    const baseY = 300;
-    const len = 150;
-    const cPx = Math.max(10, Math.min(70, crush * 0.9));
-
-    // Duvar
-    addObject({ type: 'rect', x: baseX - 2, y: baseY - 46, width: 8, height: 100, fill: '#616161' });
-    // Araç gövdesi (üstten görünüm)
-    addObject({ type: 'rect', x: baseX + cPx, y: baseY - 30, width: len, height: 60, cornerRadius: 6, fill: '#ECEFF1', stroke: '#546E7A', strokeWidth: 2 });
-    // Deformasyon bölgesi
-    addObject({ type: 'rect', x: baseX + 6, y: baseY - 30, width: cPx, height: 60, fill: '#FFCDD2', stroke: '#E53935', strokeWidth: 1.5 });
-    addObject({ type: 'text', text: `c̄ = ${trNum(crush, 1)} cm`, x: baseX + 2, y: baseY + 40, width: 130, fontSize: 10, fill: '#B71C1C', fontFamily: 'Inter', fontStyle: 'bold' });
-    addObject({ type: 'text', text: `L = ${trNum(width, 0)} cm · ${trNum(mass, 0)} kg`, x: baseX + cPx + 16, y: baseY - 52, width: 180, fontSize: 10, fill: '#546E7A', fontFamily: 'Inter', fontStyle: 'bold' });
-    // Sonuç
-    addObject({ type: 'text', text: `EBS ≈ ${trNum(ebs, 0)} km/s (${trNum(ebsMin, 0)}–${trNum(ebsMax, 0)})`, x: baseX + 30, y: baseY + 62, width: 240, fontSize: 13, fill: '#B71C1C', fontFamily: 'Inter', fontStyle: 'bold' });
-
+    // Yalnızca kısa özet metni tuvale eklenir (şema/çizim eklenmez)
     addObject({
       type: 'text',
       text: summaryText,
-      x: baseX - 20,
-      y: baseY + 90,
-      width: 320,
+      x: 200,
+      y: 300,
+      width: 340,
       fontSize: 10,
       fill: '#000000',
       fontFamily: 'Inter',
       fontStyle: 'bold',
     });
-    addNotification({ type: 'success', message: 'Şema ve kısa özet tuvale aktarıldı' });
+    addNotification({ type: 'success', message: 'Kısa özet tuvale aktarıldı' });
   };
 
   const inputCls = 'w-full bg-[#111] border border-[#333] rounded-xl px-4 py-3 text-sm text-white focus:border-[#F5C518]/50 outline-none transition-all font-mono';

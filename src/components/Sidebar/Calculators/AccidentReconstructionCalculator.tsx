@@ -173,163 +173,19 @@ export const AccidentReconstructionCalculator: React.FC = () => {
   const summaryText = useMemo(() => formatForensicSummary(report), [report]);
 
   const handleAddToCanvas = () => {
-    const baseX = 200;
-    const baseY = 200;
-
-    accidentReconstruction.vehicles.filter((v): v is VehicleData => !!v).forEach((v) => {
-      addObject({
-        type: 'rect',
-        x: baseX + v.startX,
-        y: baseY + v.startY,
-        width: 60,
-        height: 30,
-        rotation: v.startRotation,
-        fill: v.color,
-        stroke: '#000',
-        strokeWidth: 1,
-      });
-
-      addObject({
-        type: 'line',
-        x: baseX + v.startX,
-        y: baseY + v.startY,
-        width: Math.abs(v.collisionX - v.startX) + Math.abs(v.finalX - v.collisionX) + 20,
-        height: Math.abs(v.collisionY - v.startY) + Math.abs(v.finalY - v.collisionY) + 20,
-        fill: v.color,
-        points: [
-          0, 0,
-          v.collisionX - v.startX, v.collisionY - v.startY,
-          v.finalX - v.startX, v.finalY - v.startY,
-        ],
-        dash: [6, 4],
-        stroke: v.color,
-        strokeWidth: 2,
-      });
-
-      if (v.showBrakeMarks && v.brakeMarkType !== 'none') {
-        const brakeStartX = baseX + v.startX + (v.collisionX - v.startX) * 0.3;
-        const brakeStartY = baseY + v.startY + (v.collisionY - v.startY) * 0.3;
-        const pts: number[] = [];
-        for (let i = 0; i <= 10; i++) {
-          const t = i / 10;
-          const bx = brakeStartX + (baseX + v.collisionX - brakeStartX) * t;
-          const by = brakeStartY + (baseY + v.collisionY - brakeStartY) * t;
-          const curve = v.brakeMarkType === 'curved' ? Math.sin(t * Math.PI) * v.brakeMarkCurvature * 15 : 0;
-          const dx = v.collisionX - v.startX;
-          const dy = v.collisionY - v.startY;
-          const len = Math.sqrt(dx * dx + dy * dy) || 1;
-          pts.push(bx + (-dy / len) * curve - baseX, by + (dx / len) * curve - baseY);
-        }
-        addObject({
-          type: 'line',
-          x: baseX,
-          y: baseY,
-          width: Math.abs(v.collisionX - v.startX) + 40,
-          height: Math.abs(v.collisionY - v.startY) + 40,
-          points: pts,
-          stroke: '#333',
-          strokeWidth: Math.max(2, v.brakeMarkWidth * 3),
-        });
-      }
-
-      addObject({
-        type: 'rect',
-        x: baseX + v.collisionX - 5,
-        y: baseY + v.collisionY - 5,
-        width: 10,
-        height: 10,
-        rotation: 45,
-        fill: '#FF5722',
-        stroke: '#fff',
-        strokeWidth: 2,
-      });
-
-      addObject({
-        type: 'text',
-        text: `${v.name}: ${v.initialSpeed} km/h`,
-        x: baseX + v.startX - 20,
-        y: baseY + v.startY - 25,
-        width: 120,
-        fontSize: 10,
-        fill: '#333',
-        fontFamily: 'Inter',
-        fontStyle: 'bold',
-      });
-
-      addObject({
-        type: 'text',
-        text: `Çarpışma: ${v.impactSpeed} km/h ${v.impactAngle}°`,
-        x: baseX + v.collisionX + 10,
-        y: baseY + v.collisionY - 10,
-        width: 140,
-        fontSize: 9,
-        fill: '#E53935',
-        fontFamily: 'Inter',
-        fontStyle: 'bold',
-      });
-    });
-
+    // Yalnızca kısa özet metni tuvale eklenir (şema/çizim eklenmez)
     addObject({
       type: 'text',
       text: summaryText,
-      x: baseX + 10,
-      y: baseY - 80,
-      width: 320,
+      x: 200,
+      y: 300,
+      width: 340,
       fontSize: 10,
-      fill: '#000',
+      fill: '#000000',
       fontFamily: 'Inter',
       fontStyle: 'bold',
     });
-
-    // Draw pedestrians
-    (accidentReconstruction.pedestrians || []).filter(p => p.show).forEach((p) => {
-      const px = baseX + p.startX;
-      const py = baseY + p.startY;
-      const pSize = p.size === 'child' ? 10 : 16;
-
-      addObject({
-        type: 'image',
-        symbolId: 'pedestrian',
-        x: px - pSize,
-        y: py - pSize * 2.5,
-        width: pSize * 2,
-        height: pSize * 2.5,
-        rotation: 0,
-        scaleX: 1,
-        scaleY: 1,
-        fill: p.color,
-        stroke: '#000',
-        strokeWidth: 1,
-      });
-
-      addObject({
-        type: 'line',
-        x: baseX,
-        y: baseY,
-        width: Math.abs(p.endX - p.startX) + 20,
-        height: Math.abs(p.endY - p.startY) + 20,
-        points: [
-          p.startX, p.startY,
-          p.endX, p.endY,
-        ],
-        dash: [4, 4],
-        stroke: p.color,
-        strokeWidth: 1.5,
-      });
-
-      addObject({
-        type: 'text',
-        text: `${p.name} (${p.speed} km/h)`,
-        x: px - 30,
-        y: py - pSize * 2.5 - 20,
-        width: 100,
-        fontSize: 9,
-        fill: '#333',
-        fontFamily: 'Inter',
-        fontStyle: 'bold',
-      });
-    });
-    addNotification({ type: 'success', message: 'Şema ve kısa özet tuvale aktarıldı' });
+    addNotification({ type: 'success', message: 'Kısa özet tuvale aktarıldı' });
   };
 
   return (
@@ -773,7 +629,7 @@ export const AccidentReconstructionCalculator: React.FC = () => {
             <button
               onClick={handleAddToCanvas}
               className="flex items-center gap-1.5 px-3 py-2 text-[10px] font-bold text-gray-400 hover:text-[#F5C518] border border-[#333] hover:border-[#F5C518]/50 rounded-lg transition-all"
-              title="Şema ve kısa özeti tuvale aktarır"
+              title="Kısa özeti tuvale aktarır"
             >
               TUVALE AKTAR
             </button>

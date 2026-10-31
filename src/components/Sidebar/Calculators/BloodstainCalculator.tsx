@@ -99,45 +99,19 @@ export const BloodstainCalculator: React.FC = () => {
   const summaryText = useMemo(() => formatForensicSummary(report), [report]);
 
   const handleAddToCanvas = () => {
-    const diag = (ax: number, ay: number, bx: number, by: number, color: string, sw = 2) => {
-      addObject({ type: 'symbol', symbolId: 'a-5', x: ax, y: ay, width: Math.max(2, Math.abs(bx - ax)), height: Math.max(2, Math.abs(by - ay)), startX: ax, startY: ay, endX: bx, endY: by, fill: color, stroke: color, strokeWidth: sw });
-    };
-
-    const baseX = 300;
-    const baseY = 300;
-    const stainLen = Math.max(16, Math.min(60, length * 3));
-    const stainW = Math.max(7, Math.min(24, width * 3));
-
-    // Zemin/duvar referans çizgisi
-    addObject({ type: 'rect', x: baseX - 170, y: baseY + 34, width: 390, height: 2.5, fill: '#9E9E9E' });
-
-    // Üç kan lekesi (geliş yönüne dönük)
-    ([-1, 0, 1] as const).forEach((k) => {
-      const sx = baseX + k * 50;
-      const sy = baseY - 10 + k * 6;
-      addObject({ type: 'rect', x: sx, y: sy, width: stainW, height: stainLen, rotation: -angle, cornerRadius: 4, fill: '#B71C1C', stroke: '#7F0000', strokeWidth: 1 });
-    });
-    // Geliş açısı etiketi
-    addObject({ type: 'text', text: `Geliş açısı ≈ ${trNum(angle, 1)}° (${trNum(angleMin, 0)}–${trNum(angleMax, 0)})`, x: baseX - 90, y: baseY + stainLen + 14, width: 250, fontSize: 11, fill: '#B71C1C', fontFamily: 'Inter', fontStyle: 'bold' });
-    // Kaynak noktası (elips geometrisinden) + yönlü ok
-    const ohPx = Math.min(120, Math.max(20, originHeight * 60));
-    const dPx = Math.min(150, Math.max(30, distanceToSource * 60));
-    diag(baseX, baseY, baseX + dPx - 6, baseY - ohPx, '#1565C0', 1.5);
-    addObject({ type: 'rect', x: baseX + dPx - 6, y: baseY - ohPx - 6, width: 12, height: 12, rotation: 45, fill: '#1565C0', stroke: '#fff', strokeWidth: 1 });
-    addObject({ type: 'text', text: `Kaynak: h=${trNum(originHeight, 2)} m · yatay ${trNum(distanceToSource, 2)} m`, x: baseX + dPx + 8, y: baseY - ohPx - 4, width: 240, fontSize: 10, fill: '#0D47A1', fontFamily: 'Inter', fontStyle: 'bold' });
-
+    // Yalnızca kısa özet metni tuvale eklenir (şema/çizim eklenmez)
     addObject({
       type: 'text',
       text: summaryText,
-      x: baseX - 20,
-      y: baseY + 66,
-      width: 320,
+      x: 200,
+      y: 300,
+      width: 340,
       fontSize: 10,
       fill: '#000000',
       fontFamily: 'Inter',
       fontStyle: 'bold',
     });
-    addNotification({ type: 'success', message: 'Şema ve kısa özet tuvale aktarıldı' });
+    addNotification({ type: 'success', message: 'Kısa özet tuvale aktarıldı' });
   };
 
   return (

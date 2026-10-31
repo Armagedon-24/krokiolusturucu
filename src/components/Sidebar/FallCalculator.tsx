@@ -92,139 +92,19 @@ export const FallCalculator: React.FC = () => {
   const summaryText = useMemo(() => formatForensicSummary(report), [report]);
 
   const handleAddToCanvas = () => {
-    const scale = 20;
-    const baseX = 250;
-    const baseY = 200;
-    const hPx = height * scale;
-    const dPx = distance * scale;
-
-    addObject({
-      type: 'rect',
-      x: baseX - 30,
-      y: baseY - hPx,
-      width: 60,
-      height: hPx,
-      fill: '#e0e0e0',
-      stroke: '#888',
-      strokeWidth: 2,
-    });
-
-    addObject({
-      type: 'line',
-      x: baseX - 80,
-      y: baseY,
-      width: 160 + dPx,
-      height: 6,
-      fill: '#666',
-      points: [0, 3, 160 + dPx, 3],
-      stroke: '#666',
-      strokeWidth: 6,
-    });
-
-    addObject({
-      type: 'line',
-      x: baseX,
-      y: baseY - hPx,
-      width: dPx + 10,
-      height: hPx + 10,
-      points: [
-        0, 0,
-        dPx * 0.25, -hPx * 0.15,
-        dPx * 0.55, hPx * 0.2,
-        dPx, hPx,
-      ],
-      dash: [6, 4],
-      stroke: '#E53935',
-      strokeWidth: 2,
-    });
-
-    addObject({
-      type: 'text',
-      text: `Bina: ${height}m`,
-      x: baseX - 25,
-      y: baseY - hPx - 20,
-      width: 80,
-      fontSize: 10,
-      fill: '#666',
-      fontFamily: 'Inter',
-      fontStyle: 'bold',
-    });
-
-    addObject({
-      type: 'rect',
-      x: baseX - 6,
-      y: baseY - hPx - 6,
-      width: 12,
-      height: 12,
-      rotation: 45,
-      fill: '#1565C0',
-      stroke: '#fff',
-      strokeWidth: 2,
-    });
-
-    addObject({
-      type: 'rect',
-      x: baseX + dPx - 6,
-      y: baseY - 6,
-      width: 12,
-      height: 12,
-      rotation: 45,
-      fill: '#FF5722',
-      stroke: '#fff',
-      strokeWidth: 2,
-    });
-
-    addObject({
-      type: 'text',
-      text: `Çarpma: ${Math.round(impactVelocity)} km/h`,
-      x: baseX + dPx + 12,
-      y: baseY - 12,
-      width: 120,
-      fontSize: 10,
-      fill: '#E53935',
-      fontFamily: 'Inter',
-      fontStyle: 'bold',
-    });
-
-    addObject({
-      type: 'line',
-      x: baseX,
-      y: baseY + 20,
-      width: dPx,
-      height: 2,
-      points: [0, 0, dPx, 0],
-      stroke: '#1565C0',
-      strokeWidth: 1,
-      dash: [3, 3],
-    });
-
-    addObject({
-      type: 'text',
-      text: `${distance.toFixed(1)}m`,
-      x: baseX + dPx / 2 - 20,
-      y: baseY + 22,
-      width: 50,
-      fontSize: 9,
-      fill: '#1565C0',
-      fontFamily: 'Inter',
-      fontStyle: 'bold',
-    });
-
+    // Yalnızca kısa özet metni tuvale eklenir (şema/çizim eklenmez)
     addObject({
       type: 'text',
       text: summaryText,
-      x: baseX - 20,
-      y: baseY + 50,
-      width: 320,
+      x: 200,
+      y: 300,
+      width: 340,
       fontSize: 10,
-      fill: '#000',
+      fill: '#000000',
       fontFamily: 'Inter',
       fontStyle: 'bold',
     });
-
-    setFallAnimation({ canvasData: undefined, isPlaying: false, currentTime: 0 });
-
-    addNotification({ type: 'success', message: 'Şema ve kısa özet tuvale aktarıldı' });
+    addNotification({ type: 'success', message: 'Kısa özet tuvale aktarıldı' });
   };
 
   return (
@@ -413,7 +293,7 @@ export const FallCalculator: React.FC = () => {
           <button
             onClick={handleAddToCanvas}
             className="flex items-center gap-1.5 px-3 py-2 text-[10px] font-bold text-gray-400 hover:text-[#F5C518] border border-[#333] hover:border-[#F5C518]/50 rounded-lg transition-all"
-            title="Şema ve kısa özeti tuvale aktarır"
+            title="Kısa özeti tuvale aktarır"
           >
             TUVALE AKTAR
           </button>
