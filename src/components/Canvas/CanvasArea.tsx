@@ -405,19 +405,32 @@ export const drawExportObject = (ctx: CanvasRenderingContext2D, obj: any, img: H
       ctx.globalAlpha = 1;
       return;
     }
-    // st-4 Döner kavşak — yatay/dikey gövde → kesikli → hub kapağı (ekrandaki sıra)
+    // st-4 Döner kavşak — beyaz gövde → SİYAH yol kenar çizgileri → kesikli → siyah çevirili halka
+    // (ekrandaki Konva motorunun birebir aynası; kenarlar beyaz kalınca krokide yol belli olmuyordu)
+    const edgeW = lineW; // max(1.5, roadWidth/20) — ekrandaki edgeWidth ile aynı
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(w / 2 - roadWidth / 2, 0, roadWidth, h);
     ctx.fillRect(0, h / 2 - roadWidth / 2, w, roadWidth);
     ctx.strokeStyle = '#000000';
+    ctx.lineWidth = edgeW;
+    ctx.lineCap = 'butt';
+    // Dikey yol kenarları
+    line(w / 2 - roadWidth / 2, 0, w / 2 - roadWidth / 2, h);
+    line(w / 2 + roadWidth / 2, 0, w / 2 + roadWidth / 2, h);
+    // Yatay yol kenarları
+    line(0, h / 2 - roadWidth / 2, w, h / 2 - roadWidth / 2);
+    line(0, h / 2 + roadWidth / 2, w, h / 2 + roadWidth / 2);
+    // Kesikli orta çizgiler
     ctx.lineWidth = lineW;
     ctx.setLineDash([20, 20]);
-    ctx.lineCap = 'butt';
     line(w / 2, 0, w / 2, h);
     line(0, h / 2, w, h / 2);
     ctx.setLineDash([]);
+    // Hub — siyah çevirili döner kavşak halkası (kenar çizgilerini kavşak içinde keser)
     ctx.beginPath(); ctx.arc(w / 2, h / 2, roadWidth * 0.8, 0, Math.PI * 2);
     ctx.fillStyle = '#ffffff'; ctx.fill();
+    ctx.lineWidth = edgeW;
+    ctx.strokeStyle = '#000000'; ctx.stroke();
     return;
   }
 
@@ -1542,19 +1555,28 @@ const IndividualObject = ({
                   </Group>
                 );
               } else {
-                // Roundabout (st-1 style) — göbek ve ada düz asfalt, hiçbir beyaz çizgi yok
+                // Roundabout (st-1 style) — beyaz gövde + SİYAH yol kenar çizgileri
+                // (kenarlar beyaz kalınca krokide yol olduğu anlaşılmıyordu)
+                const edgeWidth = centerLineWidth; // aynı kalınlık: max(1.5, roadWidth/20)
                 return (
                   <Group>
                     {/* Roads */}
                     <Rect x={w/2 - roadWidth/2} y={0} width={roadWidth} height={h} fill={roadColor} />
                     <Rect x={0} y={h/2 - roadWidth/2} width={w} height={roadWidth} fill={roadColor} />
 
+                    {/* Road Edge Lines — siyah yol kenarları */}
+                    <Line points={[w/2 - roadWidth/2, 0, w/2 - roadWidth/2, h]} stroke={lineColor} strokeWidth={edgeWidth} lineCap="butt" />
+                    <Line points={[w/2 + roadWidth/2, 0, w/2 + roadWidth/2, h]} stroke={lineColor} strokeWidth={edgeWidth} lineCap="butt" />
+                    <Line points={[0, h/2 - roadWidth/2, w, h/2 - roadWidth/2]} stroke={lineColor} strokeWidth={edgeWidth} lineCap="butt" />
+                    <Line points={[0, h/2 + roadWidth/2, w, h/2 + roadWidth/2]} stroke={lineColor} strokeWidth={edgeWidth} lineCap="butt" />
+
                     {/* Center Dashed Lines (st-1 style) */}
                     <Line points={[w/2, 0, w/2, h]} stroke={lineColor} strokeWidth={centerLineWidth} dash={centerDash} lineCap="butt" />
                     <Line points={[0, h/2, w, h/2]} stroke={lineColor} strokeWidth={centerLineWidth} dash={centerDash} lineCap="butt" />
 
-                    {/* Hub Cover — kesikli çizgilerin ÜSTÜNE çizilir; kavşak ve ada tamamen düz asfalt kalır */}
-                    <Circle x={w/2} y={h/2} radius={roadWidth * 0.8} fill={roadColor} />
+                    {/* Hub — siyah çevirili döner kavşak halkası; kenar/kesikli çizgilerin ÜSTÜNE çizilir,
+                        böylece kavşak içindeki çizgiler halka kenarında temiz biçimde kesilir */}
+                    <Circle x={w/2} y={h/2} radius={roadWidth * 0.8} fill={roadColor} stroke={lineColor} strokeWidth={edgeWidth} />
                   </Group>
                 );
               }

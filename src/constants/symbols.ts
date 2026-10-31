@@ -455,7 +455,7 @@ export const SYMBOL_CATEGORIES = [
         thumbnail: '/assets/symbols/karakalem/roads/t_junction.png', type: 'symbol', description: 'T tipi yol birleşimlerini çizmek için kullanılır.' },
       { id: 'st-3', name: 'Y Kavşak', src: '/assets/symbols/roads/y_junction.svg',
         thumbnail: '/assets/symbols/karakalem/roads/y_junction.png', type: 'symbol', description: 'Y tipi yol ayrımı veya birleşimi.' },
-      { id: 'st-4', name: 'Ada (Döner)', src: '/assets/symbols/roads/roundabout.svg?v=3',
+      { id: 'st-4', name: 'Ada (Döner)', src: '/assets/symbols/roads/roundabout.svg?v=4',
         thumbnail: '/assets/symbols/karakalem/roads/roundabout.png', type: 'symbol', description: 'Döner kavşakları ve trafik adalarını temsil eder.' },
       { id: 'st-overpass', name: 'Üst Geçit', src: '/assets/symbols/roads/ust_gecit.png',
         thumbnail: '/assets/symbols/karakalem/roads/ust_gecit.png', type: 'symbol', description: 'Yaya üst geçidi (kuşbakışı, şeffaf PNG). İki merdiveni de aynı yöne iner.' },
