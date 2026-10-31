@@ -91,6 +91,10 @@ const wrapTextByWidth = (text: string, fontSize: number, maxWidth: number): stri
   return out;
 };
 
+// UZATILABİLİR ŞERİT SEMBOLLERİ — uzatılınca desen bozulmasın diye desen tekrarıyla çizilir
+// (kaynak PNG'ler yatayda kusursuz tekrarlanabilir üretildi; ekran + export aynı seti kullanır)
+const TILE_REPEAT_SYMBOLS = ['tr-2', 'tr-skid-straight', 'st-median', 'st-sidewalk', 'f-10'];
+
 export const drawExportObject = (ctx: CanvasRenderingContext2D, obj: any, img: HTMLImageElement | null, sceneObjects: any[]) => {
   const w = obj.width ?? 50;
   const h = obj.height ?? 50;
@@ -317,6 +321,94 @@ export const drawExportObject = (ctx: CanvasRenderingContext2D, obj: any, img: H
       ctx.fillText(String(obj.findingNo), w / 2, h / 2);
       ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
     }
+    return;
+  }
+
+  // 5e) UZATILABİLİR ŞERİTLER — desen tekrarı (ekrandaki fillPattern repeat-x'in aynası).
+  //     Uzatılan şeritte kesikli çizgi/karo/doku periyodu korunur; esnetme bozulması olmaz.
+  if (symbolId && TILE_REPEAT_SYMBOLS.includes(symbolId) && obj.src && img) {
+    const s = img.height > 0 ? h / img.height : 1;
+    const pat = ctx.createPattern(img, 'repeat-x');
+    if (pat) {
+      ctx.save();
+      ctx.scale(s, s);
+      ctx.fillStyle = pat;
+      ctx.fillRect(0, 0, w / s, img.height);
+      ctx.restore();
+    } else {
+      ctx.drawImage(img, 0, 0, w, h);
+    }
+    return;
+  }
+
+  // 5f) YOL MOTORU (st-1) — ekrandaki Bezier vektör yol motorunun aynası.
+  //     Sabit [20,20] kesikli orta çizgi periyoduyla uzatma bozulması olmaz.
+  if (symbolId === 'st-1') {
+    const curv = obj.curvature || 0;
+    const curvX = obj.curvatureX !== undefined ? obj.curvatureX : w / 2;
+    const controlY = h / 2 + curv * 2;
+    const p = new Path2D(`M 0 ${h / 2} Q ${curvX} ${controlY} ${w} ${h / 2}`);
+    ctx.lineCap = 'butt';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = h + 5;
+    ctx.stroke(p);
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = h;
+    ctx.stroke(p);
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = Math.max(1.5, h / 25);
+    ctx.setLineDash([20, 20]);
+    ctx.stroke(p);
+    ctx.setLineDash([]);
+    return;
+  }
+
+  // 5g) KAVŞAK MOTORU (st-3 Y / st-4 Döner) — ekrandaki vektör kavşak motorunun aynası
+  if (symbolId === 'st-3' || symbolId === 'st-4') {
+    const roadWidth = Math.min(w, h) * 0.35;
+    const lineW = Math.max(1.5, roadWidth / 20);
+    const line = (x1: number, y1: number, x2: number, y2: number) => {
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    };
+    if (symbolId === 'st-3') {
+      // Y Kavşak — ekrandaki katman sırasıyla: gövde → hub → kesikli → kenar
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = roadWidth;
+      ctx.lineCap = 'butt';
+      line(w / 2, h, w / 2, h / 2);
+      ctx.lineCap = 'round';
+      line(w / 2, h / 2, 0, 0);
+      line(w / 2, h / 2, w, 0);
+      ctx.beginPath(); ctx.arc(w / 2, h / 2, roadWidth / 2, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff'; ctx.fill();
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = lineW;
+      ctx.setLineDash([20, 20]);
+      line(w / 2, h, w / 2, h / 2);
+      line(w / 2, h / 2, 0, 0);
+      line(w / 2, h / 2, w, 0);
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 0.5;
+      ctx.lineWidth = 1;
+      line(w / 2 - roadWidth / 2, h, w / 2 - roadWidth / 2, h / 2);
+      line(w / 2 + roadWidth / 2, h, w / 2 + roadWidth / 2, h / 2);
+      ctx.globalAlpha = 1;
+      return;
+    }
+    // st-4 Döner kavşak — yatay/dikey gövde → kesikli → hub kapağı (ekrandaki sıra)
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(w / 2 - roadWidth / 2, 0, roadWidth, h);
+    ctx.fillRect(0, h / 2 - roadWidth / 2, w, roadWidth);
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = lineW;
+    ctx.setLineDash([20, 20]);
+    ctx.lineCap = 'butt';
+    line(w / 2, 0, w / 2, h);
+    line(0, h / 2, w, h / 2);
+    ctx.setLineDash([]);
+    ctx.beginPath(); ctx.arc(w / 2, h / 2, roadWidth * 0.8, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffffff'; ctx.fill();
     return;
   }
 
@@ -2598,23 +2690,25 @@ const IndividualObject = ({
             pointerAtEnding={true}
             opacity={1}
           />
-        ) : shapeProps.symbolId === 'tr-2' ? (
+        ) : shapeProps.symbolId && TILE_REPEAT_SYMBOLS.includes(shapeProps.symbolId) ? (
+          // UZATILABİLİR ŞERİTLER — desen tekrarı: uzatınca bozulmaz (tr-2 lastik izi,
+          // fren izi, orta refüj, kaldırım, yolluk)
           <Rect
             width={shapeProps.width}
             height={shapeProps.height}
             fillPatternImage={image}
             fillPatternRepeat="repeat-x"
-            fillPatternScale={{ 
-              x: shapeProps.height / (image?.height || 1), 
-              y: shapeProps.height / (image?.height || 1) 
+            fillPatternScale={{
+              x: shapeProps.height / (image?.height || 1),
+              y: shapeProps.height / (image?.height || 1)
             }}
             scaleX={shapeProps.scaleX || 1}
             scaleY={shapeProps.scaleY || 1}
             offsetX={(shapeProps.scaleX === -1) ? shapeProps.width : 0}
             offsetY={(shapeProps.scaleY === -1) ? shapeProps.height : 0}
-            filters={[Konva.Filters.Grayscale, RemoveWhiteFilter]}
+            filters={shapeProps.symbolId === 'tr-2' ? [Konva.Filters.Grayscale, RemoveWhiteFilter] : undefined}
             onMouseMove={() => {
-              if (imgRef.current) imgRef.current.cache();
+              if (shapeProps.symbolId === 'tr-2' && imgRef.current) imgRef.current.cache();
             }}
           />
         ) : (
