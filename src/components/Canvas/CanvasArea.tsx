@@ -24,6 +24,7 @@ import { FallAnimationCanvas } from './FallAnimationCanvas';
 import { PedestrianLaunchCanvas } from './PedestrianLaunchCanvas';
 import { PageControlBar } from './PageControlBar';
 import type { CanvasObject } from '../../types';
+import { resolveTileMode, drawTiledImage, tilePatternParams } from '../../utils/tiledRender';
 
 const RemoveWhiteFilter = (imageData: any) => {
   const data = imageData.data;
@@ -91,9 +92,9 @@ const wrapTextByWidth = (text: string, fontSize: number, maxWidth: number): stri
   return out;
 };
 
-// UZATILABİLİR ŞERİT SEMBOLLERİ — uzatılınca desen bozulmasın diye desen tekrarıyla çizilir
-// (kaynak PNG'ler yatayda kusursuz tekrarlanabilir üretildi; ekran + export aynı seti kullanır)
-const TILE_REPEAT_SYMBOLS = ['tr-2', 'tr-skid-straight', 'st-median', 'st-sidewalk', 'f-10'];
+// UZATMA MOTORU — görsel semboller esnetilirken desen tekrarıyla çizilir (bozulma olmaz).
+// Mod çözümlemesi: obj.tileMode (özellik çubuğundan açık seçim) → kütüphane metadata'sı → esnetme.
+// (Kaynak PNG'ler tekrarlanabilir üretildi; ekran + export aynı motoru kullanır.)
 
 export const drawExportObject = (ctx: CanvasRenderingContext2D, obj: any, img: HTMLImageElement | null, sceneObjects: any[]) => {
   const w = obj.width ?? 50;
@@ -324,21 +325,12 @@ export const drawExportObject = (ctx: CanvasRenderingContext2D, obj: any, img: H
     return;
   }
 
-  // 5e) UZATILABİLİR ŞERİTLER — desen tekrarı (ekrandaki fillPattern repeat-x'in aynası).
-  //     Uzatılan şeritte kesikli çizgi/karo/doku periyodu korunur; esnetme bozulması olmaz.
-  if (symbolId && TILE_REPEAT_SYMBOLS.includes(symbolId) && obj.src && img) {
-    const s = img.height > 0 ? h / img.height : 1;
-    const pat = ctx.createPattern(img, 'repeat-x');
-    if (pat) {
-      ctx.save();
-      ctx.scale(s, s);
-      ctx.fillStyle = pat;
-      ctx.fillRect(0, 0, w / s, img.height);
-      ctx.restore();
-    } else {
-      ctx.drawImage(img, 0, 0, w, h);
-    }
-    return;
+  // 5e) UZATMA MOTORU — desen tekrarı (ekrandaki fillPattern'in aynası).
+  //     Şerit/Karo modunda uzatılan görselin deseni periyodu korunarak tekrar eder;
+  //     esnetme bozulması olmaz. obj.tileMode ile yüklenen görseller de desteklenir.
+  if (obj.src && img) {
+    const tMode = resolveTileMode(obj);
+    if (tMode !== 'stretch' && drawTiledImage(ctx, img, w, h, tMode)) return;
   }
 
   // 5f) YOL MOTORU (st-1) — ekrandaki Bezier vektör yol motorunun aynası.
@@ -716,6 +708,18 @@ const IndividualObject = ({
   if (shapeProps.type === 'finding-list' && !allObjects?.some((o: CanvasObject) => o.findingNo)) {
     return null;
   }
+
+  // UZATMA MOTORU (ekran) — etkin desen modu ve Konva pattern parametreleri.
+  // imgRef görseli yüklüyse şerit/karo modunda desen tekrarıyla çizilir; aksi halde
+  // görsel yüklenene kadar normal esnetme gösterilir.
+  const effectiveTileMode = resolveTileMode(shapeProps);
+  const tilePattern = tilePatternParams(
+    effectiveTileMode,
+    shapeProps.width || 0,
+    shapeProps.height || 0,
+    image?.width || 0,
+    image?.height || 0
+  );
 
   return (
     <React.Fragment>
@@ -2690,18 +2694,15 @@ const IndividualObject = ({
             pointerAtEnding={true}
             opacity={1}
           />
-        ) : shapeProps.symbolId && TILE_REPEAT_SYMBOLS.includes(shapeProps.symbolId) ? (
-          // UZATILABİLİR ŞERİTLER — desen tekrarı: uzatınca bozulmaz (tr-2 lastik izi,
-          // fren izi, orta refüj, kaldırım, yolluk)
+        ) : effectiveTileMode !== 'stretch' && image ? (
+          // UZATMA MOTORU (ekran) — desen tekrarı: uzatınca desen bozulmaz.
+          // strip-x/strip-y: kesit-fit tekrar; tile: 2D karo (tekdüze ölçek, büyütme yok).
           <Rect
             width={shapeProps.width}
             height={shapeProps.height}
             fillPatternImage={image}
-            fillPatternRepeat="repeat-x"
-            fillPatternScale={{
-              x: shapeProps.height / (image?.height || 1),
-              y: shapeProps.height / (image?.height || 1)
-            }}
+            fillPatternRepeat={tilePattern.repeat}
+            fillPatternScale={{ x: tilePattern.scale, y: tilePattern.scale }}
             scaleX={shapeProps.scaleX || 1}
             scaleY={shapeProps.scaleY || 1}
             offsetX={(shapeProps.scaleX === -1) ? shapeProps.width : 0}
@@ -5394,6 +5395,28 @@ export const CanvasArea: React.FC = () => {
 
                   {/* Group 4: Visual Style (Unified Color Picker and Transformations) */}
                   <div className="flex items-center gap-2 px-2 border-r border-[#333]">
+                    {/* DOKU MODU — görsel semboller uzatıldığında desen bozulmasın.
+                        Şerit: desen uzun eksende tekrar eder (yol/refüj/iz şeritleri).
+                        Karo: desen iki eksende tekrar eder (çukur/islak zemin dokuları).
+                        Yüklenen görsellerde de çalışır. */}
+                    {!!selectedObj.src && (selectedObj.type === 'symbol' || selectedObj.type === 'image') && (
+                      <div className="flex items-center gap-1">
+                        <span className="text-[9px] font-bold text-cyan-400 uppercase" title="Uzatma modu: Şerit/Karo seçiliyken görsel uzatıldığında desen bozulmadan tekrar eder">Doku:</span>
+                        <select
+                          value={selectedObj.tileMode || 'auto'}
+                          onChange={(e) => updateObject(selectedId, { tileMode: e.target.value as CanvasObject['tileMode'] })}
+                          title="Uzatma modu: Şerit/Karo seçiliyken görsel uzatıldığında desen bozulmadan tekrar eder"
+                          className="bg-[#111] border border-[#333] text-white text-[10px] rounded px-1 py-0.5 outline-none"
+                        >
+                          <option value="auto">OTO</option>
+                          <option value="stretch">NORMAL</option>
+                          <option value="strip-auto">ŞERİT (OTO)</option>
+                          <option value="strip-x">ŞERİT YATAY</option>
+                          <option value="strip-y">ŞERİT DİKEY</option>
+                          <option value="tile">KARO (2D)</option>
+                        </select>
+                      </div>
+                    )}
                     <span className="text-[9px] font-bold text-gray-400 uppercase">Renk:</span>
                     <input
                       type="color"

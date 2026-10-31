@@ -1,5 +1,14 @@
 export type ObjectType = 'image' | 'text' | 'symbol' | 'rect' | 'line' | 'finding-list';
 
+/** Uzatma motoru modu — görsel semboller esnetilirken desen bozulmasın.
+ *  'auto'      : kütüphane metadata'sına düş (yoksa normal esnetme)
+ *  'stretch'   : klasik esnetme (desen nesneyle birlikte esner)
+ *  'strip-x'   : yatay şerit — desen X'te tekrar eder, kesit nesne yüksekliğine oturur
+ *  'strip-y'   : dikey şerit — desen Y'de tekrar eder, kesit nesne genişliğine oturur
+ *  'strip-auto': şerit, yön otomatik (yerel en >= boy → X, değilse Y)
+ *  'tile'      : 2D karo — desen her iki eksende tekdüze ölçekte tekrar eder */
+export type TileMode = 'auto' | 'stretch' | 'strip-x' | 'strip-y' | 'strip-auto' | 'tile';
+
 export interface CanvasObject {
   id: string;
   name?: string;
@@ -31,6 +40,7 @@ export interface CanvasObject {
   align?: 'left' | 'center' | 'right';
   categoryId?: string;
   symbolId?: string;
+  tileMode?: TileMode;
   ratioFixed?: boolean;
   dash?: number[];
   curvature?: number;
