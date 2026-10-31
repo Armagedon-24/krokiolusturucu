@@ -106,7 +106,7 @@ export default defineConfig({
   ],
 
   build: {
-    target: ['es2020', 'chrome89', 'safari14', 'firefox89'],
+    target: ['es2022', 'chrome100', 'safari15.4', 'firefox100'],
     minify: 'esbuild',
     sourcemap: false,
     cssCodeSplit: true,
