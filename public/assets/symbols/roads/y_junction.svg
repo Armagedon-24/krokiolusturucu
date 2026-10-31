@@ -1,26 +1,18 @@
 <svg width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <!-- Left diagonal branch -->
-  <g transform="translate(100, 100) rotate(-45) translate(-100, -100)">
-    <rect x="70" y="0" width="60" height="120" fill="#333333" />
-    <line x1="72" y1="0" x2="72" y2="120" stroke="white" stroke-width="4" />
-    <line x1="128" y1="0" x2="128" y2="120" stroke="white" stroke-width="4" />
-    <line x1="100" y1="0" x2="100" y2="120" stroke="white" stroke-width="4" stroke-dasharray="15 15" />
-  </g>
-
-  <!-- Right diagonal branch -->
-  <g transform="translate(100, 100) rotate(45) translate(-100, -100)">
-    <rect x="70" y="0" width="60" height="120" fill="#333333" />
-    <line x1="72" y1="0" x2="72" y2="120" stroke="white" stroke-width="4" />
-    <line x1="128" y1="0" x2="128" y2="120" stroke="white" stroke-width="4" />
-    <line x1="100" y1="0" x2="100" y2="120" stroke="white" stroke-width="4" stroke-dasharray="15 15" />
-  </g>
-
-  <!-- Main vertical road (bottom) -->
-  <rect x="70" y="100" width="60" height="100" fill="#333333" />
-  <line x1="72" y1="100" x2="72" y2="200" stroke="white" stroke-width="4" />
-  <line x1="128" y1="100" x2="128" y2="200" stroke="white" stroke-width="4" />
-  <line x1="100" y1="100" x2="100" y2="200" stroke="white" stroke-width="4" stroke-dasharray="15 15" />
-
-  <!-- Central asphalt hub to cover lines -->
-  <circle cx="100" cy="110" r="30" fill="#333333" />
+  <!-- Yol gövdeleri (beyaz, kalın) — sol dal, sağ dal, gövde -->
+  <line x1="100" y1="200" x2="100" y2="100" stroke="#ffffff" stroke-width="70" stroke-linecap="butt" />
+  <line x1="100" y1="100" x2="0" y2="0" stroke="#ffffff" stroke-width="70" stroke-linecap="round" />
+  <line x1="100" y1="100" x2="200" y2="0" stroke="#ffffff" stroke-width="70" stroke-linecap="round" />
+  <circle cx="100" cy="100" r="35" fill="#ffffff" />
+  <!-- Kesikli siyah orta çizgiler -->
+  <line x1="100" y1="200" x2="100" y2="100" stroke="black" stroke-width="3" stroke-dasharray="15 15" />
+  <line x1="100" y1="100" x2="0" y2="0" stroke="black" stroke-width="3" stroke-dasharray="15 15" />
+  <line x1="100" y1="100" x2="200" y2="0" stroke="black" stroke-width="3" stroke-dasharray="15 15" />
+  <!-- SİYAH yol kenarları — fillet birleşimli (ekrandaki motorla aynı geometri) -->
+  <line x1="65" y1="200" x2="65" y2="114.5" stroke="black" stroke-width="3" />
+  <line x1="135" y1="200" x2="135" y2="114.5" stroke="black" stroke-width="3" />
+  <line x1="-24.75" y1="24.75" x2="65" y2="114.5" stroke="black" stroke-width="3" />
+  <line x1="224.75" y1="24.75" x2="135" y2="114.5" stroke="black" stroke-width="3" />
+  <line x1="24.75" y1="-24.75" x2="100" y2="50.5" stroke="black" stroke-width="3" />
+  <line x1="175.25" y1="-24.75" x2="100" y2="50.5" stroke="black" stroke-width="3" />
 </svg>

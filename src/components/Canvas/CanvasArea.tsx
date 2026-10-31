@@ -96,6 +96,34 @@ const wrapTextByWidth = (text: string, fontSize: number, maxWidth: number): stri
 // Mod çözümlemesi: obj.tileMode (özellik çubuğundan açık seçim) → kütüphane metadata'sı → esnetme.
 // (Kaynak PNG'ler tekrarlanabilir üretildi; ekran + export aynı motoru kullanır.)
 
+// st-3 Y KAVŞAK — siyah yol kenar segmentleri (ekran + export ortak geometrisi).
+// 6 kenar döndürür: gövdenin iki kenarı + iki dalın dörder kenarının birleşimi.
+// Kenarlar birleşim bölgelerinde fillet noktalarında buluşur (klasik kroki görünümü);
+// dal kenarları hub çemberine teğettir, fillet noktaları daima çemberin dışında kalır.
+const st3EdgeSegments = (w: number, h: number, roadWidth: number): number[][] => {
+  const cx = w / 2, cy = h / 2, s = roadWidth / 2;
+  const Ld = Math.sqrt(cx * cx + cy * cy); // merkez→köşe yarısı uzunluğu
+  if (!Ld || !cx) return [];
+  const yFc = Math.min(s * cx / Ld + ((Ld * (cx - s) + s * cy) * cy) / (cx * Ld), h); // gövde fillet Y (clamp'li)
+  // Dal uçlarındaki kenar başlangıç noktaları (köşe dışına taşar, canvas kırpılır)
+  const A1x = -s * cy / Ld, A1y = s * cx / Ld;    // sol dal gövde-arası kenar ucu
+  const A2x = w + s * cy / Ld, A2y = s * cx / Ld; // sağ dal gövde-arası kenar ucu
+  const B1x = s * cy / Ld, B1y = -s * cx / Ld;    // sol dal V çanağı kenar ucu
+  const B2x = w - s * cy / Ld, B2y = -s * cx / Ld;// sağ dal V çanağı kenar ucu
+  // V çanağı filleti: iki dalın çanak kenarlarının kesişimi
+  const t3 = (w * Ld - 2 * s * cy) / (2 * cx);
+  const F3x = s * cy / Ld + t3 * cx / Ld;
+  const F3y = -s * cx / Ld + t3 * cy / Ld;
+  return [
+    [cx - s, h, cx - s, yFc],       // gövde sol kenarı
+    [cx + s, h, cx + s, yFc],       // gövde sağ kenarı
+    [A1x, A1y, cx - s, yFc],        // sol dalın gövdeye bakan kenarı
+    [A2x, A2y, cx + s, yFc],        // sağ dalın gövdeye bakan kenarı
+    [B1x, B1y, F3x, F3y],           // sol dalın çanak kenarı
+    [B2x, B2y, F3x, F3y],           // sağ dalın çanak kenarı
+  ];
+};
+
 export const drawExportObject = (ctx: CanvasRenderingContext2D, obj: any, img: HTMLImageElement | null, sceneObjects: any[]) => {
   const w = obj.width ?? 50;
   const h = obj.height ?? 50;
@@ -381,7 +409,7 @@ export const drawExportObject = (ctx: CanvasRenderingContext2D, obj: any, img: H
       ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
     };
     if (symbolId === 'st-3') {
-      // Y Kavşak — ekrandaki katman sırasıyla: gövde → hub → kesikli → kenar
+      // Y Kavşak — ekrandaki katman sırasıyla: gövde → hub → kesikli → SİYAH kenarlar
       ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = roadWidth;
       ctx.lineCap = 'butt';
@@ -398,11 +426,13 @@ export const drawExportObject = (ctx: CanvasRenderingContext2D, obj: any, img: H
       line(w / 2, h / 2, 0, 0);
       line(w / 2, h / 2, w, 0);
       ctx.setLineDash([]);
-      ctx.globalAlpha = 0.5;
-      ctx.lineWidth = 1;
-      line(w / 2 - roadWidth / 2, h, w / 2 - roadWidth / 2, h / 2);
-      line(w / 2 + roadWidth / 2, h, w / 2 + roadWidth / 2, h / 2);
+      // SİYAH yol kenarları — Konva motoruyla aynı ortak geometri (fillet birleşimli)
+      ctx.lineCap = 'butt';
+      ctx.lineWidth = lineW;
       ctx.globalAlpha = 1;
+      for (const sg of st3EdgeSegments(w, h, roadWidth)) {
+        ctx.beginPath(); ctx.moveTo(sg[0], sg[1]); ctx.lineTo(sg[2], sg[3]); ctx.stroke();
+      }
       return;
     }
     // st-4 Döner kavşak — beyaz gövde → SİYAH yol kenar çizgileri → kesikli → siyah çevirili halka
@@ -1533,7 +1563,10 @@ const IndividualObject = ({
               const centerLineWidth = Math.max(1.5, roadWidth / 20);
               
               if (shapeProps.symbolId === 'st-3') {
-                // Y-Junction (st-1 style)
+                // Y-Junction (st-1 style) — SİYAH yol kenarları: gövde + iki dal,
+                // birleşimlerde fillet noktalarında buluşur (st-4 ile aynı stil)
+                const edgeWidth = centerLineWidth; // max(1.5, roadWidth/20)
+                const edgeSegs = st3EdgeSegments(w, h, roadWidth);
                 return (
                   <Group>
                     {/* Road Backgrounds */}
@@ -1549,9 +1582,10 @@ const IndividualObject = ({
                     <Line points={[w/2, h/2, 0, 0]} stroke={lineColor} strokeWidth={centerLineWidth} dash={centerDash} lineCap="butt" />
                     <Line points={[w/2, h/2, w, 0]} stroke={lineColor} strokeWidth={centerLineWidth} dash={centerDash} lineCap="butt" />
                     
-                    {/* Outer Border Lines */}
-                    <Line points={[w/2 - roadWidth/2, h, w/2 - roadWidth/2, h/2]} stroke={lineColor} strokeWidth={1} opacity={0.5} />
-                    <Line points={[w/2 + roadWidth/2, h, w/2 + roadWidth/2, h/2]} stroke={lineColor} strokeWidth={1} opacity={0.5} />
+                    {/* Road Edge Lines — siyah yol kenarları (tam opak, ortak geometri) */}
+                    {edgeSegs.map((sg, i) => (
+                      <Line key={`st3-edge-${i}`} points={sg} stroke={lineColor} strokeWidth={edgeWidth} lineCap="butt" />
+                    ))}
                   </Group>
                 );
               } else {

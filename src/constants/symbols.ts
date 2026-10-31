@@ -453,7 +453,7 @@ export const SYMBOL_CATEGORIES = [
         thumbnail: '/assets/symbols/karakalem/roads/straight.png', type: 'symbol', description: 'Standart iki şeritli düz yol segmenti.' },
       { id: 'st-2', name: 'T Kavşak', src: '/assets/symbols/roads/t_junction.svg',
         thumbnail: '/assets/symbols/karakalem/roads/t_junction.png', type: 'symbol', description: 'T tipi yol birleşimlerini çizmek için kullanılır.' },
-      { id: 'st-3', name: 'Y Kavşak', src: '/assets/symbols/roads/y_junction.svg',
+      { id: 'st-3', name: 'Y Kavşak', src: '/assets/symbols/roads/y_junction.svg?v=2',
         thumbnail: '/assets/symbols/karakalem/roads/y_junction.png', type: 'symbol', description: 'Y tipi yol ayrımı veya birleşimi.' },
       { id: 'st-4', name: 'Ada (Döner)', src: '/assets/symbols/roads/roundabout.svg?v=4',
         thumbnail: '/assets/symbols/karakalem/roads/roundabout.png', type: 'symbol', description: 'Döner kavşakları ve trafik adalarını temsil eder.' },
