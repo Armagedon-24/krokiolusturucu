@@ -165,3 +165,333 @@ export function tilePatternParams(
   // tile
   return { repeat: 'repeat', scale: Math.min(imgW > 0 ? w / imgW : 1, imgH > 0 ? h / imgH : 1, 1) };
 }
+
+/* =====================================================================================
+ * UZATMA MOTORU v4 — KAPAK+KESİT (3-slice) ve TAHIL YÖNÜ (grain) FARKINDALIĞI
+ *
+ * v2/v3'ün iki zaafı kullanıcı yüklemelerinde ortaya çıktı:
+ *  1) BÜTÜN görsel karo olarak tekrarlıyordu → yolun UÇLARI (kapak bölgeleri) yolun
+ *     ortasında da tekrar edince görsel "parçalanıyor" görünüyordu.
+ *  2) Şerit yönü yalnızca nesne en/boy oranına bakarak seçiliyordu → dikey yollu
+ *     (portre) dokuya yatay uzatma uygulandığında desen yanlış eksende tekrar
+ *     edip yine parçalanıyordu.
+ *
+ * v4 çözümü:
+ *  - getTextureInfo(): dokuyu bir kez küçük bir tuvalde analiz eder —
+ *      • grain: yolun/çizgilerin hangi eksende uzandığı (yatay kenar enerjisi EH,
+ *        dikey kenar enerjisi EV karşılaştırılır),
+ *      • cutA/cutB: kesit bandının kesilme noktaları — geçiş maliyeti (kenar
+ *        gradyanı) en düşük sütun/satır seçilir → kesikli çizgiler bozulmaz.
+ *  - resolveConcreteTileMode(): metadata'sız yüklemelerde şerit yönü TAHIL yönüne
+ *    göre atanır; nesne tahıla dik uzatılmışsa esnetmeye döner (parçalanma yok).
+ *  - drawStripCaps(): uçlar SABİT çizilir, yalnızca orta bant kesit-fit ölçekle
+ *    tekrar eder → yol uçları ortada tekrar etmez, kesikli çizgiler bozulmaz.
+ * ===================================================================================== */
+
+export interface TexInfo {
+  grain: 'x' | 'y';
+  /** Kesit bandı başlangıcı (grain ekseninde, kaynak px) */
+  cutA: number;
+  /** Kesit bandı sonu (grain ekseninde, kaynak px) */
+  cutB: number;
+  iw: number;
+  ih: number;
+}
+
+const texInfoCache = new Map<string, TexInfo>();
+const ANALYSIS_SIZE = 96;
+
+/** Dokuyu bir kez analiz eder ve önbelleğe alır (img.src başına). */
+export function getTextureInfo(img: HTMLImageElement): TexInfo | null {
+  const iw = img.naturalWidth || img.width;
+  const ih = img.naturalHeight || img.height;
+  if (!iw || !ih) return null;
+  const key = img.src || '';
+  const cached = key ? texInfoCache.get(key) : undefined;
+  if (cached) return cached;
+  const info = analyzeTexture(img, iw, ih);
+  if (key) {
+    texInfoCache.set(key, info);
+    if (texInfoCache.size > 60) {
+      const first = texInfoCache.keys().next().value;
+      if (first) texInfoCache.delete(first);
+    }
+  }
+  return info;
+}
+
+function analyzeTexture(img: HTMLImageElement, iw: number, ih: number): TexInfo {
+  const dimGrain: 'x' | 'y' = iw >= ih ? 'x' : 'y';
+  const fallback = (): TexInfo =>
+    dimGrain === 'x'
+      ? { grain: 'x', cutA: Math.round(iw * 0.25), cutB: Math.round(iw * 0.75), iw, ih }
+      : { grain: 'y', cutA: Math.round(ih * 0.25), cutB: Math.round(ih * 0.75), iw, ih };
+  try {
+    const W = Math.max(8, Math.min(ANALYSIS_SIZE, iw));
+    const H = Math.max(8, Math.round(ih * (W / iw)));
+    const c = document.createElement('canvas');
+    c.width = W;
+    c.height = H;
+    const cx = c.getContext('2d', { willReadFrequently: true });
+    if (!cx) return fallback();
+    cx.drawImage(img, 0, 0, W, H);
+    const d = cx.getImageData(0, 0, W, H).data; // CORS-taint durumunda fırlatır → fallback
+    const N = W * H;
+    const L = new Float32Array(N);
+    const A = new Float32Array(N);
+    for (let i = 0, p = 0; i < N; i++, p += 4) {
+      L[i] = 0.299 * d[p] + 0.587 * d[p + 1] + 0.114 * d[p + 2];
+      A[i] = d[p + 3];
+    }
+    // Kenar enerjileri: EH büyük → yatay çizgiler → grain X; EV büyük → dikey çizgiler → grain Y
+    let EH = 0;
+    let EV = 0;
+    for (let y = 1; y < H; y++) {
+      for (let x = 0; x < W; x++) EH += Math.abs(L[y * W + x] - L[(y - 1) * W + x]);
+    }
+    for (let y = 0; y < H; y++) {
+      for (let x = 1; x < W; x++) EV += Math.abs(L[y * W + x] - L[y * W + x - 1]);
+    }
+    let grain: 'x' | 'y';
+    if (EH > EV * 1.12) grain = 'x';
+    else if (EV > EH * 1.12) grain = 'y';
+    else grain = dimGrain;
+
+    // Kesit bant kesim noktaları — BİRLEŞİK seçim: iki kesim sütunu/satırı BİRBİRİNE
+    // benzemeli (join maliyeti) → karo dikişsiz devam eder; ayrıca her iki kesim
+    // noktasının kendi geçiş maliyeti de düşük olmalı (kesikli çizgi bozulmaz).
+    const colSig = (k: number): Float32Array | null => {
+      const sig = new Float32Array(grain === 'x' ? H : W);
+      if (grain === 'x') {
+        for (let y = 0; y < H; y++) sig[y] = L[y * W + k] * 1.4 + (A[y * W + k] / 255) * 0.6;
+      } else {
+        for (let x = 0; x < W; x++) sig[x] = L[k * W + x] * 1.4 + (A[k * W + x] / 255) * 0.6;
+      }
+      return sig;
+    };
+    const quietCost = (k: number): number => {
+      let q = 0;
+      if (grain === 'x') {
+        for (let y = 0; y < H; y++) {
+          q += Math.abs(L[y * W + k] - L[y * W + k - 1]) + 0.6 * Math.abs(A[y * W + k] - A[y * W + k - 1]);
+        }
+      } else {
+        for (let x = 0; x < W; x++) {
+          q += Math.abs(L[k * W + x] - L[(k - 1) * W + x]) + 0.6 * Math.abs(A[k * W + x] - A[(k - 1) * W + x]);
+        }
+      }
+      return q;
+    };
+    const axisMax = grain === 'x' ? W : H;
+    const pickCuts = (): { a: number; b: number } => {
+      const fromA = Math.max(1, Math.round(0.15 * axisMax));
+      const toA = Math.round(0.35 * axisMax);
+      const fromB = Math.round(0.65 * axisMax);
+      const toB = Math.min(axisMax - 2, Math.round(0.85 * axisMax));
+      let best = { a: fromA, b: fromB };
+      let bestCost = Infinity;
+      for (let ka = fromA; ka <= toA; ka++) {
+        const sa = colSig(ka);
+        if (!sa) continue;
+        for (let kb = fromB; kb <= toB; kb++) {
+          const sb = colSig(kb);
+          if (!sb) continue;
+          let join = 0;
+          for (let i = 0; i < sb.length; i++) join += Math.abs(sa[i] - sb[i]);
+          const total = join + 0.35 * (quietCost(ka) + quietCost(kb));
+          if (total < bestCost) {
+            bestCost = total;
+            best = { a: ka, b: kb };
+          }
+        }
+      }
+      return best;
+    };
+
+    let cutA: number;
+    let cutB: number;
+    const picked = pickCuts();
+    if (grain === 'x') {
+      cutA = Math.round((picked.a * iw) / W);
+      cutB = Math.round((picked.b * iw) / W);
+      if (cutB - cutA < iw * 0.25) {
+        cutA = Math.round(iw * 0.25);
+        cutB = Math.round(iw * 0.75);
+      }
+    } else {
+      cutA = Math.round((picked.a * ih) / H);
+      cutB = Math.round((picked.b * ih) / H);
+      if (cutB - cutA < ih * 0.25) {
+        cutA = Math.round(ih * 0.25);
+        cutB = Math.round(ih * 0.75);
+      }
+    }
+    return { grain, cutA, cutB, iw, ih };
+  } catch {
+    return fallback();
+  }
+}
+
+export interface ResolvedTile {
+  mode: TileMode;
+  /** true → uçlar sabit, orta bant tekrar eder (kapak+kesit çizimi) */
+  caps: boolean;
+}
+
+/**
+ * Somut desen modunu çözümler (v4). Metadata'lı kütüphane dokuları eskisi gibi
+ * bütün-görsel tiling kullanır; metadata'sız yüklemeler grain-farkındalıklı
+ * kapak+kesit moduna geçer.
+ */
+export function resolveConcreteTileMode(
+  obj: TileModeSource | null | undefined,
+  w: number,
+  h: number,
+  imgW: number,
+  imgH: number,
+  tex: TexInfo | null
+): ResolvedTile {
+  if (!obj || !w || !h) return { mode: 'stretch', caps: false };
+  const explicit = obj.tileMode;
+  const meta = obj.symbolId ? SYMBOL_TILE_MODES[obj.symbolId] : undefined;
+
+  if (explicit === 'strip-x') return { mode: 'strip-x', caps: !meta };
+  if (explicit === 'strip-y') return { mode: 'strip-y', caps: !meta };
+  if (explicit === 'tile') return { mode: 'tile', caps: false };
+
+  // Kütüphane metadata'sı — güvenilir, kusursuz karo dokular: eski davranış.
+  if (meta) {
+    if (meta === 'strip-auto') return { mode: w >= h ? 'strip-x' : 'strip-y', caps: false };
+    return { mode: meta, caps: false };
+  }
+
+  // ——— Metadata yok (kullanıcı yüklemeleri / bilinmeyen görseller) ———
+  const iw = imgW || (tex ? tex.iw : 0);
+  const ih = imgH || (tex ? tex.ih : 0);
+  if (!iw || !ih) return { mode: 'stretch', caps: false };
+  const grain: 'x' | 'y' = tex ? tex.grain : iw >= ih ? 'x' : 'y';
+  const E: 'x' | 'y' = w >= h ? 'x' : 'y';
+
+  // Boyutlandırma sırasında işaretlenmiş strip-auto: yalnızca tahıl yönünde uzama varsa şerit.
+  if (explicit === 'strip-auto') {
+    if (E !== grain) return { mode: 'stretch', caps: false };
+    const elong = grain === 'x' ? (w / h) / (iw / ih) : (h / w) / (ih / iw);
+    if (elong < 1.3) return { mode: 'stretch', caps: false };
+    return { mode: grain === 'x' ? 'strip-x' : 'strip-y', caps: true };
+  }
+
+  // 'auto' / tanımsız → adaptif kural (grain kapısıyla)
+  if (obj.type === 'symbol' || obj.type === 'image' || !obj.type) {
+    if (grain === 'x') {
+      const rel = (w / h) / (iw / ih);
+      if (rel >= ADAPTIVE_ASPECT_THRESHOLD) return { mode: 'strip-x', caps: true };
+      const sx = w / iw;
+      const sy = h / ih;
+      if (sx >= ADAPTIVE_LEN_SCALE && sy <= ADAPTIVE_CROSS_SCALE) return { mode: 'strip-x', caps: true };
+    } else {
+      const rel = (h / w) / (ih / iw);
+      if (rel >= ADAPTIVE_ASPECT_THRESHOLD) return { mode: 'strip-y', caps: true };
+      const sy = h / ih;
+      const sx = w / iw;
+      if (sy >= ADAPTIVE_LEN_SCALE && sx <= ADAPTIVE_CROSS_SCALE) return { mode: 'strip-y', caps: true };
+    }
+  }
+  return { mode: 'stretch', caps: false };
+}
+
+/**
+ * KAPAK+KESİT çizimi: uç bölgeleri sabit, orta bant kesit-fit ölçekle tekrar eder.
+ * ctx, çıkış motorunun translate/scale dönüşümü altındadır (0,0 — nesne köşesi).
+ * Başarılıysa true döner.
+ */
+export function drawStripCaps(
+  ctx: CanvasRenderingContext2D,
+  img: HTMLImageElement,
+  w: number,
+  h: number,
+  mode: 'strip-x' | 'strip-y',
+  tex: TexInfo | null
+): boolean {
+  const iw = img.naturalWidth || img.width;
+  const ih = img.naturalHeight || img.height;
+  if (!iw || !ih || !w || !h) return false;
+  const t = tex || getTextureInfo(img);
+
+  if (mode === 'strip-x') {
+    const s = h / ih;
+    const cutA = t ? t.cutA : Math.round(iw * 0.25);
+    const cutB = t ? t.cutB : Math.round(iw * 0.75);
+    const srcMid = cutB - cutA;
+    // TAM SAYI konumlandırma: alt-piksel boşlukları (beyaz çizgi artefaktı) olmasın.
+    const capAi = Math.round(cutA * s);
+    const capBi = Math.round((iw - cutB) * s);
+    const avail = w - capAi - capBi;
+    const midW = srcMid * s;
+    if (avail < midW * 0.45 || avail < 2) return false;
+    const n = Math.max(1, Math.round(avail / midW));
+    const tileWi = Math.round(avail / n);
+    for (let i = 0; i < n; i++) {
+      const x = capAi + i * tileWi;
+      const drawW = Math.min(tileWi, w - capBi - x);
+      if (drawW <= 0) break;
+      ctx.drawImage(img, cutA, 0, srcMid, ih, x, 0, drawW, h);
+    }
+    // Kapaklar en üste (bant taşmalarını örter)
+    if (capAi > 0) ctx.drawImage(img, 0, 0, cutA, ih, 0, 0, capAi, h);
+    if (capBi > 0) ctx.drawImage(img, cutB, 0, iw - cutB, ih, w - capBi, 0, capBi, h);
+    return true;
+  }
+
+  // strip-y
+  const s = w / iw;
+  const cutA = t ? t.cutA : Math.round(ih * 0.25);
+  const cutB = t ? t.cutB : Math.round(ih * 0.75);
+  const srcMid = cutB - cutA;
+  const capAi = Math.round(cutA * s);
+  const capBi = Math.round((ih - cutB) * s);
+  const avail = h - capAi - capBi;
+  const midH = srcMid * s;
+  if (avail < midH * 0.45 || avail < 2) return false;
+  const n = Math.max(1, Math.round(avail / midH));
+  const tileHi = Math.round(avail / n);
+  for (let i = 0; i < n; i++) {
+    const y = capAi + i * tileHi;
+    const drawH = Math.min(tileHi, h - capBi - y);
+    if (drawH <= 0) break;
+    ctx.drawImage(img, 0, cutA, iw, srcMid, 0, y, w, drawH);
+  }
+  if (capAi > 0) ctx.drawImage(img, 0, 0, iw, cutA, 0, 0, w, capAi);
+  if (capBi > 0) ctx.drawImage(img, 0, cutB, iw, ih - cutB, 0, h - capBi, w, capBi);
+  return true;
+}
+
+/** Ekran (Konva) tarafı: kapak+kesit kompozitini tuval olarak üretir. */
+const composedCache = new Map<string, HTMLCanvasElement>();
+
+export function composeStripCanvas(
+  img: HTMLImageElement,
+  w: number,
+  h: number,
+  mode: 'strip-x' | 'strip-y'
+): HTMLCanvasElement | null {
+  const W = Math.round(w);
+  const H = Math.round(h);
+  if (!W || !H || W > 4096 || H > 4096) return null;
+  const key = `${img.src || ''}|${W}x${H}|${mode}`;
+  const cached = composedCache.get(key);
+  if (cached) return cached;
+  const c = document.createElement('canvas');
+  c.width = W;
+  c.height = H;
+  const cx = c.getContext('2d');
+  if (!cx) return null;
+  cx.imageSmoothingEnabled = true;
+  cx.imageSmoothingQuality = 'high';
+  if (!drawStripCaps(cx, img, W, H, mode, getTextureInfo(img))) return null;
+  composedCache.set(key, c);
+  if (composedCache.size > 12) {
+    const first = composedCache.keys().next().value;
+    if (first) composedCache.delete(first);
+  }
+  return c;
+}

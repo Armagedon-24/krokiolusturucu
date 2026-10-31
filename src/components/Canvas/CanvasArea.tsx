@@ -24,7 +24,7 @@ import { FallAnimationCanvas } from './FallAnimationCanvas';
 import { PedestrianLaunchCanvas } from './PedestrianLaunchCanvas';
 import { PageControlBar } from './PageControlBar';
 import type { CanvasObject } from '../../types';
-import { resolveTileMode, drawTiledImage, tilePatternParams, SYMBOL_TILE_MODES } from '../../utils/tiledRender';
+import { drawTiledImage, tilePatternParams, SYMBOL_TILE_MODES, getTextureInfo, resolveConcreteTileMode, drawStripCaps, composeStripCanvas } from '../../utils/tiledRender';
 
 const RemoveWhiteFilter = (imageData: any) => {
   const data = imageData.data;
@@ -325,18 +325,29 @@ export const drawExportObject = (ctx: CanvasRenderingContext2D, obj: any, img: H
     return;
   }
 
-  // 5e) UZATMA MOTORU — desen tekrarı (ekrandaki fillPattern'in aynası).
-  //     Şerit/Karo modunda uzatılan görselin deseni periyodu korunarak tekrar eder;
-  //     esnetme bozulması olmaz. obj.tileMode ile yüklenen görseller de desteklenir.
+  // 5e) UZATMA MOTORU v4 — desen tekrarı (ekrandaki fillPattern'in aynası).
+  //     Metadata'lı kütüphane dokuları bütün-görsel tiling; metadata'sız yüklemelerde
+  //     KAPAK+KESİT (3-slice): uçlar sabit, orta bant tekrar eder → parçalanma yok.
   if (obj.src && img) {
-    const tMode = resolveTileMode(
+    const tex = getTextureInfo(img);
+    const resolved = resolveConcreteTileMode(
       obj,
       w,
       h,
       img.naturalWidth || img.width,
-      img.naturalHeight || img.height
+      img.naturalHeight || img.height,
+      tex
     );
-    if (tMode !== 'stretch' && drawTiledImage(ctx, img, w, h, tMode)) return;
+    if (resolved.mode !== 'stretch') {
+      if (
+        resolved.caps &&
+        (resolved.mode === 'strip-x' || resolved.mode === 'strip-y') &&
+        drawStripCaps(ctx, img, w, h, resolved.mode, tex)
+      ) {
+        return;
+      }
+      if (drawTiledImage(ctx, img, w, h, resolved.mode)) return;
+    }
   }
 
   // 5f) YOL MOTORU (st-1) — ekrandaki Bezier vektör yol motorunun aynası.
@@ -751,16 +762,19 @@ const IndividualObject = ({
     return null;
   }
 
-  // UZATMA MOTORU (ekran) — etkin desen modu ve Konva pattern parametreleri.
-  // imgRef görseli yüklüyse şerit/karo modunda desen tekrarıyla çizilir; aksi halde
-  // görsel yüklenene kadar normal esnetme gösterilir.
-  const effectiveTileMode = resolveTileMode(
+  // UZATMA MOTORU v4 (ekran) — somut desen modu + KAPAK+KESİT kompoziti.
+  // Metadata'lı kütüphane dokuları bütün-görsel fillPattern ile; metadata'sız
+  // yüklemelerde uçlar sabit tutulup yalnızca orta bant tekrar eder (parçalanma yok).
+  const texInfo = image ? getTextureInfo(image) : null;
+  const resolvedTile = resolveConcreteTileMode(
     shapeProps,
     shapeProps.width || 0,
     shapeProps.height || 0,
     image?.width || 0,
-    image?.height || 0
+    image?.height || 0,
+    texInfo
   );
+  const effectiveTileMode = resolvedTile.mode;
   const tilePattern = tilePatternParams(
     effectiveTileMode,
     shapeProps.width || 0,
@@ -768,6 +782,10 @@ const IndividualObject = ({
     image?.width || 0,
     image?.height || 0
   );
+  const composedStrip =
+    resolvedTile.caps && image && (effectiveTileMode === 'strip-x' || effectiveTileMode === 'strip-y')
+      ? composeStripCanvas(image, shapeProps.width || 0, shapeProps.height || 0, effectiveTileMode)
+      : null;
 
   return (
     <React.Fragment>
@@ -2744,14 +2762,15 @@ const IndividualObject = ({
             opacity={1}
           />
         ) : effectiveTileMode !== 'stretch' && image ? (
-          // UZATMA MOTORU (ekran) — desen tekrarı: uzatınca desen bozulmaz.
-          // strip-x/strip-y: kesit-fit tekrar; tile: 2D karo (tekdüze ölçek, büyütme yok).
+          // UZATMA MOTORU v4 (ekran) — desen tekrarı: uzatınca desen bozulmaz.
+          // composedStrip varsa KAPAK+KESİT kompoziti (uçlar sabit, orta bant tekrar);
+          // değilse metadata'lı bütün-görsel karo (strip-x/strip-y/tile).
           <Rect
             width={shapeProps.width}
             height={shapeProps.height}
-            fillPatternImage={image}
-            fillPatternRepeat={tilePattern.repeat}
-            fillPatternScale={{ x: tilePattern.scale, y: tilePattern.scale }}
+            fillPatternImage={(composedStrip || image) as HTMLImageElement}
+            fillPatternRepeat={composedStrip ? 'no-repeat' : tilePattern.repeat}
+            fillPatternScale={composedStrip ? { x: 1, y: 1 } : { x: tilePattern.scale, y: tilePattern.scale }}
             opacity={shapeProps.opacity ?? 1}
             scaleX={shapeProps.scaleX || 1}
             scaleY={shapeProps.scaleY || 1}
