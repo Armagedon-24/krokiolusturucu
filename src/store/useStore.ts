@@ -18,6 +18,9 @@ export interface Notification {
 
 interface StoreState extends CanvasState {
   addObject: (obj: Partial<CanvasObject>) => void;
+  /** Örnek olay krokileri gibi çok nesneli yerleşimler için toplu ekleme:
+   *  ızgara hizalaması yapmaz, tek geçmiş kaydı oluşturur. */
+  addKrokiObjects: (objs: Partial<CanvasObject>[]) => void;
   addUploadedImage: (img: { id: string, src: string, name: string, category?: string, group?: string }, opts?: { allowDeletedName?: boolean }) => void;
   removeUploadedImage: (id: string) => void;
   updateUploadedImage: (id: string, category?: string, group?: string, name?: string) => void;
@@ -577,6 +580,42 @@ export const useStore = create<StoreState>()(
           symbolUsage: obj.symbolId 
             ? { ...state.symbolUsage, [obj.symbolId]: (state.symbolUsage[obj.symbolId] || 0) + 1 }
             : state.symbolUsage
+        }));
+        get().saveHistory();
+      },
+
+      addKrokiObjects: (objs) => {
+        if (!objs.length) return;
+        const existingObjects = get().objects;
+        let maxZ = existingObjects.reduce((max, o) => Math.max(max, o.zIndex || 0), -1);
+        const newObjs: CanvasObject[] = objs.map((obj) => {
+          maxZ += 1;
+          return {
+            id: uuidv4(),
+            type: 'symbol',
+            x: 150,
+            y: 150,
+            width: 100,
+            height: 100,
+            rotation: 0,
+            scaleX: 1,
+            scaleY: 1,
+            distanceColor: '#000000',
+            ratioFixed: false,
+            ...obj,
+            zIndex: maxZ,
+          } as CanvasObject;
+        });
+        set((state) => ({
+          objects: [...state.objects, ...newObjs],
+          selectedId: null,
+          symbolUsage: (() => {
+            const usage = { ...state.symbolUsage };
+            newObjs.forEach((o) => {
+              if (o.symbolId) usage[o.symbolId] = (usage[o.symbolId] || 0) + 1;
+            });
+            return usage;
+          })(),
         }));
         get().saveHistory();
       },
