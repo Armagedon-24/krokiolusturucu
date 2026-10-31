@@ -429,6 +429,123 @@ export const SYMBOL_CATEGORIES = [
         width: 80, height: 120,
         description: 'U şeklinde prosedürel merdiven. Yükseklik ve genişlik değişimine göre basamak sayısı otomatik hesaplanır.'
       },
+      { 
+        id: 'arch-kepenk', 
+        name: 'Kepenk', 
+        src: '/assets/symbols/shutter.svg',
+        thumbnail: '/assets/symbols/karakalem/shutter.png',
+        type: 'symbol',
+        width: 120, height: 12,
+        description: 'Dükkan/mağaza kepenki. Uzatılabilir; lam aralığı otomatik tekrar eder. Zorlanarak kaldırma olaylarında kullanılır.'
+      },
+      { 
+        id: 'arch-d3-slide', 
+        name: 'Sürgülü Kapı', 
+        src: '/assets/symbols/door_sliding.svg',
+        thumbnail: '/assets/symbols/karakalem/door_sliding.png',
+        type: 'symbol',
+        width: 100, height: 16,
+        description: 'Bindirmeli iki panelli sürgülü kapı. Balkon ve teras kapıları için kullanılır, duvara yapışır.'
+      },
+      { 
+        id: 'arch-elevator', 
+        name: 'Asansör', 
+        src: '/assets/symbols/elevator.svg',
+        thumbnail: '/assets/symbols/karakalem/elevator.png',
+        type: 'symbol',
+        width: 70, height: 70,
+        description: 'X çizili asansör boşluğu. Kat planlarında asansör kabini/kuyusunu gösterir, duvara yapışır.'
+      },
+      { 
+        id: 'arch-opening', 
+        name: 'Duvar Geçidi', 
+        src: '/assets/symbols/wall_opening.svg',
+        thumbnail: '/assets/symbols/karakalem/wall_opening.png',
+        type: 'symbol',
+        width: 80, height: 10,
+        description: 'Kapısız duvar açıklığı / geçit. Kesikli çerçeve ile gösterilir, duvara yapışır.'
+      },
+      { 
+        id: 'arch-parapet', 
+        name: 'Yarım Duvar / Parapet', 
+        src: '/assets/symbols/parapet.svg',
+        thumbnail: '/assets/symbols/karakalem/parapet.png',
+        type: 'symbol',
+        width: 200, height: 10,
+        description: 'Alçak duvar / parapet. Ortadaki kesikli çizgi tam boyut olmadığını belirtir. Teras kenarı ve bariyerlerde kullanılır.'
+      },
+      { 
+        id: 'arch-colon-k', 
+        name: 'Kolon (Kare)', 
+        src: '/assets/symbols/column_square.svg',
+        thumbnail: '/assets/symbols/karakalem/column_square.png',
+        type: 'symbol',
+        width: 25, height: 25,
+        description: 'Kesit dolgulu kare kolon. Otopark, bodrum ve avlu alanlarındaki taşıyıcı kolonları gösterir.'
+      },
+      { 
+        id: 'arch-colon-y', 
+        name: 'Kolon (Yuvarlak)', 
+        src: '/assets/symbols/column_round.svg',
+        thumbnail: '/assets/symbols/karakalem/column_round.png',
+        type: 'symbol',
+        width: 25, height: 25,
+        description: 'Kesit dolgulu yuvarlak kolon. Taşıyıcı silindir kolonları gösterir.'
+      },
+      { 
+        id: 'arch-garden-wall', 
+        name: 'Bahçe Duvarı', 
+        src: '/assets/symbols/garden_wall.svg',
+        thumbnail: '/assets/symbols/karakalem/garden_wall.png',
+        type: 'symbol',
+        width: 200, height: 8,
+        description: 'İçi boş çift çizgili bahçe/çevre duvarı. Duvar uçları birbirine yapışır.'
+      },
+      { 
+        id: 'arch-garden-gate', 
+        name: 'Bahçe Kapısı', 
+        src: '/assets/symbols/garden_gate.svg',
+        thumbnail: '/assets/symbols/karakalem/garden_gate.png',
+        type: 'symbol',
+        width: 60, height: 60,
+        description: 'Çubuklu bahçe kapısı kanadı. Bahçe duvarı üzerindeki geçiş noktalarını gösterir, duvara yapışır.'
+      },
+      { 
+        id: 'arch-balcony', 
+        name: 'Balkon', 
+        src: '/assets/symbols/balcony.svg',
+        thumbnail: '/assets/symbols/karakalem/balcony.png',
+        type: 'symbol',
+        width: 120, height: 40,
+        description: 'Korkuluk tırnaklı balkon. Kesikli kenar binaya bağlanacak yüzü gösterir.'
+      },
+      { 
+        id: 'arch-pool', 
+        name: 'Havuz', 
+        src: '/assets/symbols/pool.svg',
+        thumbnail: '/assets/symbols/karakalem/pool.png',
+        type: 'symbol',
+        width: 150, height: 80,
+        description: 'Dalga çizgili havuz. Bahçe ve site olaylarında yüzme havuzunu gösterir.'
+      },
+      { 
+        id: 'arch-well', 
+        name: 'Kuyu', 
+        src: '/assets/symbols/well.svg',
+        thumbnail: '/assets/symbols/karakalem/well.png',
+        type: 'symbol',
+        width: 40, height: 40,
+        description: 'Çift daireli klasik kroki kuyu sembolü. Bahçe ve kırsal alan olaylarında kullanılır.'
+      },
+      { 
+        id: 'arch-bsection', 
+        name: 'Bina (Kesit)', 
+        src: '/assets/symbols/building_section.svg',
+        thumbnail: '/assets/symbols/karakalem/building_section.png',
+        type: 'symbol',
+        width: 100, height: 120,
+        description: 'Parametrik bina kesiti. Yükseklik değiştikçe kat sayısı otomatik hesaplanır; olayın hangi katta olduğunu gösterir.'
+      },
       { id: 'arch-house', name: 'Müstakil Ev', src: '/assets/symbols/house_detached.svg?v=2',
         thumbnail: '/assets/symbols/karakalem/house_detached.png', type: 'symbol', fill: '#000000', description: 'Tek katlı veya müstakil ev yapıları.', isSketch: true },
       { id: 'arch-b1', name: 'Bina (1 Katlı)', src: '/assets/symbols/building_1_story_front.svg?v=2',

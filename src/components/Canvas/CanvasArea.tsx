@@ -191,6 +191,331 @@ const st2JunctionGeometry = (w: number, h: number, roadWidth: number): JunctionG
   };
 };
 
+/* =====================================================================================
+ * MİMARİ EK SEMBOLLER MOTORU (kepenk, sürgülü kapı, asansör, geçit, parapet, kolon,
+ * bahçe duvarı/kapısı, balkon, havuz, kuyu, bina kesiti)
+ * Tümü prosedürel çizilir: sarı/görsel dokuya düşmez, uzatınca desen boyuta göre
+ * yeniden hesaplanır → görünüm bozulmaz. Ekran (ExtraArchShapes) ve export
+ * (drawExtraArch) aynı geometriyi paylaşır.
+ * ===================================================================================== */
+const EXTRA_ARCH_IDS = [
+  'arch-kepenk', 'arch-d3-slide', 'arch-elevator', 'arch-opening', 'arch-parapet',
+  'arch-colon-k', 'arch-colon-y', 'arch-garden-wall', 'arch-garden-gate',
+  'arch-balcony', 'arch-pool', 'arch-well', 'arch-bsection',
+];
+/** Kapı/pencere gibi duvara hizalanan semboller (sürükleme sırasında rotasyon duvara uyar) */
+const DOORLIKE_SNAP_IDS = ['arch-d1r', 'arch-d1l', 'arch-win', 'arch-d2', 'arch-d3-slide', 'arch-garden-gate', 'arch-kepenk', 'arch-opening'];
+/** Duvar gibi uç uca yapışan semboller */
+const WALLLIKE_IDS = ['arch-w1', 'arch-w1v', 'arch-w1i', 'arch-w1vi', 'arch-w-square', 'arch-garden-wall', 'arch-parapet'];
+
+/** Export (ctx) tarafı — ekrandaki ExtraArchShapes ile birebir aynı geometri. */
+const drawExtraArch = (ctx: CanvasRenderingContext2D, symbolId: string, w: number, h: number): boolean => {
+  switch (symbolId) {
+    case 'arch-kepenk': {
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(0, 0, w, h);
+      ctx.lineWidth = 1;
+      for (let x = 6; x < w; x += 6) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+      }
+      return true;
+    }
+    case 'arch-d3-slide': {
+      const ph = Math.max(3, h * 0.42);
+      ctx.fillStyle = '#ffffff';
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 1.5;
+      ctx.fillRect(0, 0, w * 0.55, ph);
+      ctx.strokeRect(0, 0, w * 0.55, ph);
+      ctx.fillRect(w * 0.45, h - ph, w * 0.55, ph);
+      ctx.strokeRect(w * 0.45, h - ph, w * 0.55, ph);
+      return true;
+    }
+    case 'arch-elevator': {
+      ctx.fillStyle = '#ffffff';
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 2;
+      ctx.fillRect(0, 0, w, h);
+      ctx.strokeRect(0, 0, w, h);
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(w, h); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(w, 0); ctx.lineTo(0, h); ctx.stroke();
+      return true;
+    }
+    case 'arch-opening': {
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([5, 4]);
+      ctx.strokeRect(0, 0, w, h);
+      ctx.setLineDash([]);
+      return true;
+    }
+    case 'arch-parapet': {
+      ctx.fillStyle = '#ffffff';
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 1.5;
+      ctx.fillRect(0, 0, w, h);
+      ctx.strokeRect(0, 0, w, h);
+      ctx.lineWidth = 1;
+      ctx.setLineDash([6, 4]);
+      ctx.beginPath(); ctx.moveTo(0, h / 2); ctx.lineTo(w, h / 2); ctx.stroke();
+      ctx.setLineDash([]);
+      return true;
+    }
+    case 'arch-colon-k': {
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, w, h);
+      return true;
+    }
+    case 'arch-colon-y': {
+      ctx.fillStyle = '#000';
+      ctx.beginPath();
+      ctx.ellipse(w / 2, h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      return true;
+    }
+    case 'arch-garden-wall': {
+      ctx.fillStyle = '#ffffff';
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 1.5;
+      ctx.fillRect(0, 0, w, h);
+      ctx.strokeRect(0, 0, w, h);
+      return true;
+    }
+    case 'arch-garden-gate': {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, h * 0.85, w, h * 0.15);
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(5, h * 0.85); ctx.lineTo(5, h * 0.1); ctx.stroke();
+      ctx.lineWidth = 1.5;
+      for (const y of [h * 0.33, h * 0.55, h * 0.77]) {
+        ctx.beginPath(); ctx.moveTo(1.5, y); ctx.lineTo(8.5, y); ctx.stroke();
+      }
+      ctx.lineWidth = 1;
+      ctx.setLineDash([5, 4]);
+      ctx.beginPath();
+      ctx.arc(5, h * 0.85, h * 0.75, -Math.PI / 2, 0);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      return true;
+    }
+    case 'arch-balcony': {
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(0, 0); ctx.lineTo(0, h); ctx.lineTo(w, h); ctx.lineTo(w, 0);
+      ctx.stroke();
+      ctx.lineWidth = 1;
+      ctx.setLineDash([5, 4]);
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(w, 0); ctx.stroke();
+      ctx.setLineDash([]);
+      for (let x = 10; x <= w - 5; x += 10) {
+        ctx.beginPath(); ctx.moveTo(x, h - 5); ctx.lineTo(x, h); ctx.stroke();
+      }
+      for (let y = 10; y <= h - 5; y += 10) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(5, y); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(w - 5, y); ctx.lineTo(w, y); ctx.stroke();
+      }
+      return true;
+    }
+    case 'arch-pool': {
+      const rr = Math.min(10, h * 0.15);
+      ctx.beginPath();
+      ctx.moveTo(1.5 + rr, 1.5);
+      ctx.arcTo(1.5 + (w - 3), 1.5, 1.5 + (w - 3), 1.5 + (h - 3), rr);
+      ctx.arcTo(1.5 + (w - 3), 1.5 + (h - 3), 1.5, 1.5 + (h - 3), rr);
+      ctx.arcTo(1.5, 1.5 + (h - 3), 1.5, 1.5, rr);
+      ctx.arcTo(1.5, 1.5, 1.5 + (w - 3), 1.5, rr);
+      ctx.closePath();
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.lineWidth = 1.2;
+      const x0 = w * 0.1;
+      const qw = (w * 0.8) / 4;
+      const amp = h * 0.05;
+      for (let i = 1; i <= 3; i++) {
+        const y = (h * i) / 4;
+        ctx.beginPath();
+        ctx.moveTo(x0, y);
+        for (let s = 0; s < 4; s++) {
+          const sgn = s % 2 === 0 ? -1 : 1;
+          ctx.quadraticCurveTo(x0 + qw * (s + 0.5), y + sgn * amp, x0 + qw * (s + 1), y);
+        }
+        ctx.stroke();
+      }
+      return true;
+    }
+    case 'arch-well': {
+      const rx = w / 2;
+      const ry = h / 2;
+      ctx.fillStyle = '#ffffff';
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.ellipse(rx, ry, rx, ry, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      const irx = rx * 0.6;
+      const iry = ry * 0.6;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.ellipse(rx, ry, irx, iry, 0, 0, Math.PI * 2); ctx.stroke();
+      ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.moveTo(rx - irx, ry - iry); ctx.lineTo(rx + irx, ry + iry); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(rx + irx, ry - iry); ctx.lineTo(rx - irx, ry + iry); ctx.stroke();
+      return true;
+    }
+    case 'arch-bsection': {
+      const floors = Math.max(2, Math.round(h / 40));
+      const slabH = Math.max(2, h * 0.025);
+      const groundH = Math.max(3, h * 0.03);
+      ctx.fillStyle = '#000';
+      for (let i = 0; i < floors; i++) {
+        ctx.fillRect(0, (i * h) / floors, w, slabH);
+      }
+      ctx.fillRect(0, h - groundH, w, groundH);
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(0, 0, w, h);
+      return true;
+    }
+    default:
+      return false;
+  }
+};
+
+/** Ekran (Konva) tarafı — drawExtraArch ile birebir aynı geometri. */
+const ExtraArchShapes = ({ symbolId, width: w, height: h }: { symbolId: string; width: number; height: number }) => {
+  switch (symbolId) {
+    case 'arch-kepenk':
+      return (
+        <Group>
+          <Rect width={w} height={h} stroke="#000" strokeWidth={2} />
+          {Array.from({ length: Math.max(0, Math.ceil((w - 6) / 6)) }).map((_, i) => (
+            <Line key={i} points={[6 + i * 6, 0, 6 + i * 6, h]} stroke="#000" strokeWidth={1} />
+          ))}
+        </Group>
+      );
+    case 'arch-d3-slide': {
+      const ph = Math.max(3, h * 0.42);
+      return (
+        <Group>
+          <Rect width={w * 0.55} height={ph} fill="#fff" stroke="#000" strokeWidth={1.5} />
+          <Rect x={w * 0.45} y={h - ph} width={w * 0.55} height={ph} fill="#fff" stroke="#000" strokeWidth={1.5} />
+        </Group>
+      );
+    }
+    case 'arch-elevator':
+      return (
+        <Group>
+          <Rect width={w} height={h} fill="#fff" stroke="#000" strokeWidth={2} />
+          <Line points={[0, 0, w, h]} stroke="#000" strokeWidth={1.5} />
+          <Line points={[w, 0, 0, h]} stroke="#000" strokeWidth={1.5} />
+        </Group>
+      );
+    case 'arch-opening':
+      return <Rect width={w} height={h} stroke="#000" strokeWidth={1.5} dash={[5, 4]} />;
+    case 'arch-parapet':
+      return (
+        <Group>
+          <Rect width={w} height={h} fill="#fff" stroke="#000" strokeWidth={1.5} />
+          <Line points={[0, h / 2, w, h / 2]} stroke="#000" strokeWidth={1} dash={[6, 4]} />
+        </Group>
+      );
+    case 'arch-colon-k':
+      return <Rect width={w} height={h} fill="#000" />;
+    case 'arch-colon-y':
+      return <Ellipse x={w / 2} y={h / 2} radiusX={w / 2} radiusY={h / 2} fill="#000" />;
+    case 'arch-garden-wall':
+      return <Rect width={w} height={h} fill="#fff" stroke="#000" strokeWidth={1.5} />;
+    case 'arch-garden-gate':
+      return (
+        <Group>
+          <Rect y={h * 0.85} width={w} height={h * 0.15} fill="#fff" />
+          <Line points={[5, h * 0.85, 5, h * 0.1]} stroke="#000" strokeWidth={3} />
+          {[0.33, 0.55, 0.77].map((f, i) => (
+            <Line key={i} points={[1.5, h * f, 8.5, h * f]} stroke="#000" strokeWidth={1.5} />
+          ))}
+          <Path
+            data={`M 5 ${h * 0.1} A ${h * 0.75} ${h * 0.75} 0 0 1 ${5 + h * 0.75} ${h * 0.85}`}
+            stroke="#000"
+            strokeWidth={1}
+            dash={[5, 4]}
+            fill="none"
+          />
+        </Group>
+      );
+    case 'arch-balcony':
+      return (
+        <Group>
+          <Path data={`M 0 0 L 0 ${h} L ${w} ${h} L ${w} 0`} stroke="#000" strokeWidth={1.5} fill="none" />
+          <Line points={[0, 0, w, 0]} stroke="#000" strokeWidth={1.5} dash={[5, 4]} />
+          {Array.from({ length: Math.max(0, Math.floor((w - 15) / 10) + 1) }).map((_, i) => (
+            <Line key={`b-${i}`} points={[10 + i * 10, h - 5, 10 + i * 10, h]} stroke="#000" strokeWidth={1} />
+          ))}
+          {Array.from({ length: Math.max(0, Math.floor((h - 15) / 10) + 1) }).map((_, i) => (
+            <Group key={`s-${i}`}>
+              <Line points={[0, 10 + i * 10, 5, 10 + i * 10]} stroke="#000" strokeWidth={1} />
+              <Line points={[w - 5, 10 + i * 10, w, 10 + i * 10]} stroke="#000" strokeWidth={1} />
+            </Group>
+          ))}
+        </Group>
+      );
+    case 'arch-pool': {
+      const waveData = (y: number) => {
+        const x0 = w * 0.1;
+        const qw = (w * 0.8) / 4;
+        const amp = h * 0.05;
+        let d = `M ${x0} ${y}`;
+        for (let s = 0; s < 4; s++) {
+          const sgn = s % 2 === 0 ? -1 : 1;
+          d += ` Q ${x0 + qw * (s + 0.5)} ${y + sgn * amp}, ${x0 + qw * (s + 1)} ${y}`;
+        }
+        return d;
+      };
+      return (
+        <Group>
+          <Rect x={1.5} y={1.5} width={Math.max(1, w - 3)} height={Math.max(1, h - 3)} cornerRadius={Math.min(10, h * 0.15)} fill="#fff" stroke="#000" strokeWidth={2} />
+          {[1, 2, 3].map((i) => (
+            <Path key={i} data={waveData((h * i) / 4)} stroke="#000" strokeWidth={1.2} fill="none" />
+          ))}
+        </Group>
+      );
+    }
+    case 'arch-well': {
+      const rx = w / 2;
+      const ry = h / 2;
+      const irx = rx * 0.6;
+      const iry = ry * 0.6;
+      return (
+        <Group>
+          <Ellipse x={rx} y={ry} radiusX={rx} radiusY={ry} fill="#fff" stroke="#000" strokeWidth={2} />
+          <Ellipse x={rx} y={ry} radiusX={irx} radiusY={iry} stroke="#000" strokeWidth={1.5} />
+          <Line points={[rx - irx, ry - iry, rx + irx, ry + iry]} stroke="#000" strokeWidth={1.2} />
+          <Line points={[rx + irx, ry - iry, rx - irx, ry + iry]} stroke="#000" strokeWidth={1.2} />
+        </Group>
+      );
+    }
+    case 'arch-bsection': {
+      const floors = Math.max(2, Math.round(h / 40));
+      const slabH = Math.max(2, h * 0.025);
+      const groundH = Math.max(3, h * 0.03);
+      return (
+        <Group>
+          {Array.from({ length: floors }).map((_, i) => (
+            <Rect key={i} y={(i * h) / floors} width={w} height={slabH} fill="#000" />
+          ))}
+          <Rect y={h - groundH} width={w} height={groundH} fill="#000" />
+          <Rect width={w} height={h} stroke="#000" strokeWidth={2} />
+        </Group>
+      );
+    }
+    default:
+      return null;
+  }
+};
+
 export const drawExportObject = (ctx: CanvasRenderingContext2D, obj: any, img: HTMLImageElement | null, sceneObjects: any[]) => {
   const w = obj.width ?? 50;
   const h = obj.height ?? 50;
@@ -442,6 +767,11 @@ export const drawExportObject = (ctx: CanvasRenderingContext2D, obj: any, img: H
     for (let i = 0; i < Math.floor((w - 70) / 20); i++) {
       ctx.beginPath(); ctx.moveTo(35 + (i + 1) * 20, h - 35); ctx.lineTo(35 + (i + 1) * 20, h); ctx.stroke();
     }
+    return;
+  }
+
+  // 4f) MİMARİ EK SEMBOLLER MOTORU — ekranla birebir aynı prosedürel çizim.
+  if (EXTRA_ARCH_IDS.includes(symbolId) && drawExtraArch(ctx, symbolId, w, h)) {
     return;
   }
 
@@ -768,9 +1098,9 @@ const IndividualObject = ({
         // Kapılar için standart başlangıç boyutu
         initialWidth = 60;
         initialHeight = 60;
-      } else if (['arch-6', 'arch-6-v4', 'arch-6l', 'arch-6l-v4', 'arch-6u', 'arch-6u-v4'].includes(shapeProps.symbolId || '')) {
-        // Prosedürel merdivenler: yerleştirme boyutu korunur — basamak motoru
-        // boyuta göre çizildiğinden oran sabitlemeye gerek yoktur.
+      } else if (['arch-6', 'arch-6-v4', 'arch-6l', 'arch-6l-v4', 'arch-6u', 'arch-6u-v4'].includes(shapeProps.symbolId || '') || EXTRA_ARCH_IDS.includes(shapeProps.symbolId || '')) {
+        // Prosedürel merdivenler ve mimari ek semboller: yerleştirme boyutu korunur —
+        // motorlar boyuta göre çizildiğinden oran sabitlemeye gerek yoktur.
         initialWidth = shapeProps.width;
         initialHeight = shapeProps.height;
       } else {
@@ -980,8 +1310,8 @@ const IndividualObject = ({
           if (onDragMove) onDragMove(e);
           
           // Mimari Snapping (Kapı/Pencere rotasyonunu duvara uydur)
-          const isSnapTarget = ['arch-d1r', 'arch-d1l', 'arch-win', 'arch-d2'].includes(shapeProps.symbolId || '');
-          const isWall = ['arch-w1', 'arch-w1v', 'arch-w1i', 'arch-w1vi', 'arch-w-square'].includes(shapeProps.symbolId || '');
+          const isSnapTarget = DOORLIKE_SNAP_IDS.includes(shapeProps.symbolId || '');
+          const isWall = WALLLIKE_IDS.includes(shapeProps.symbolId || '');
 
           if (allObjects && e.target === groupRef.current) {
             const threshold = 15; // Snapping etki alanı
@@ -991,7 +1321,7 @@ const IndividualObject = ({
             if (isSnapTarget) {
               for (const other of allObjects) {
                 if (other.id === shapeProps.id) continue;
-                const isOtherWall = ['arch-w1', 'arch-w1v', 'arch-w1i', 'arch-w1vi', 'arch-w-square'].includes(other.symbolId || '');
+                const isOtherWall = WALLLIKE_IDS.includes(other.symbolId || '');
                 if (!isOtherWall) continue;
 
                 const dx = myX - other.x;
@@ -1014,7 +1344,7 @@ const IndividualObject = ({
               // Duvar-Duvar Yapışma (Uç uca ekleme)
               for (const other of allObjects) {
                 if (other.id === shapeProps.id) continue;
-                const isOtherWall = ['arch-w1', 'arch-w1v', 'arch-w1i', 'arch-w1vi', 'arch-w-square'].includes(other.symbolId || '');
+                const isOtherWall = WALLLIKE_IDS.includes(other.symbolId || '');
                 if (!isOtherWall) continue;
 
                 // Diğer duvarın köşelerini hesapla
@@ -1090,8 +1420,8 @@ const IndividualObject = ({
 
           // Road & Wall Snapping Logic
           const isRoad = shapeProps.symbolId?.startsWith('st-') && ['st-1', 'st-2', 'st-3', 'st-4'].includes(shapeProps.symbolId);
-          const isWall = ['arch-w1', 'arch-w1v', 'arch-w1i', 'arch-w1vi'].includes(shapeProps.symbolId || '');
-          const isSnapTarget = ['arch-d1r', 'arch-d1l', 'arch-win', 'arch-d2'].includes(shapeProps.symbolId || '');
+          const isWall = WALLLIKE_IDS.includes(shapeProps.symbolId || '');
+          const isSnapTarget = DOORLIKE_SNAP_IDS.includes(shapeProps.symbolId || '');
 
           if ((isRoad || isWall || isSnapTarget) && allObjects) {
             const threshold = 20;
@@ -1507,6 +1837,13 @@ const IndividualObject = ({
               </Group>
             )}
           </Group>
+        ) : EXTRA_ARCH_IDS.includes(shapeProps.symbolId || '') ? (
+          // MİMARİ EK SEMBOLLER — prosedürel çizim (uzatmaya dayanıklı)
+          <ExtraArchShapes
+            symbolId={shapeProps.symbolId || ''}
+            width={shapeProps.width}
+            height={shapeProps.height}
+          />
         ) : shapeProps.type === 'rect' ? (
           <Rect
             width={shapeProps.width}
