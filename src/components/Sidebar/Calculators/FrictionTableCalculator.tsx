@@ -84,18 +84,37 @@ export const FrictionTableCalculator: React.FC = () => {
   const summaryText = useMemo(() => formatForensicSummary(report), [report]);
 
   const handleAddToCanvas = () => {
+    const baseX = 220;
+    const baseY = 300;
+    const barW = 300;
+    const muToPx = (m: number) => m * barW;
+
+    // μ ekseni
+    addObject({ type: 'rect', x: baseX, y: baseY, width: barW + 20, height: 2.5, fill: '#9E9E9E' });
+    // Tipik aralık bandı
+    addObject({ type: 'rect', x: baseX + muToPx(surface.min), y: baseY - 9, width: Math.max(8, muToPx(surface.max - surface.min)), height: 18, cornerRadius: 3, fill: '#A5D6A7', stroke: '#1B5E20', strokeWidth: 1.5 });
+    // Orta değer işareti
+    addObject({ type: 'rect', x: baseX + muToPx(surface.typ) - 5, y: baseY - 14, width: 10, height: 10, rotation: 45, fill: '#1B5E20', stroke: '#fff', strokeWidth: 1 });
+    // Uç etiketleri
+    addObject({ type: 'text', text: surface.min.toFixed(2), x: baseX + muToPx(surface.min) - 14, y: baseY + 12, width: 50, fontSize: 9, fill: '#37474F', fontFamily: 'Inter', fontStyle: 'bold' });
+    addObject({ type: 'text', text: surface.max.toFixed(2), x: baseX + muToPx(surface.max) - 6, y: baseY + 12, width: 50, fontSize: 9, fill: '#37474F', fontFamily: 'Inter', fontStyle: 'bold' });
+    addObject({ type: 'text', text: 'μ = 0', x: baseX - 30, y: baseY + 12, width: 44, fontSize: 9, fill: '#9E9E9E', fontFamily: 'Inter', fontStyle: 'bold' });
+    addObject({ type: 'text', text: `${surface.name} — μ ${surface.min.toFixed(2)}–${surface.max.toFixed(2)}`, x: baseX, y: baseY - 40, width: 340, fontSize: 10, fill: '#37474F', fontFamily: 'Inter', fontStyle: 'bold' });
+    // Sonuç
+    addObject({ type: 'text', text: `${trNum(speed, 0)} km/s → frenleme ≈ ${trNum(braking.dTyp, 0)} m (${trNum(braking.dMin, 0)}–${trNum(braking.dMax, 0)} m)`, x: baseX, y: baseY + 32, width: 360, fontSize: 11, fill: '#B71C1C', fontFamily: 'Inter', fontStyle: 'bold' });
+
     addObject({
       type: 'text',
       text: summaryText,
-      x: 300,
-      y: 300,
-      width: 360,
-      fontSize: 11,
+      x: baseX - 20,
+      y: baseY + 60,
+      width: 320,
+      fontSize: 10,
       fill: '#000000',
       fontFamily: 'Inter',
       fontStyle: 'bold',
     });
-    addNotification({ type: 'success', message: 'Hesaplama kısa özeti rapora (kroki) eklendi' });
+    addNotification({ type: 'success', message: 'Şema ve kısa özet rapora (kroki) eklendi' });
   };
 
   const inputCls = 'w-full bg-[#111] border border-[#333] rounded-xl px-4 py-3 text-sm text-white focus:border-[#F5C518]/50 outline-none transition-all font-mono';

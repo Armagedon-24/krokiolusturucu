@@ -107,18 +107,46 @@ export const PedestrianThrowCalculator: React.FC = () => {
   const summaryText = useMemo(() => formatForensicSummary(report), [report]);
 
   const handleAddToCanvas = () => {
+    const seg = (ax: number, ay: number, bx: number, by: number, color: string, th = 3) => {
+      const dx = bx - ax, dy = by - ay;
+      addObject({ type: 'rect', x: ax, y: ay, width: Math.max(2, Math.sqrt(dx * dx + dy * dy)), height: th, rotation: (Math.atan2(dy, dx) * 180) / Math.PI, fill: color, stroke: color, strokeWidth: 0.5 });
+    };
+
+    const scale = 15;
+    const baseX = 230;
+    const baseY = 330;
+    const dPx = Math.min(400, Math.max(60, distance * scale));
+    const hPx = Math.min(80, Math.max(18, height * scale * 3));
+
+    // Zemin
+    addObject({ type: 'rect', x: baseX - 60, y: baseY + 2, width: dPx + 150, height: 2.5, fill: '#9E9E9E' });
+    // Araç
+    addObject({ type: 'rect', x: baseX - 66, y: baseY - 20, width: 56, height: 22, cornerRadius: 5, fill: '#E53935', stroke: '#B71C1C', strokeWidth: 2 });
+    addObject({ type: 'text', text: `Araç ≈ ${trNum(vMid, 0)} km/s`, x: baseX - 76, y: baseY - 44, width: 140, fontSize: 10, fill: '#B71C1C', fontFamily: 'Inter', fontStyle: 'bold' });
+    // Yaya savrulma parabolü (rect parçalarıyla)
+    const N = 12;
+    for (let i = 0; i < N; i++) {
+      const t1 = i / N, t2 = (i + 1) / N;
+      seg(baseX + dPx * t1, baseY - hPx * 4 * t1 * (1 - t1), baseX + dPx * t2, baseY - hPx * 4 * t2 * (1 - t2), '#FF5722', 3);
+    }
+    // Yaya başlangıç ve düşüş işaretleri
+    addObject({ type: 'rect', x: baseX - 5, y: baseY - 5, width: 10, height: 10, rotation: 45, fill: '#1565C0', stroke: '#fff', strokeWidth: 1 });
+    addObject({ type: 'rect', x: baseX + dPx - 5, y: baseY - 5, width: 10, height: 10, rotation: 45, fill: '#FF5722', stroke: '#fff', strokeWidth: 1 });
+    addObject({ type: 'text', text: `Savrulma: ${trNum(distance, 1)} m`, x: baseX + dPx / 2 - 50, y: baseY + 12, width: 160, fontSize: 10, fill: '#37474F', fontFamily: 'Inter', fontStyle: 'bold' });
+    addObject({ type: 'text', text: `v ≈ ${trNum(vMin, 0)}–${trNum(vMax, 0)} km/s`, x: baseX + dPx + 14, y: baseY - 30, width: 170, fontSize: 12, fill: '#B71C1C', fontFamily: 'Inter', fontStyle: 'bold' });
+
     addObject({
       type: 'text',
       text: summaryText,
-      x: 300,
-      y: 300,
-      width: 360,
-      fontSize: 11,
+      x: baseX - 20,
+      y: baseY + 38,
+      width: 320,
+      fontSize: 10,
       fill: '#000000',
       fontFamily: 'Inter',
       fontStyle: 'bold',
     });
-    addNotification({ type: 'success', message: 'Hesaplama kısa özeti rapora (kroki) eklendi' });
+    addNotification({ type: 'success', message: 'Şema ve kısa özet rapora (kroki) eklendi' });
   };
 
   const inputCls = 'w-full bg-[#111] border border-[#333] rounded-xl px-4 py-3 text-sm text-white focus:border-[#F5C518]/50 outline-none transition-all font-mono';

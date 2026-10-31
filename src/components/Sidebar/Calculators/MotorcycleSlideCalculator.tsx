@@ -93,18 +93,34 @@ export const MotorcycleSlideCalculator: React.FC = () => {
   const summaryText = useMemo(() => formatForensicSummary(report), [report]);
 
   const handleAddToCanvas = () => {
+    const scale = Math.min(9, 380 / Math.max(1, distance));
+    const baseX = 220;
+    const baseY = 300;
+    const dPx = Math.max(30, distance * scale);
+
+    // Zemin
+    addObject({ type: 'rect', x: baseX - 50, y: baseY + 12, width: dPx + 150, height: 2.5, fill: '#9E9E9E' });
+    // Motosiklet (devrilmiş) + sürücü
+    addObject({ type: 'rect', x: baseX - 46, y: baseY - 8, width: 42, height: 14, rotation: 8, cornerRadius: 4, fill: '#1565C0', stroke: '#0D47A1', strokeWidth: 2 });
+    addObject({ type: 'rect', x: baseX - 56, y: baseY - 6, width: 10, height: 10, rotation: 45, fill: '#FF5722', stroke: '#fff', strokeWidth: 1 });
+    // Kayma izi (kesikli)
+    addObject({ type: 'line', x: baseX, y: baseY, width: dPx, height: 4, dash: [11, 6], fill: '#263238' });
+    addObject({ type: 'rect', x: baseX + dPx - 4, y: baseY - 4, width: 8, height: 8, rotation: 45, fill: '#263238', stroke: '#fff', strokeWidth: 1 });
+    addObject({ type: 'text', text: `Kayma: ${trNum(distance, 1)} m · μ=${mu.toFixed(2)}`, x: baseX, y: baseY + 24, width: 280, fontSize: 10, fill: '#37474F', fontFamily: 'Inter', fontStyle: 'bold' });
+    addObject({ type: 'text', text: `≈ ${trNum(speed, 0)} km/s (${trNum(speedMin, 0)}–${trNum(speedMax, 0)})`, x: baseX + dPx + 14, y: baseY - 8, width: 180, fontSize: 13, fill: '#B71C1C', fontFamily: 'Inter', fontStyle: 'bold' });
+
     addObject({
       type: 'text',
       text: summaryText,
-      x: 300,
-      y: 300,
-      width: 360,
-      fontSize: 11,
+      x: baseX - 20,
+      y: baseY + 52,
+      width: 320,
+      fontSize: 10,
       fill: '#000000',
       fontFamily: 'Inter',
       fontStyle: 'bold',
     });
-    addNotification({ type: 'success', message: 'Hesaplama kısa özeti rapora (kroki) eklendi' });
+    addNotification({ type: 'success', message: 'Şema ve kısa özet rapora (kroki) eklendi' });
   };
 
   const inputCls = 'w-full bg-[#111] border border-[#333] rounded-xl px-4 py-3 text-sm text-white focus:border-[#F5C518]/50 outline-none transition-all font-mono';

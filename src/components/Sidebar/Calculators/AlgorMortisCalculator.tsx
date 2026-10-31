@@ -97,18 +97,56 @@ export const AlgorMortisCalculator: React.FC = () => {
   const summaryText = useMemo(() => formatForensicSummary(report), [report]);
 
   const handleAddToCanvas = () => {
+    const seg = (ax: number, ay: number, bx: number, by: number, color: string, th = 3) => {
+      const dx = bx - ax, dy = by - ay;
+      addObject({ type: 'rect', x: ax, y: ay, width: Math.max(2, Math.sqrt(dx * dx + dy * dy)), height: th, rotation: (Math.atan2(dy, dx) * 180) / Math.PI, fill: color, stroke: color, strokeWidth: 0.5 });
+    };
+
+    const baseX = 230;
+    const baseY = 290;
+    const W = 260;
+    const H = 120;
+    const span = Math.max(24, hours * 1.5);
+    const tMin = Math.min(ambientTemp, bodyTemp) - 1;
+    const lam = bodyTemp > ambientTemp && hours > 0
+      ? Math.log((37 - ambientTemp) / Math.max(0.5, bodyTemp - ambientTemp)) / hours
+      : 0.05;
+    const yOf = (t: number) => H - ((t - tMin) / (37.5 - tMin)) * H;
+
+    // Eksenler
+    addObject({ type: 'rect', x: baseX, y: baseY - H, width: 2, height: H + 6, fill: '#9E9E9E' });
+    addObject({ type: 'rect', x: baseX, y: baseY, width: W + 30, height: 2, fill: '#9E9E9E' });
+    // Ortam sıcaklığı (kesikli yatay)
+    addObject({ type: 'line', x: baseX, y: baseY + yOf(ambientTemp) - H, width: W + 30, height: 2, dash: [6, 5], fill: '#455A64' });
+    addObject({ type: 'text', text: `Ortam ${trNum(ambientTemp, 0)}°C`, x: baseX + W + 8, y: baseY + yOf(ambientTemp) - H - 8, width: 90, fontSize: 9, fill: '#455A64', fontFamily: 'Inter', fontStyle: 'bold' });
+    // Soğuma eğrisi (rect parçalarıyla)
+    const N = 16;
+    for (let i = 0; i < N; i++) {
+      const t1 = (i / N) * span, t2 = ((i + 1) / N) * span;
+      const u1 = ambientTemp + (37 - ambientTemp) * Math.exp(-lam * t1);
+      const u2 = ambientTemp + (37 - ambientTemp) * Math.exp(-lam * t2);
+      seg(baseX + (t1 / span) * W, baseY + yOf(u1) - H, baseX + (t2 / span) * W, baseY + yOf(u2) - H, '#B71C1C', 3);
+    }
+    // Ölçüm anı işareti
+    const nowX = Math.min(W, (hours / span) * W);
+    const nowY = yOf(bodyTemp) - H;
+    addObject({ type: 'rect', x: baseX + nowX - 5, y: baseY + nowY - 5, width: 10, height: 10, rotation: 45, fill: '#1565C0', stroke: '#fff', strokeWidth: 1 });
+    addObject({ type: 'text', text: `Ölçüm: ${trNum(bodyTemp, 1)}°C`, x: baseX + nowX - 60, y: baseY + nowY - 26, width: 130, fontSize: 9, fill: '#0D47A1', fontFamily: 'Inter', fontStyle: 'bold' });
+    addObject({ type: 'text', text: `PMI ≈ ${trNum(hours, 1)} saat (${trNum(hoursMin, 1)}–${trNum(hoursMax, 1)})`, x: baseX + 20, y: baseY - H - 36, width: 250, fontSize: 12, fill: '#B71C1C', fontFamily: 'Inter', fontStyle: 'bold' });
+    addObject({ type: 'text', text: 'Vücut ısısı (soğuma eğrisi)', x: baseX + 14, y: baseY - H - 12, width: 190, fontSize: 9, fill: '#B71C1C', fontFamily: 'Inter', fontStyle: 'bold' });
+
     addObject({
       type: 'text',
       text: summaryText,
-      x: 300,
-      y: 300,
-      width: 360,
-      fontSize: 11,
+      x: baseX - 20,
+      y: baseY + 34,
+      width: 320,
+      fontSize: 10,
       fill: '#000000',
       fontFamily: 'Inter',
-      fontStyle: 'bold'
+      fontStyle: 'bold',
     });
-    addNotification({ type: 'success', message: 'Hesaplama kısa özeti rapora (kroki) eklendi' });
+    addNotification({ type: 'success', message: 'Şema ve kısa özet rapora (kroki) eklendi' });
   };
 
   return (

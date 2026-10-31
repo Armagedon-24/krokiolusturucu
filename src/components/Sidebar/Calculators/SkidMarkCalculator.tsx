@@ -119,18 +119,36 @@ export const SkidMarkCalculator: React.FC = () => {
   const summaryText = useMemo(() => formatForensicSummary(report), [report]);
 
   const handleAddToCanvas = () => {
+    const scale = Math.min(9, 380 / Math.max(1, distance));
+    const baseX = 220;
+    const baseY = 300;
+    const dPx = Math.max(30, distance * scale);
+
+    // Zemin (kesikli)
+    addObject({ type: 'line', x: baseX - 50, y: baseY + 14, width: dPx + 150, height: 3, dash: [10, 6], fill: '#9E9E9E' });
+    // Araç
+    addObject({ type: 'rect', x: baseX, y: baseY - 11, width: 56, height: 22, cornerRadius: 5, fill: '#1565C0', stroke: '#0D47A1', strokeWidth: 2 });
+    // Fren izi (kesikli, kalın)
+    addObject({ type: 'line', x: baseX + 56, y: baseY, width: dPx, height: 5, dash: [14, 6], fill: '#263238' });
+    // İz bitiş işareti
+    addObject({ type: 'rect', x: baseX + 56 + dPx - 4, y: baseY - 4, width: 8, height: 8, rotation: 45, fill: '#263238', stroke: '#fff', strokeWidth: 1 });
+    // Ölçü etiketi
+    addObject({ type: 'text', text: `Fren izi: ${trNum(distance, 1)} m · μ=${mu.toFixed(2)} · ${vehicleType.name}`, x: baseX, y: baseY + 26, width: 300, fontSize: 10, fill: '#37474F', fontFamily: 'Inter', fontStyle: 'bold' });
+    // Sonuç
+    addObject({ type: 'text', text: `≈ ${trNum(speed, 0)} km/s (${trNum(speedMin, 0)}–${trNum(speedMax, 0)})`, x: baseX + 56 + dPx + 14, y: baseY - 8, width: 180, fontSize: 13, fill: '#B71C1C', fontFamily: 'Inter', fontStyle: 'bold' });
+
     addObject({
       type: 'text',
       text: summaryText,
-      x: 300,
-      y: 300,
-      width: 360,
-      fontSize: 11,
+      x: baseX - 20,
+      y: baseY + 56,
+      width: 320,
+      fontSize: 10,
       fill: '#000000',
       fontFamily: 'Inter',
-      fontStyle: 'bold'
+      fontStyle: 'bold',
     });
-    addNotification({ type: 'success', message: 'Hesaplama kısa özeti rapora (kroki) eklendi' });
+    addNotification({ type: 'success', message: 'Şema ve kısa özet rapora (kroki) eklendi' });
   };
 
   return (

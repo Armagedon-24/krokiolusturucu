@@ -77,18 +77,43 @@ export const ShadowCalculator: React.FC = () => {
   const summaryText = useMemo(() => formatForensicSummary(report), [report]);
 
   const handleAddToCanvas = () => {
+    const diag = (ax: number, ay: number, bx: number, by: number, color: string, sw = 2) => {
+      addObject({ type: 'symbol', symbolId: 'a-5', x: ax, y: ay, width: Math.max(2, Math.abs(bx - ax)), height: Math.max(2, Math.abs(by - ay)), startX: ax, startY: ay, endX: bx, endY: by, fill: color, stroke: color, strokeWidth: sw });
+    };
+
+    const hM = objectHeight > 0 ? objectHeight : shadowLength * Math.tan((sunAngle * Math.PI) / 180);
+    const scale = Math.min(40, 280 / Math.max(0.5, shadowLength));
+    const baseX = 240;
+    const baseY = 320;
+    const dPx = Math.max(70, shadowLength * scale);
+    const hPx = Math.min(170, Math.max(30, hM * scale));
+
+    // Zemin
+    addObject({ type: 'rect', x: baseX - 60, y: baseY + 2, width: dPx + 130, height: 2.5, fill: '#9E9E9E' });
+    // Dikme (nesne)
+    addObject({ type: 'rect', x: baseX - 2, y: baseY - hPx, width: 5, height: hPx, fill: '#37474F' });
+    // Gölge
+    addObject({ type: 'rect', x: baseX, y: baseY - 3, width: dPx, height: 6, fill: '#546E7A' });
+    // Güneş ışını (yönlü ok: güneşten gölge ucuna)
+    diag(baseX - 0.25 * dPx, baseY - 1.25 * hPx, baseX + dPx, baseY, '#FFB300', 1.5);
+    // Güneş
+    addObject({ type: 'rect', x: baseX - 0.25 * dPx - 9, y: baseY - 1.25 * hPx - 9, width: 18, height: 18, rotation: 45, fill: '#FFB300', stroke: '#FF8F00', strokeWidth: 1 });
+    addObject({ type: 'text', text: `h = ${trNum(hM, 2)} m`, x: baseX - 96, y: baseY - hPx / 2 - 8, width: 90, fontSize: 10, fill: '#37474F', fontFamily: 'Inter', fontStyle: 'bold' });
+    addObject({ type: 'text', text: `Gölge: ${trNum(shadowLength, 2)} m`, x: baseX + dPx / 2 - 44, y: baseY + 12, width: 130, fontSize: 10, fill: '#546E7A', fontFamily: 'Inter', fontStyle: 'bold' });
+    addObject({ type: 'text', text: `Güneş açısı: ${trNum(sunAngle, 0)}°`, x: baseX + 16, y: baseY - 28, width: 140, fontSize: 10, fill: '#FF8F00', fontFamily: 'Inter', fontStyle: 'bold' });
+
     addObject({
       type: 'text',
       text: summaryText,
-      x: 300,
-      y: 300,
-      width: 360,
-      fontSize: 11,
+      x: baseX - 20,
+      y: baseY + 40,
+      width: 320,
+      fontSize: 10,
       fill: '#000000',
       fontFamily: 'Inter',
-      fontStyle: 'bold'
+      fontStyle: 'bold',
     });
-    addNotification({ type: 'success', message: 'Hesaplama kısa özeti rapora (kroki) eklendi' });
+    addNotification({ type: 'success', message: 'Şema ve kısa özet rapora (kroki) eklendi' });
   };
 
   return (

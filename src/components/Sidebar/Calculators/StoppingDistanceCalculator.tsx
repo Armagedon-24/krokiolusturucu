@@ -101,18 +101,37 @@ export const StoppingDistanceCalculator: React.FC = () => {
   const summaryText = useMemo(() => formatForensicSummary(report), [report]);
 
   const handleAddToCanvas = () => {
+    const total = Math.max(1, calc.dTotal);
+    const scale = Math.min(6, 360 / total);
+    const baseX = 210;
+    const baseY = 300;
+    const rPx = Math.max(10, calc.dReact * scale);
+    const bPx = Math.max(20, calc.dBrake * scale);
+
+    // Araç
+    addObject({ type: 'rect', x: baseX - 62, y: baseY - 11, width: 56, height: 22, cornerRadius: 5, fill: '#1565C0', stroke: '#0D47A1', strokeWidth: 2 });
+    addObject({ type: 'text', text: `${trNum(speed, 0)} km/s`, x: baseX - 70, y: baseY - 36, width: 100, fontSize: 10, fill: '#0D47A1', fontFamily: 'Inter', fontStyle: 'bold' });
+    // Tepki mesafesi (sarı)
+    addObject({ type: 'rect', x: baseX, y: baseY - 5, width: rPx, height: 10, fill: '#F5C518', stroke: '#C9A50A', strokeWidth: 1 });
+    // Frenleme mesafesi (kırmızı)
+    addObject({ type: 'rect', x: baseX + rPx, y: baseY - 5, width: bPx, height: 10, fill: '#E53935', stroke: '#B71C1C', strokeWidth: 1 });
+
+    addObject({ type: 'text', text: `Tepki: ${trNum(calc.dReact, 1)} m`, x: baseX, y: baseY - 28, width: 150, fontSize: 10, fill: '#8D6E00', fontFamily: 'Inter', fontStyle: 'bold' });
+    addObject({ type: 'text', text: `Frenleme: ${trNum(calc.dBrake, 1)} m`, x: baseX + rPx, y: baseY + 14, width: 170, fontSize: 10, fill: '#B71C1C', fontFamily: 'Inter', fontStyle: 'bold' });
+    addObject({ type: 'text', text: `Toplam: ${trNum(calc.dTotal, 1)} m`, x: baseX + rPx + bPx + 12, y: baseY - 8, width: 150, fontSize: 12, fill: '#1B5E20', fontFamily: 'Inter', fontStyle: 'bold' });
+
     addObject({
       type: 'text',
       text: summaryText,
-      x: 300,
-      y: 300,
-      width: 360,
-      fontSize: 11,
+      x: baseX - 20,
+      y: baseY + 44,
+      width: 320,
+      fontSize: 10,
       fill: '#000000',
       fontFamily: 'Inter',
       fontStyle: 'bold',
     });
-    addNotification({ type: 'success', message: 'Hesaplama kısa özeti rapora (kroki) eklendi' });
+    addNotification({ type: 'success', message: 'Şema ve kısa özet rapora (kroki) eklendi' });
   };
 
   const inputCls = 'w-full bg-[#111] border border-[#333] rounded-xl px-4 py-3 text-sm text-white focus:border-[#F5C518]/50 outline-none transition-all font-mono';
