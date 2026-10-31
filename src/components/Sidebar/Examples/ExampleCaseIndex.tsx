@@ -22,6 +22,8 @@ import {
   Home,
   Skull,
   HeartCrack,
+  Briefcase,
+  Slice,
   Map as MapIcon,
   Download,
 } from 'lucide-react';
@@ -52,6 +54,8 @@ const ICONS: Record<string, React.ReactNode> = {
   Home: <Home size={14} />,
   Skull: <Skull size={14} />,
   HeartCrack: <HeartCrack size={14} />,
+  Briefcase: <Briefcase size={14} />,
+  Slice: <Slice size={14} />,
   Map: <MapIcon size={14} />,
   FileText: <FileText size={14} />,
 };

@@ -92,11 +92,24 @@ const innerH = (x: number, y: number, w: number): KrokiPlacement => ({ s: 'arch-
 /** Pencere (duvar üzerine) */
 const win = (x: number, y: number, w = 80, rot = 0): KrokiPlacement => ({ s: 'arch-win', x, y, w, h: 12, rot });
 
-/** Kapı (kanat + açılım yayı) */
-const door = (x: number, y: number, w = 56, rot = 0): KrokiPlacement => ({ s: 'arch-d1l', x, y, w, h: w, rot });
+/** Kapı (kanat + açılım yayı). (hx,hy) = MENTEŞE noktası: kapı kanadının duvar MERKEZ
+ *  ÇİZGİSİNE birebir oturduğu uç. arch-d1l imgesinde kanat kutunun alt kenarındadır;
+ *  yerleşim kanat çizgisi tam duvar çizgisi üzerine gelecek şekilde hesaplanır.
+ *  rot: 0 = kanat menteşeden SAĞA, yay YUKARI; 90 = kanat AŞAĞI, yay SAĞA;
+ *       180 = kanat SOLA, yay AŞAĞI; 270 = kanat YUKARI, yay SOLA. */
+const door = (hx: number, hy: number, w = 56, rot: 0 | 90 | 180 | 270 = 0): KrokiPlacement => {
+  if (rot === 90) return { s: 'arch-d1l', x: hx + w, y: hy, w, h: w, rot };
+  if (rot === 180) return { s: 'arch-d1l', x: hx, y: hy + w, w, h: w, rot };
+  if (rot === 270) return { s: 'arch-d1l', x: hx - w, y: hy, w, h: w, rot };
+  return { s: 'arch-d1l', x: hx, y: hy - w, w, h: w, rot };
+};
 
-/** Çift kanatlı kapı / balkon kapısı */
-const doubleDoor = (x: number, y: number, w = 70, rot = 0): KrokiPlacement => ({ s: 'arch-d2', x, y, w, h: w, rot });
+/** Çift kanatlı kapı / balkon kapısı. (hx,hy) = kanat diziliminin duvar merkez çizgisine
+ *  oturan uç noktası: rot 0 → sol menteşe, kanatlar sağa; rot 90 → üst menteşe, kanatlar aşağı. */
+const doubleDoor = (hx: number, hy: number, w = 70, rot: 0 | 90 = 0): KrokiPlacement =>
+  rot === 90
+    ? { s: 'arch-d2', x: hx + w, y: hy, w, h: w, rot }
+    : { s: 'arch-d2', x: hx, y: hy - w, w, h: w, rot };
 
 /** Sarı numaratör (Bulgu Listesi'ne işlenir). cx,cy = merkez. */
 const marker = (no: string, desc: string, cx: number, cy: number, size = 34): KrokiPlacement => ({
@@ -333,8 +346,8 @@ const hirsizlik: KrokiScenario[] = [
       // ---- Plan: salon + yatak odası
       ...room(30, 30, 1096, 420),
       innerV(652, 30, 420),
-      // Giriş kapısı (alt duvar, salon)
-      door(100, 422, 56, 0),
+      // Giriş kapısı (alt duvar, salon) — kanat duvar merkez çizgisinde
+      door(104, 450, 56, 0),
       // Pencereler
       win(330, 24, 90, 0),
       { s: 'arch-win', x: 1134, y: 180, w: 80, h: 12, rot: 90 },
@@ -396,11 +409,11 @@ const hirsizlik: KrokiScenario[] = [
       ...room(120, 40, 520, 520),
       innerH(120, 340, 180),
       { s: 'arch-w1i', x: 380, y: 336, w: 260, h: 8 },
-      door(304, 328, 56, 0),
+      door(306, 340, 56, 0),
       // Arka pencere (giriş noktası) — sol duvar
       { s: 'arch-win', x: 128, y: 120, w: 80, h: 12, rot: 90 },
-      // Arka kapı — sağ duvar
-      door(650, 460, 56, 90),
+      // Arka kapı — sağ duvar (kanat duvar çizgisinde, yay odaya)
+      door(640, 516, 56, 270),
       // ---- Mobilya
       { s: 'f-2', x: 500, y: 70, w: 140, h: 190, name: 'Çift Kişilik Yatak' },
       { s: 'f-7', x: 330, y: 56, w: 150, h: 55, name: 'Gardırop (3 Kapılı)' },
@@ -460,11 +473,11 @@ const hirsizlik: KrokiScenario[] = [
       lbl('Kiler 2', 420, 200, 11),
       lbl('Kiler 3', 680, 200, 11),
       lbl('Kiler 4', 940, 200, 11),
-      // Kiler kapıları (koridor tarafına)
-      door(140, 318, 48, 180),
-      door(400, 318, 48, 180),
-      door(660, 318, 48, 180),
-      door(920, 318, 48, 180),
+      // Kiler kapıları (koridor tarafına) — kanatlar koridor üst duvar çizgisinde
+      door(140, 380, 48, 180),
+      door(400, 380, 48, 180),
+      door(660, 380, 48, 180),
+      door(920, 380, 48, 180),
       // ---- Koridor
       ...room(40, 380, 1060, 130),
       // ---- Kiler 2 içi (soygun yeri)
@@ -525,8 +538,8 @@ const hirsizlik: KrokiScenario[] = [
       // ---- Ev planı (açık mutfak + salon)
       ...room(240, 120, 760, 380),
       innerV(770, 120, 380),
-      // Teras kapısı (alt duvar) + giriş
-      doubleDoor(490, 462, 72, 0),
+      // Teras kapısı (alt duvar) + giriş — kanatlar duvar çizgisinde
+      doubleDoor(490, 500, 72, 0),
       // ---- Salon
       { s: 'f-8', x: 300, y: 160, w: 180, h: 80, name: 'İkili Koltuk' },
       { s: 'f-5', x: 302, y: 270, w: 88, h: 86, name: 'Tekli Koltuk' },
@@ -581,10 +594,10 @@ const hirsizlik: KrokiScenario[] = [
       ...room(90, 60, 680, 420),
       innerV(610, 60, 180),
       innerH(610, 240, 160),
-      door(620, 228, 48, 0),
+      door(622, 240, 48, 0),
       lbl('Banyo', 690, 150, 10),
-      // Balkon kapısı — sağ duvar (rot 90)
-      doubleDoor(786, 370, 66, 90),
+      // Balkon kapısı — sağ duvar (kanat duvar çizgisinde, yay balkona)
+      doubleDoor(770, 370, 66, 90),
       // Pencere — üst duvar
       win(300, 56, 80, 0),
       // ---- Mobilya
@@ -918,7 +931,7 @@ const cinayet: KrokiScenario[] = [
     objects: [
       ...room(60, 50, 760, 420),
       win(400, 46, 80, 0),
-      door(150, 432, 56, 0),
+      door(150, 470, 56, 0),
       // Mobilya
       { s: 'f-8', x: 100, y: 90, w: 170, h: 80, name: 'İkili Koltuk' },
       { s: 'f-5', x: 102, y: 212, w: 88, h: 86, name: 'Tekli Koltuk' },
@@ -972,9 +985,9 @@ const cinayet: KrokiScenario[] = [
       ...room(80, 50, 460, 460),
       innerV(540, 50, 220),
       innerH(540, 270, 200),
-      door(556, 256, 44, 0),
+      door(556, 270, 44, 0),
       lbl('Banyo', 645, 150, 10),
-      door(350, 470, 54, 0),
+      door(350, 510, 54, 0),
       win(440, 46, 70, 0),
       // Mobilya
       { s: 'f-2', x: 110, y: 80, w: 150, h: 200, name: 'Çift Kişilik Yatak' },
@@ -1027,7 +1040,7 @@ const cinayet: KrokiScenario[] = [
     objects: [
       ...room(100, 60, 640, 400),
       win(300, 56, 80, 0),
-      door(620, 424, 54, 0),
+      door(620, 460, 54, 0),
       // Mobilya
       { s: 'f-1', x: 140, y: 90, w: 110, h: 200, name: 'Tek Kişilik Yatak' },
       { s: 'f-5', x: 300, y: 100, w: 88, h: 86, name: 'Koltuk' },
@@ -1075,7 +1088,7 @@ const cinayet: KrokiScenario[] = [
     objects: [
       ...room(80, 60, 620, 380),
       win(300, 56, 80, 0),
-      door(300, 404, 54, 0),
+      door(300, 440, 54, 0),
       // Mutfak dolapları
       { s: 'f-4', x: 100, y: 80, w: 230, h: 160, name: 'L Tezgah' },
       { s: 'f-3', x: 480, y: 80, w: 180, h: 55, name: 'Tezgah' },
@@ -1188,7 +1201,7 @@ const intihar: KrokiScenario[] = [
     ],
     objects: [
       ...room(100, 60, 600, 440),
-      door(560, 452, 54, 0),
+      door(560, 500, 54, 0),
       win(320, 56, 80, 0),
       // Gardırop + ip
       { s: 'f-13', x: 116, y: 76, w: 130, h: 55, name: 'Gardırop' },
@@ -1215,7 +1228,7 @@ const intihar: KrokiScenario[] = [
       arrow(116, 430, 116, 130, '≈ 3,1 m'),
       // Açıklamalar
       callout('Mağdur ayakları yerden 8 cm yukarıda (asılı)', 520, 220, 11),
-      callout('Kapı içeriden kilitli — 112 ekibi kırdı', 560, 480, 11),
+      callout('Kapı içeriden kilitli — 112 ekibi kırdı', 500, 552, 11),
       note('112 ekibin girişi sonrası kapı kanadı kırıldı.', 60, 560, 230, 9),
     ],
   },
@@ -1236,7 +1249,7 @@ const intihar: KrokiScenario[] = [
     ],
     objects: [
       ...room(200, 80, 360, 320),
-      door(360, 388, 50, 0),
+      door(360, 400, 50, 0),
       // Duş teknesi
       { s: 'ev-rect-hollow', x: 230, y: 100, w: 90, h: 60 },
       lbl('Duş teknesi', 275, 130, 9),
@@ -1389,7 +1402,7 @@ const intihar: KrokiScenario[] = [
       lbl('Bahçe duvarı', 460, 80, 9),
       // Ev (sağda, kısmi cephe)
       ...room(1000, 120, 320, 380),
-      door(1020, 488, 52, 0),
+      door(1020, 500, 52, 0),
       lbl('Ev (arka cephe)', 1160, 90, 10),
       // Sokak lambası
       { s: 'out-street-light', x: 856, y: 176, w: 40, h: 54 },
@@ -1427,6 +1440,1038 @@ const intihar: KrokiScenario[] = [
 ];
 
 /* ------------------------------------------------------------------ */
+/* Grup 5: OTODAN HIRSIZLIK (araç içi / araçtan hırsızlık)             */
+/* ------------------------------------------------------------------ */
+const otoHirsizligi: KrokiScenario[] = [
+  {
+    id: 'oto-1',
+    title: 'Sokak kenarında park halindeki araçtan cam kırma hırsızlığı',
+    address: 'Ankara / Çankaya — Kızılırmak Mah. Dikmen Cd. No:144 kenarı park yeri',
+    story:
+      'Mağdur aracını gece 22.30-07.00 arasında sokak kenarına park etti; sabah sağ arka camın taşla kırıldığını, bagajdaki dizüstü bilgisayar çantasının alındığını gördü. Yerinde cam kırıkları, kopan bagaj kilidi ve şüpheliye ait ayak izleri tespit edildi.',
+    scaleNote: '≈ 1 m = 95 piksel',
+    bulgular: [
+      { no: '1', desc: 'Mağdur aracı (sağ arka cam kırık)' },
+      { no: '2', desc: 'Zemindeki cam kırıkları' },
+      { no: '3', desc: 'Bagajda kalan belgeler (çalıntı: dizüstü bilgisayar)' },
+      { no: '4', desc: 'Şüpheliye ait ayak izleri' },
+      { no: '5', desc: 'Şüphelinin kaçış yönü' },
+      { no: '6', desc: 'Karşı bina güvenlik kamerası görüntü noktası' },
+    ],
+    objects: [
+      roadH(20, 1346, 300, 150),
+      { s: 'out-fence', x: 160, y: 60, w: 160, h: 50 },
+      { s: 'out-fence', x: 340, y: 60, w: 160, h: 50 },
+      lbl('Apartman bahçe duvarı', 340, 85, 9),
+      { s: 'out-street-light', x: 100, y: 130, w: 40, h: 54 },
+      // Mağdur araç + kırık cam
+      { s: 'v-sedan', x: 600, y: 240, w: 180, h: 78, name: 'Binek otomobil (mağdur aracı)' },
+      { s: 'ex-4', x: 740, y: 330, w: 64, h: 42, name: 'Kırılan camlar (sağ arka kapı önü)' },
+      { s: 'ei-keys', x: 688, y: 334, w: 30, h: 42, name: 'Kopan bagaj kilidi (yerde)' },
+      { s: 'ei-documents', x: 830, y: 330, w: 44, h: 38, name: 'Bagajda kalan belgeler' },
+      // Şüpheli izleri + kaçış
+      { s: 'tr-footprint', x: 980, y: 330, w: 26, h: 42 },
+      { s: 'tr-footprint', x: 1024, y: 318, w: 26, h: 42, rot: -12 },
+      dash(1100, 340, 1300, 240, 'Kaçış yönü'),
+      // Kamera
+      { s: 'out-cctv', x: 1180, y: 110, w: 52, h: 40, name: 'Güvenlik kamerası' },
+      lbl('Kamera görüş alanı', 1180, 175, 9),
+      // Numaratörler
+      marker('1', 'Mağdur araç', 560, 272),
+      marker('2', 'Cam kırıkları', 772, 400),
+      marker('3', 'Bagajda kalan belgeler', 880, 400),
+      marker('4', 'Şüpheli ayak izleri', 1002, 408),
+      marker('5', 'Kaçış yönü', 1240, 205),
+      marker('6', 'Güvenlik kamerası', 1252, 145, 30),
+      // Ölçüler + açıklamalar
+      arrow(600, 430, 780, 430, '≈ 4,5 m'),
+      callout('Sağ arka cam taş ile kırıldı', 420, 175, 11),
+      callout('Olay 22.30 - 07.00 arasında gerçekleşti', 900, 160, 11),
+      note('Kamera kaydı komşu apartman yönetiminden talep edildi.', 40, 640, 270, 9),
+    ],
+  },
+  {
+    id: 'oto-2',
+    title: 'AVM kapalı otoparkında araç içinden hırsızlık',
+    address: 'İstanbul / Kadıköy — Caferağa Mah. AVM kapalı otopark B1 katı',
+    story:
+      'Araç sahibi akşam aracına döndüğünde ön sol camın kırıldığını, kapı kilidi zorlanmadan konsol ses sisteminin söküldüğünü fark etti. Otopark kamerası şüphelinin B-14 slotuna yaklaştığını gösteriyor; yerde kırıcı alet ve cam kırıkları bulundu.',
+    scaleNote: '≈ 1 m = 95 piksel',
+    bulgular: [
+      { no: '1', desc: 'Mağdur araç (B-14 slotu, ön sol cam kırık)' },
+      { no: '2', desc: 'Zemindeki cam kırıkları' },
+      { no: '3', desc: 'Kırıcı alet (sopa — şüpheliye ait)' },
+      { no: '4', desc: 'Mağdurun düşen gözlüğü' },
+      { no: '5', desc: 'Şüpheli ayak izleri (merdiven yönü)' },
+      { no: '6', desc: 'Otopark güvenlik kamerası' },
+    ],
+    objects: [
+      // Park sıraları
+      { s: 'ev-rect-hollow', x: 240, y: 160, w: 200, h: 100 },
+      { s: 'ev-rect-hollow', x: 470, y: 160, w: 200, h: 100 },
+      { s: 'ev-rect-hollow', x: 700, y: 160, w: 200, h: 100 },
+      lbl('B-12', 340, 210, 10),
+      lbl('B-13', 570, 210, 10),
+      lbl('B-14', 800, 210, 10),
+      // Araçlar
+      { s: 'v-panelvan', x: 485, y: 172, w: 175, h: 76, name: 'Komşu araç (B-13)' },
+      { s: 'v-sedan', x: 715, y: 172, w: 170, h: 74, name: 'Mağdur araç (B-14)' },
+      // Deliller
+      { s: 'ex-4', x: 700, y: 290, w: 60, h: 40, name: 'Cam kırıkları (ön sol kapı önü)' },
+      { s: 'w-5', x: 610, y: 316, w: 52, h: 16, name: 'Kırıcı alet (sopa)' },
+      { s: 'ei-glasses', x: 540, y: 310, w: 30, h: 26, name: 'Düşen gözlük' },
+      { s: 'tr-footprint', x: 770, y: 400, w: 26, h: 42 },
+      { s: 'tr-footprint', x: 812, y: 418, w: 26, h: 42, rot: 15 },
+      { s: 'tr-footprint', x: 854, y: 438, w: 26, h: 42, rot: 32 },
+      dash(900, 470, 1090, 560, 'Kaçış (merdiven yönü)'),
+      // Altyapı
+      { s: 'out-cctv', x: 1200, y: 110, w: 52, h: 40, name: 'Otopark kamerası' },
+      { s: 'ts-parking', x: 160, y: 110, w: 40, h: 40 },
+      lbl('Otopark B1', 300, 125, 10),
+      // Numaratörler
+      marker('1', 'Mağdur araç (B-14)', 760, 320),
+      marker('2', 'Cam kırıkları', 700, 370),
+      marker('3', 'Kırıcı alet', 610, 370),
+      marker('4', 'Düşen gözlük', 540, 370),
+      marker('5', 'Şüpheli ayak izleri', 830, 480),
+      marker('6', 'Otopark kamerası', 1252, 180, 30),
+      // Ölçüler + açıklamalar
+      arrow(240, 560, 900, 560, 'Park sırası ≈ 7 m'),
+      callout('Konsoldan ses sistemi sökülmüş', 380, 400, 11),
+      callout('Kapı kilidi zorlanmamış — cam kırılmış', 950, 640, 11),
+      note('Kamera görüntüleri 21.00-23.00 arası incelendi.', 60, 640, 250, 9),
+    ],
+  },
+  {
+    id: 'oto-3',
+    title: 'Sitede otoparkta motorsiklet hırsızlığı (zincir kilit kırılarak)',
+    address: 'İzmir / Buca — Şirinyer sitesi kapalı otoparkı, slot M-07',
+    story:
+      'Site sakininin kilitli motosikleti gece otoparktan alındı; yerde kesilmiş zincir kilidi ve mağdura ait kask bulundu. Kamera görüntülerinde motosikletin iki kişi tarafından itilerek çıkarıldığı görüldü.',
+    scaleNote: '≈ 1 m = 95 piksel',
+    bulgular: [
+      { no: '1', desc: 'Motosiklet park yeri M-07 (boş)' },
+      { no: '2', desc: 'Kesilmiş zincir kilidi (yerde)' },
+      { no: '3', desc: 'Mağdura ait kask (yerde)' },
+      { no: '4', desc: 'Şüpheli ayak izleri' },
+      { no: '5', desc: 'Motosikletin itildiği yön' },
+      { no: '6', desc: 'Site güvenlik kamerası' },
+    ],
+    objects: [
+      // Otopark düzeni
+      { s: 'ev-rect-hollow', x: 320, y: 200, w: 130, h: 280 },
+      { s: 'ev-rect-hollow', x: 480, y: 200, w: 130, h: 280 },
+      { s: 'ev-rect-hollow', x: 640, y: 200, w: 130, h: 280 },
+      lbl('M-06', 385, 340, 10),
+      lbl('M-07', 545, 340, 10),
+      lbl('M-08', 705, 340, 10),
+      { s: 'v-motor', x: 355, y: 320, w: 110, h: 44, name: 'Komşu motosiklet (M-06)' },
+      // Boş slot + deliller
+      lbl('Motosiklet (çalındı)', 545, 250, 10),
+      { s: 'ei-keys', x: 520, y: 430, w: 30, h: 42, name: 'Kesilmiş zincir kilidi' },
+      { s: 'cl-helmet', x: 600, y: 300, w: 44, h: 40, name: 'Mağdurun kaskı (yerde)' },
+      // İzler + kaçış
+      { s: 'tr-footprint', x: 700, y: 520, w: 26, h: 42 },
+      { s: 'tr-footprint', x: 744, y: 536, w: 26, h: 42, rot: 18 },
+      dash(800, 560, 1000, 620, 'Motosikletin itildiği yön'),
+      // Altyapı
+      { s: 'out-fence', x: 200, y: 60, w: 160, h: 50 },
+      { s: 'out-fence', x: 380, y: 60, w: 160, h: 50 },
+      lbl('Site duvarı', 380, 85, 9),
+      { s: 'out-street-light', x: 880, y: 80, w: 40, h: 54 },
+      { s: 'out-cctv', x: 1100, y: 120, w: 52, h: 40, name: 'Site kamerası' },
+      // Numaratörler
+      marker('1', 'Boş park yeri M-07', 545, 460),
+      marker('2', 'Kesilmiş zincir kilidi', 520, 500),
+      marker('3', 'Kask (yerde)', 600, 268),
+      marker('4', 'Şüpheli ayak izleri', 730, 500),
+      marker('5', 'İtiliş yönü', 1010, 600),
+      marker('6', 'Site kamerası', 1160, 190, 30),
+      // Ölçüler + açıklamalar
+      arrow(320, 620, 770, 620, 'Park sırası ≈ 4,7 m'),
+      callout('Zincir kesici aletle kesilmiş', 240, 460, 11),
+      callout('Olay 02.00-03.30 arasında', 950, 160, 11),
+      note('Kamera kaydında iki şahıs motosikleti iterek çıkardı.', 60, 660, 280, 9),
+    ],
+  },
+  {
+    id: 'oto-4',
+    title: 'Takside bırakılan valizin bagajdan alınması',
+    address: 'Antalya / Muratpaşa — Şirinyalı Mah. taksi durağı',
+    story:
+      'Taksi şoförü yolcusunu indirdikten sonra bagajda unutulan valizin yok olduğunu fark etti; durak kameralarında bir şahsın bagajı açıp valizi aldığı görüldü. Bagajda valize ait kilit parçası ve dökülen belgeler kaldı.',
+    scaleNote: '≈ 1 m = 95 piksel',
+    bulgular: [
+      { no: '1', desc: 'Taksi (bagaj kapağı açık)' },
+      { no: '2', desc: 'Valiz kilidi parçası (yerde)' },
+      { no: '3', desc: 'Valizden dökülen belgeler' },
+      { no: '4', desc: 'Şüpheli ayak izleri' },
+      { no: '5', desc: 'Şüphelinin kaçış yönü' },
+      { no: '6', desc: 'Durak güvenlik kamerası' },
+    ],
+    objects: [
+      roadH(20, 1346, 280, 150),
+      { s: 'ts-stop', x: 120, y: 120, w: 40, h: 40 },
+      lbl('Taksi durağı', 240, 140, 10),
+      // Taksi + açık bagaj
+      { s: 'v-taxi', x: 400, y: 226, w: 190, h: 84, name: 'Taksi (bagaj kapağı açık)' },
+      { s: 'ev-rect-hollow', x: 610, y: 240, w: 70, h: 48, name: 'Açık bagaj bölmesi' },
+      { s: 'ei-keys', x: 640, y: 320, w: 30, h: 42, name: 'Valiz kilidi parçası' },
+      { s: 'ei-documents', x: 700, y: 316, w: 44, h: 38, name: 'Dökülen belgeler' },
+      { s: 'ei-id-card', x: 760, y: 322, w: 34, h: 34, name: 'Kimlik (valizden dökülen)' },
+      // Şüpheli izleri
+      { s: 'tr-footprint', x: 850, y: 310, w: 26, h: 42 },
+      { s: 'tr-footprint', x: 896, y: 300, w: 26, h: 42, rot: -15 },
+      dash(960, 290, 1160, 200, 'Kaçış yönü'),
+      // Kamera + ışık
+      { s: 'out-cctv', x: 1080, y: 110, w: 52, h: 40, name: 'Durak kamerası' },
+      { s: 'out-street-light', x: 950, y: 100, w: 40, h: 54 },
+      // Numaratörler
+      marker('1', 'Taksi (bagaj açık)', 470, 340),
+      marker('2', 'Valiz kilidi parçası', 655, 400),
+      marker('3', 'Dökülen belgeler', 722, 400),
+      marker('4', 'Şüpheli ayak izleri', 870, 390),
+      marker('5', 'Kaçış yönü', 1180, 175),
+      marker('6', 'Durak kamerası', 1120, 180, 30),
+      // Ölçüler + açıklamalar
+      arrow(400, 400, 590, 400, '≈ 4,2 m'),
+      callout('Valiz 23.40 sıralarında alınmış', 300, 400, 11),
+      callout('Şoför bagajı kontrol etmeden kalktı', 900, 480, 11),
+      note('Kamera kaydında şüpheli yürüyerek istikamet değiştirdi.', 40, 560, 280, 9),
+    ],
+  },
+  {
+    id: 'oto-5',
+    title: 'Bahçe kapısı önündeki kamyonetten akü ve alet hırsızlığı',
+    address: 'Bursa / Nilüfer — Akçalar Mah. müstakil ev bahçe girişi',
+    story:
+      'Ev sahibi sabah bahçe kapısının önüne park ettiği kamyonetin kaputunun açık olduğunu, akünün ve araç içindeki alet çantasının alındığını gördü. Çamurlu zeminde ayak izleri ve bahçe duvarına tırmanma izleri mevcut.',
+    scaleNote: '≈ 1 m = 95 piksel',
+    bulgular: [
+      { no: '1', desc: 'Kamyonet (kaput açık, akü sökülmüş)' },
+      { no: '2', desc: 'Alet çantası yeri (çalındı)' },
+      { no: '3', desc: 'Çamurlu zemindeki ayak izleri' },
+      { no: '4', desc: 'Bahçe duvarındaki tırmanma izleri' },
+      { no: '5', desc: 'Şüphelinin kaçış yönü' },
+      { no: '6', desc: 'Sokak güvenlik kamerası' },
+    ],
+    objects: [
+      // Bahçe sınırı + ev
+      { s: 'out-fence', x: 240, y: 60, w: 180, h: 50 },
+      { s: 'out-fence', x: 440, y: 60, w: 180, h: 50 },
+      lbl('Bahçe duvarı', 430, 85, 9),
+      ...room(700, 60, 400, 300),
+      lbl('Ev (ön cephe)', 900, 90, 10),
+      door(880, 360, 52, 0),
+      // Kamyonet (kaput açık — sökülmüş akü)
+      { s: 'v-pickup', x: 420, y: 150, w: 80, h: 200, name: 'Kamyonet (kaput açık)' },
+      lbl('Akü sökülmüş', 470, 130, 9),
+      { s: 'ev-rect-hollow', x: 300, y: 200, w: 90, h: 60, name: 'Alet çantası (çalındı)' },
+      // İzler
+      { s: 'tr-mud', x: 300, y: 420, w: 90, h: 55 },
+      { s: 'tr-footprint', x: 420, y: 420, w: 26, h: 42 },
+      { s: 'tr-footprint', x: 466, y: 436, w: 26, h: 42, rot: 20 },
+      dash(540, 470, 740, 560, 'Kaçış yönü'),
+      // Kamera
+      { s: 'out-street-light', x: 120, y: 300, w: 40, h: 54 },
+      { s: 'out-cctv', x: 620, y: 90, w: 52, h: 40, name: 'Sokak kamerası' },
+      // Numaratörler
+      marker('1', 'Kamyonet', 460, 390),
+      marker('2', 'Alet çantası yeri', 345, 300),
+      marker('3', 'Çamur ayak izleri', 350, 500),
+      marker('4', 'Tırmanma izleri', 530, 130, 30),
+      marker('5', 'Kaçış yönü', 760, 540),
+      marker('6', 'Sokak kamerası', 656, 160, 30),
+      // Ölçüler + açıklamalar
+      arrow(300, 560, 520, 560, '≈ 2,3 m'),
+      callout('Bahçe kapısı kilitli bulundu', 200, 200, 11),
+      callout('Olay 23.00 - 06.30 arasında', 900, 440, 11),
+      note('Çamur izleri lastik taban deseniyle eşleştirilecek.', 40, 640, 270, 9),
+    ],
+  },
+];
+
+/* ------------------------------------------------------------------ */
+/* Grup 6: İŞYERİNDEN HIRSIZLIK                                        */
+/* ------------------------------------------------------------------ */
+const isyeriHirsizligi: KrokiScenario[] = [
+  {
+    id: 'isy-1',
+    title: 'Ofis dairesinden kasaya giriş (kapı kilidi zorlanarak)',
+    address: 'İstanbul / Şişli — Mecidiyeköy Yolu Cd. No:12, 4. kat ofis',
+    story:
+      'Pazartesi sabah ofis çalışanı kapı kilidinin zorlandığını, iç kapının açık olduğunu ve kasada bulunan tahsilat paralarının alındığını fark etti. Kapıdan kasaya uzanan ayak izleri ve dağınık evraklar tespit edildi.',
+    scaleNote: '≈ 1 m = 95 piksel',
+    bulgular: [
+      { no: '1', desc: 'Giriş kapısı (kilit zorlanmış)' },
+      { no: '2', desc: 'Kasa (boşaltılmış)' },
+      { no: '3', desc: 'Şüpheli ayak izleri (kapıdan kasaya)' },
+      { no: '4', desc: 'Dağıtılmış evraklar' },
+      { no: '5', desc: 'Gardırop (çekmeceler boşaltılmış)' },
+      { no: '6', desc: 'Ofis güvenlik kamerası' },
+    ],
+    objects: [
+      ...room(200, 80, 820, 480),
+      innerV(700, 80, 480),
+      // Giriş kapısı (alt duvar) — kanat duvar çizgisinde
+      door(300, 560, 56, 0),
+      lbl('Giriş', 330, 520, 10),
+      win(400, 76, 80, 0),
+      // Masa grubu (sol oda)
+      { s: 'ev-rect-hollow', x: 260, y: 160, w: 120, h: 60 },
+      { s: 'ev-rect-hollow', x: 260, y: 300, w: 120, h: 60 },
+      { s: 'ev-rect-hollow', x: 480, y: 220, w: 120, h: 60 },
+      lbl('Masa 1', 320, 190, 9),
+      lbl('Masa 2', 320, 330, 9),
+      lbl('Masa 3', 540, 250, 9),
+      // Dağıtılmış evraklar
+      { s: 'ei-documents', x: 420, y: 380, w: 46, h: 40, name: 'Dağıtılan evrak 1' },
+      { s: 'ei-documents', x: 470, y: 420, w: 46, h: 40, rot: 25, name: 'Dağıtılan evrak 2' },
+      // İç oda: kasa + gardırop
+      { s: 'ev-rect-hollow', x: 820, y: 160, w: 100, h: 65, name: 'Kasa (boşaltıldı)' },
+      lbl('Kasa', 870, 145, 10),
+      { s: 'f-13', x: 740, y: 300, w: 130, h: 55, name: 'Gardırop' },
+      { s: 'ei-keys', x: 880, y: 280, w: 30, h: 42, name: 'Kasa anahtarı (yerde)' },
+      // İzler: kapıdan iç odaya
+      { s: 'tr-footprint', x: 350, y: 470, w: 26, h: 42 },
+      { s: 'tr-footprint', x: 396, y: 440, w: 26, h: 42, rot: -25 },
+      { s: 'tr-footprint', x: 640, y: 380, w: 26, h: 42, rot: -55 },
+      { s: 'tr-footprint', x: 690, y: 330, w: 26, h: 42, rot: -70 },
+      // Kamera
+      { s: 'out-cctv', x: 230, y: 110, w: 52, h: 40, name: 'Ofis kamerası' },
+      // Numaratörler
+      marker('1', 'Giriş kapısı', 390, 470),
+      marker('2', 'Kasa', 930, 220),
+      marker('3', 'Ayak izleri hattı', 520, 415),
+      marker('4', 'Dağıtılan evraklar', 445, 470),
+      marker('5', 'Gardırop', 805, 330),
+      marker('6', 'Ofis kamerası', 300, 155, 30),
+      // Ölçüler + açıklamalar
+      arrow(350, 520, 850, 520, 'Kapı - kasa ≈ 5,3 m'),
+      callout('Kilit tezgahla zorlanmış, kanat sağlam', 480, 620, 11),
+      callout('Kamera kaydında şahıs 02.10 da girdi', 1000, 620, 11),
+      note('Kasa hasar kaydı tutanağa eklendi.', 60, 650, 230, 9),
+    ],
+  },
+  {
+    id: 'isy-2',
+    title: 'Marketten gece ön cam kırılarak giriş — kasa boşaltıldı',
+    address: 'Ankara / Keçiören — Etlik Cd. No:88 market şubesi',
+    story:
+      'Gece güvenlik alarmı üzerine gelen ekip marketin ön camının kırıldığını, kasanın boşaltıldığını ve raftan sigara ürünlerinin alındığını tespit etti. Yerde cam kırıkları, kırıcı alet ve şüpheli ayak izleri bulundu.',
+    scaleNote: '≈ 1 m = 95 piksel',
+    bulgular: [
+      { no: '1', desc: 'Kırılan ön cam (giriş yanı)' },
+      { no: '2', desc: 'Yazar kasa (boşaltıldı)' },
+      { no: '3', desc: 'Kırıcı alet (yerde)' },
+      { no: '4', desc: 'Raf (sigara ürünleri boşaltılmış)' },
+      { no: '5', desc: 'Şüpheli ayak izleri' },
+      { no: '6', desc: 'Market güvenlik kamerası' },
+    ],
+    objects: [
+      ...room(160, 100, 940, 460),
+      // Ön kapı + kırılan cam
+      door(360, 560, 56, 0),
+      { s: 'ex-4', x: 430, y: 520, w: 70, h: 46, name: 'Kırılan ön cam (giriş yanı)' },
+      lbl('Giriş', 388, 520, 9),
+      // Raflar
+      { s: 'ev-rect-hollow', x: 240, y: 200, w: 90, h: 280 },
+      { s: 'ev-rect-hollow', x: 380, y: 200, w: 90, h: 280 },
+      { s: 'ev-rect-hollow', x: 520, y: 200, w: 90, h: 280 },
+      lbl('Raf 1', 285, 470, 9),
+      lbl('Raf 2 (sigara)', 425, 470, 9),
+      lbl('Raf 3', 565, 470, 9),
+      // Kasa
+      { s: 'ev-rect-hollow', x: 900, y: 160, w: 110, h: 65, name: 'Yazar kasa (boşaltıldı)' },
+      lbl('Yazar Kasa', 955, 145, 10),
+      { s: 'ei-documents', x: 880, y: 260, w: 46, h: 40, name: 'Kasa fişleri (dağılmış)' },
+      // Deliller
+      { s: 'w-5', x: 640, y: 470, w: 52, h: 16, name: 'Kırıcı alet (bilyalı çekiç)' },
+      { s: 'tr-footprint', x: 560, y: 500, w: 26, h: 42 },
+      { s: 'tr-footprint', x: 620, y: 480, w: 26, h: 42, rot: -30 },
+      dash(700, 540, 900, 620, 'Kaçış yönü'),
+      // Kamera
+      { s: 'out-cctv', x: 1000, y: 120, w: 52, h: 40, name: 'Market kamerası' },
+      // Numaratörler
+      marker('1', 'Kırılan ön cam', 465, 600),
+      marker('2', 'Yazar kasa', 955, 260),
+      marker('3', 'Kırıcı alet', 640, 520),
+      marker('4', 'Raf 2 (sigara)', 425, 520),
+      marker('5', 'Şüpheli ayak izleri', 560, 560),
+      marker('6', 'Market kamerası', 1070, 190, 30),
+      // Ölçüler + açıklamalar
+      arrow(160, 620, 1100, 620, 'Cephe ≈ 10 m'),
+      callout('Cam taşla kırıldı; alarm 03.12 de çaldı', 700, 170, 11),
+      callout('Kasada 4.850 TL bulunduğu bildirildi', 240, 620, 11),
+      note('Raf 2 deki ürünlerin ENVANTER farkı tutanağa geçirildi.', 60, 660, 300, 9),
+    ],
+  },
+  {
+    id: 'isy-3',
+    title: 'Oto elektrik servisinde arka pencereden girilerek parça hırsızlığı',
+    address: 'Bursa / Osmangazi — Sanayi Mah. 4. Sk. oto elektrik servisi',
+    story:
+      'Servis sahibi sabah arka pencerenin kırıldığını, servisteki aracın katalitik konvertörü ile raf araç parçalarının alındığını fark etti. Pencereden içeri giriş izleri ve parça raflarında dağınıklık mevcut.',
+    scaleNote: '≈ 1 m = 95 piksel',
+    bulgular: [
+      { no: '1', desc: 'Servisteki araç (katalitik konvertör sökülmüş)' },
+      { no: '2', desc: 'Kırılan arka pencere' },
+      { no: '3', desc: 'Parça rafı (dağınık, eksikler var)' },
+      { no: '4', desc: 'Şüpheli ayak izleri (pencereden rafa)' },
+      { no: '5', desc: 'Alet dolabı (açık)' },
+      { no: '6', desc: 'Servis güvenlik kamerası' },
+    ],
+    objects: [
+      ...room(120, 80, 1000, 480),
+      // Arka pencere (sağ duvar, kırılan)
+      { s: 'arch-win', x: 1116, y: 200, w: 80, h: 12, rot: 90 },
+      { s: 'ex-4', x: 1040, y: 240, w: 64, h: 44, name: 'Pencere camı kırıkları (içeride)' },
+      // Platform + araç
+      { s: 'ev-rect-hollow', x: 320, y: 180, w: 240, h: 140, name: 'Yükseltici platform' },
+      lbl('Yükseltici', 440, 165, 9),
+      { s: 'v-sedan', x: 340, y: 210, w: 200, h: 88, name: 'Servisteki araç (konvertör sökülmüş)' },
+      lbl('Katalitik konvertör sökülmüş', 440, 330, 9),
+      // Parça rafları
+      { s: 'ev-rect-hollow', x: 700, y: 140, w: 90, h: 300 },
+      { s: 'ev-rect-hollow', x: 820, y: 140, w: 90, h: 300 },
+      lbl('Parça Rafı 1', 745, 470, 9),
+      lbl('Parça Rafı 2', 865, 470, 9),
+      { s: 'ei-documents', x: 760, y: 330, w: 46, h: 40, name: 'Yerdeki parça kutusu' },
+      // Alet dolabı
+      { s: 'ev-rect-hollow', x: 200, y: 420, w: 110, h: 65, name: 'Alet dolabı (açık)' },
+      lbl('Alet Dolabı', 255, 405, 9),
+      // İzler
+      { s: 'tr-footprint', x: 1020, y: 320, w: 26, h: 42 },
+      { s: 'tr-footprint', x: 970, y: 360, w: 26, h: 42, rot: 40 },
+      { s: 'tr-footprint', x: 900, y: 390, w: 26, h: 42, rot: 60 },
+      // Kamera
+      { s: 'out-cctv', x: 150, y: 110, w: 52, h: 40, name: 'Servis kamerası' },
+      // Numaratörler
+      marker('1', 'Servisteki araç', 440, 380),
+      marker('2', 'Kırılan pencere', 1060, 280),
+      marker('3', 'Parça rafı', 745, 250),
+      marker('4', 'Ayak izleri hattı', 960, 410),
+      marker('5', 'Alet dolabı', 255, 520),
+      marker('6', 'Servis kamerası', 220, 155, 30),
+      // Ölçüler + açıklamalar
+      arrow(320, 560, 560, 560, 'Platform ≈ 2,5 m'),
+      callout('Pencere kelepçesi içeriden açılmış', 900, 590, 11),
+      callout('Konvertör sökümünde alet izi var', 200, 600, 11),
+      note('Raf envanteri ile eksik parça listesi tutanağa eklendi.', 60, 650, 300, 9),
+    ],
+  },
+  {
+    id: 'isy-4',
+    title: 'Kuaför salonundan kepenk zorlanarak giriş — kasa hırsızlığı',
+    address: 'İzmir / Karşıyaka — Bostanlı Mah. Cemal Gürsel Cd. No:51 kuaför',
+    story:
+      'Salon sahibi sabah cephe kepenğinin zorlanarak açıldığını, resepsiyondaki kasadaki günübirlik tahsilatın alındığını fark etti. Kepenk kilit kırıkları, devrik sandalye ve ayak izleri tespit edildi.',
+    scaleNote: '≈ 1 m = 95 piksel',
+    bulgular: [
+      { no: '1', desc: 'Kepenk kilidi (zorlanmış)' },
+      { no: '2', desc: 'Resepsiyon kasası (boşaltıldı)' },
+      { no: '3', desc: 'Devrik sandalye' },
+      { no: '4', desc: 'Şüpheli ayak izleri' },
+      { no: '5', desc: 'Yerdeki tarak/makas dağınıklığı' },
+      { no: '6', desc: 'Salon güvenlik kamerası' },
+    ],
+    objects: [
+      ...room(200, 100, 800, 440),
+      // Kepenk + giriş kapısı (alt duvar)
+      door(380, 540, 56, 0),
+      { s: 'arch-w1i', x: 340, y: 536, w: 170, h: 8, name: 'Kepenk (zorlanarak kaldırılmış)' },
+      lbl('Kepenk', 425, 520, 9),
+      // Çalışma istasyonları
+      { s: 'ev-rect-hollow', x: 260, y: 180, w: 110, h: 60 },
+      { s: 'ev-rect-hollow', x: 260, y: 320, w: 110, h: 60 },
+      { s: 'ev-rect-hollow', x: 700, y: 180, w: 110, h: 60 },
+      lbl('Çalışma Ünitesi 1', 315, 165, 9),
+      lbl('Çalışma Ünitesi 2', 315, 405, 9),
+      lbl('Yıkama Ünitesi', 755, 165, 9),
+      // Resepsiyon kasası
+      { s: 'ev-rect-hollow', x: 520, y: 380, w: 100, h: 60, name: 'Resepsiyon kasası (boşaltıldı)' },
+      lbl('Kasa', 570, 365, 10),
+      // Dağınıklık + deliller
+      { s: 'f-5', x: 640, y: 300, w: 80, h: 75, rot: 35, name: 'Devrik sandalye' },
+      { s: 'ei-documents', x: 460, y: 300, w: 46, h: 40, name: 'Randevu defteri (yerde)' },
+      { s: 'ei-keys', x: 300, y: 440, w: 30, h: 42, name: 'Kepenk kilidi kırıkları' },
+      { s: 'tr-footprint', x: 420, y: 460, w: 26, h: 42 },
+      { s: 'tr-footprint', x: 470, y: 440, w: 26, h: 42, rot: -20 },
+      // Kamera
+      { s: 'out-cctv', x: 230, y: 130, w: 52, h: 40, name: 'Salon kamerası' },
+      // Numaratörler
+      marker('1', 'Kepenk kilidi', 320, 480),
+      marker('2', 'Resepsiyon kasası', 570, 480),
+      marker('3', 'Devrik sandalye', 680, 280),
+      marker('4', 'Şüpheli ayak izleri', 445, 500),
+      marker('5', 'Dağılan malzeme', 460, 270),
+      marker('6', 'Salon kamerası', 300, 175, 30),
+      // Ölçüler + açıklamalar
+      arrow(200, 620, 1000, 620, 'Cephe ≈ 8,4 m'),
+      callout('Kilit sökme aletiyle zorlanmış', 700, 620, 11),
+      callout('Kasada ≈ 3.200 TL bulunuyordu', 240, 620, 11),
+      note('Kamera kaydı 01.40-02.05 arası inceleniyor.', 60, 655, 270, 9),
+    ],
+  },
+  {
+    id: 'isy-5',
+    title: 'Şantiye deposundan kablo makarası hırsızlığı (forklift izi)',
+    address: 'Konya / Selçuklu — Feritpaşa Mah. şantiye deposu',
+    story:
+      'Şantiye amiri depo konteynerinin kilidinin kırıldığını, 3 kablo makarasının ve el aletlerinin alındığını bildirdi. Zeminde forklifte ait lastik izi ve yaya ayak izleri; tel örgüde kesik mevcut.',
+    scaleNote: '≈ 1 m = 95 piksel',
+    bulgular: [
+      { no: '1', desc: 'Konteiner (kilit kırılmış, boşaltılmış)' },
+      { no: '2', desc: 'Boş makara yeri (3 adet eksik)' },
+      { no: '3', desc: 'Forklift lastik izi' },
+      { no: '4', desc: 'Tel örgüdeki kesik (geçiş noktası)' },
+      { no: '5', desc: 'Şüpheli ayak izleri' },
+      { no: '6', desc: 'Şantiye projeksiyon kamerası' },
+    ],
+    objects: [
+      // Tel örgü çevre
+      { s: 'out-fence', x: 160, y: 60, w: 180, h: 50 },
+      { s: 'out-fence', x: 360, y: 60, w: 180, h: 50 },
+      { s: 'out-fence', x: 560, y: 60, w: 180, h: 50 },
+      lbl('Tel örgü (kesik: 620-680 arası)', 620, 85, 9),
+      // Konteiner depo
+      { s: 'ev-rect-hollow', x: 300, y: 180, w: 240, h: 120, name: 'Konteiner depo (kilit kırık)' },
+      lbl('Konteiner', 420, 165, 10),
+      // Boş makara yeri
+      { s: 'ev-rect-hollow', x: 340, y: 210, w: 70, h: 60 },
+      { s: 'ev-rect-hollow', x: 430, y: 210, w: 70, h: 60 },
+      lbl('Boş makara yeri', 420, 280, 9),
+      // Forklift + lastik izi
+      { s: 'v-forklift', x: 640, y: 220, w: 130, h: 95, name: 'Forklift (şantiyeden)' },
+      { s: 'tr-skid-straight', x: 480, y: 360, w: 200, h: 36, name: 'Forklift lastik izi' },
+      // Tel örgü kesik + ayak izleri
+      { s: 'out-fence', x: 600, y: 620, w: 160, h: 50 },
+      lbl('Kesik bölge', 680, 600, 9),
+      { s: 'tr-footprint', x: 560, y: 520, w: 26, h: 42 },
+      { s: 'tr-footprint', x: 606, y: 540, w: 26, h: 42, rot: 25 },
+      dash(680, 580, 880, 620, 'Kaçış yönü (kesikten)'),
+      // Kamera + ışık
+      { s: 'out-cctv', x: 1060, y: 120, w: 52, h: 40, name: 'Şantiye kamerası' },
+      { s: 'out-street-light', x: 900, y: 400, w: 40, h: 54 },
+      // Numaratörler
+      marker('1', 'Konteiner', 420, 330),
+      marker('2', 'Boş makara yeri', 465, 190),
+      marker('3', 'Forklift lastik izi', 580, 410),
+      marker('4', 'Tel örgü kesik', 680, 660),
+      marker('5', 'Şüpheli ayak izleri', 590, 480),
+      marker('6', 'Şantiye kamerası', 1130, 190, 30),
+      // Ölçüler + açıklamalar
+      arrow(300, 480, 540, 480, 'Konteiner ≈ 2,5 m'),
+      callout('3 makara (yaklaşık 1.200 m kablo)', 820, 300, 11),
+      callout('Forklift anahtarı konteynerdeydi', 820, 360, 11),
+      note('Kesik tel örgü fotoğraflanarak numunesi alındı.', 60, 660, 280, 9),
+    ],
+  },
+];
+
+/* ------------------------------------------------------------------ */
+/* Grup 7: BIÇAKLA YARALAMA                                            */
+/* ------------------------------------------------------------------ */
+const bicaklaYaralama: KrokiScenario[] = [
+  {
+    id: 'bic-1',
+    title: 'Lokantada çıkan kavgada bıçakla yaralama',
+    address: 'Ankara / Yenimahalle — Demetevler Mah. lokanta',
+    story:
+      'Müşteriler arasında çıkan tartışma bıçaklı kavgaya dönüştü; mağdur yerde yaralı bulundu, şüpheli masa ve sandalyeleri devirerek lokantadan kaçtı. Yerde bıçak, kan birikintisi ve şüpheliye ait kanlı ayak izleri mevcut.',
+    scaleNote: '≈ 1 m = 95 piksel',
+    bulgular: [
+      { no: '1', desc: 'Mağdur (yerde, karın bölgesinden yaralı)' },
+      { no: '2', desc: 'Olayda kullanılan bıçak' },
+      { no: '3', desc: 'Kan birikintisi' },
+      { no: '4', desc: 'Devrik sandalye (mücadele)' },
+      { no: '5', desc: 'Şüphelinin kanlı ayak izleri' },
+      { no: '6', desc: 'Şüphelinin kaçış yönü' },
+    ],
+    objects: [
+      ...room(140, 80, 940, 480),
+      // Masalar + tezgah
+      { s: 'ev-rect-hollow', x: 240, y: 160, w: 110, h: 70 },
+      { s: 'ev-rect-hollow', x: 240, y: 320, w: 110, h: 70 },
+      { s: 'ev-rect-hollow', x: 420, y: 240, w: 110, h: 70 },
+      lbl('Masa 1', 295, 145, 9),
+      lbl('Masa 2', 295, 415, 9),
+      lbl('Masa 3', 475, 225, 9),
+      { s: 'f-3', x: 160, y: 100, w: 180, h: 55, name: 'Kasa Tezgahı' },
+      // Devrik sandalye (mücadele)
+      { s: 'f-5', x: 560, y: 200, w: 80, h: 75, rot: 30, name: 'Devrik sandalye' },
+      // Mağdur + yara + kan
+      { s: 'p-9', x: 700, y: 300, w: 115, h: 52, name: 'Mağdur (yerde)' },
+      { s: 'in-stab', x: 716, y: 318, w: 44, h: 16, name: 'Kesici alet yarası (karın)' },
+      { s: 'in-stab', x: 742, y: 336, w: 40, h: 14, rot: 20, name: 'Kesici alet yarası (kol)' },
+      { s: 'in-blood-pool', x: 680, y: 360, w: 110, h: 70 },
+      // Bıçak + ayakkabı
+      { s: 'w-2', x: 830, y: 282, w: 46, h: 20, rot: -25, name: 'Olayda kullanılan bıçak' },
+      { s: 'cl-shoe', x: 648, y: 408, w: 26, h: 26 },
+      // Kaçış izleri
+      { s: 'tr-bloody-footprint', x: 520, y: 460, w: 26, h: 42 },
+      { s: 'tr-bloody-footprint', x: 470, y: 486, w: 26, h: 42, rot: -18 },
+      dash(420, 520, 230, 610, 'Şüphelinin kaçış yönü'),
+      // Kapı (kanat duvar çizgisinde)
+      door(200, 560, 56, 0),
+      // Numaratörler
+      marker('1', 'Mağdur', 700, 260),
+      marker('2', 'Bıçak', 853, 320),
+      marker('3', 'Kan birikintisi', 735, 450),
+      marker('4', 'Devrik sandalye', 600, 175),
+      marker('5', 'Kanlı ayak izleri', 495, 540),
+      marker('6', 'Kaçış yönü', 215, 590),
+      // Ölçüler + açıklamalar
+      arrow(700, 480, 830, 480, '≈ 1,4 m'),
+      callout('Mağdur karın ve kol bölgesinden yaralandı', 380, 620, 11),
+      callout('Şüpheli tanıdı; görüntü çalışması sürüyor', 800, 620, 11),
+      note('Bıçak 12 cm bıçak boyu, mutfak tipi.', 60, 650, 230, 9),
+    ],
+  },
+  {
+    id: 'bic-2',
+    title: 'Sokak ortasında bıçaklı saldırı (yol kenarı)',
+    address: 'İstanbul / Fatih — Aksaray Yolu kenarı otobüs durağı yanı',
+    story:
+      'Gece saat 01.20 sıralarında yol kenarında iki şahıs arasındaki tartışma bıçaklı saldırıyla sonuçlandı. Mağdur yol kenarında yüzüstü bulundu; saldırgan kaçarken kepi ve bıçağı düştü. Kanlı sürüklenme izi mevcut.',
+    scaleNote: '≈ 1 m = 95 piksel',
+    bulgular: [
+      { no: '1', desc: 'Mağdur (yüzüstü, sırt bölgesinden yaralı)' },
+      { no: '2', desc: 'Kanlı sürüklenme izi' },
+      { no: '3', desc: 'Saldırıda kullanılan bıçak (yerde)' },
+      { no: '4', desc: 'Şüpheliden düşen kep' },
+      { no: '5', desc: 'Şüpheli ayak izleri' },
+      { no: '6', desc: 'Şüphelinin kaçış yönü' },
+    ],
+    objects: [
+      roadH(20, 1346, 240, 140),
+      { s: 'out-street-light', x: 200, y: 100, w: 40, h: 54 },
+      { s: 'ts-pedestrian', x: 350, y: 110, w: 40, h: 40 },
+      // Mağdur + yara + kan
+      { s: 'p-4', x: 620, y: 360, w: 36, h: 80, name: 'Mağdur (yüzüstü)' },
+      { s: 'in-stab', x: 628, y: 390, w: 44, h: 16, name: 'Kesici alet yarası (sırt)' },
+      { s: 'in-blood-smear', x: 540, y: 420, w: 95, h: 40, name: 'Kanlı sürüklenme izi' },
+      // Bıçak + kep
+      { s: 'w-2', x: 720, y: 408, w: 46, h: 20, rot: 30, name: 'Bıçak (yerde)' },
+      { s: 'cl-cap', x: 775, y: 385, w: 30, h: 26, name: 'Şüpheliden düşen kep' },
+      // İzler + kaçış
+      { s: 'tr-footprint', x: 850, y: 430, w: 26, h: 42 },
+      { s: 'tr-footprint', x: 900, y: 446, w: 26, h: 42, rot: 25 },
+      dash(960, 470, 1160, 560, 'Kaçış yönü'),
+      // Kamera
+      { s: 'out-cctv', x: 1100, y: 100, w: 52, h: 40, name: 'Sokak kamerası' },
+      // Numaratörler
+      marker('1', 'Mağdur', 638, 330),
+      marker('2', 'Sürükleme izi', 585, 490),
+      marker('3', 'Bıçak', 745, 450),
+      marker('4', 'Kep', 775, 355),
+      marker('5', 'Şüpheli ayak izleri', 875, 500),
+      marker('6', 'Kaçış yönü', 1180, 545),
+      // Ölçüler + açıklamalar
+      arrow(560, 540, 700, 540, '≈ 1,5 m'),
+      callout('Sırt bölgesine tek bıçak darbesi', 300, 400, 11),
+      callout('Olay 01.20 de kamera kaydında', 850, 200, 11),
+      note('Kep ve bıçak delil olarak alındı.', 40, 640, 230, 9),
+    ],
+  },
+  {
+    id: 'bic-3',
+    title: 'Mutfakta aile içi bıçaklı yaralama',
+    address: 'Kayseri / Melikgazi — Hunat Mah. apartman daire içi',
+    story:
+      'Aile bireyleri arasındaki tartışma mutfakta bıçaklı yaralanmayla sonuçlandı; mağdur mutfak zemininde yarı kalkmış durumda bulundu. Tezgah üstünde olayda kullanılan bıçak, zeminde kan sürüntüsü tespit edildi.',
+    scaleNote: '≈ 1 m = 95 piksel',
+    bulgular: [
+      { no: '1', desc: 'Mağdur (yaralı, yarı kalkmış)' },
+      { no: '2', desc: 'Kesici alet yarası (ön kol)' },
+      { no: '3', desc: 'Kan sürüntüsü (zemin)' },
+      { no: '4', desc: 'Olayda kullanılan bıçak (tezgahta)' },
+      { no: '5', desc: 'Devrik tabure' },
+      { no: '6', desc: 'Mağdurun ayakkabısı' },
+    ],
+    objects: [
+      ...room(160, 80, 760, 460),
+      // Mutfak dolapları
+      { s: 'f-4', x: 180, y: 100, w: 230, h: 160, name: 'L Tezgah' },
+      { s: 'f-3', x: 620, y: 100, w: 180, h: 55, name: 'Mutfak Tezgahı' },
+      // Masa + tabure
+      { s: 'ev-rect-hollow', x: 420, y: 240, w: 130, h: 85, name: 'Yemek Masası' },
+      lbl('Masa', 485, 225, 9),
+      { s: 'f-5', x: 590, y: 260, w: 80, h: 75, rot: 35, name: 'Devrik tabure' },
+      // Bıçak (tezgahta bırakılmış)
+      { s: 'w-2', x: 690, y: 118, w: 46, h: 20, name: 'Olayda kullanılan bıçak' },
+      // Mağdur + yara + kan
+      { s: 'kk-injured', x: 350, y: 400, w: 105, h: 70, name: 'Mağdur (yaralı, yarı kalkmış)' },
+      { s: 'in-stab', x: 380, y: 428, w: 44, h: 16, name: 'Kesici alet yarası (ön kol)' },
+      { s: 'in-blood-smear', x: 450, y: 470, w: 90, h: 36, name: 'Kan sürüntüsü' },
+      // Ayakkabı
+      { s: 'cl-shoe', x: 300, y: 490, w: 26, h: 26 },
+      // Kapı (kanat duvar çizgisinde)
+      door(700, 540, 54, 0),
+      // Numaratörler
+      marker('1', 'Mağdur', 330, 380),
+      marker('2', 'Kol yarası', 402, 405),
+      marker('3', 'Kan sürüntüsü', 495, 530),
+      marker('4', 'Bıçak (tezgahta)', 713, 90),
+      marker('5', 'Devrik tabure', 630, 245),
+      marker('6', 'Ayakkabı', 300, 530),
+      // Ölçüler + açıklamalar
+      arrow(180, 620, 560, 620, 'Mutfak genişliği ≈ 4 m'),
+      callout('Tartışma tezgah başında başladı', 260, 300, 11),
+      callout('Şüpheli olay sonrası daireden ayrıldı', 700, 300, 11),
+      note('Mağdur 112 ekiyle hastaneye kaldırıldı.', 60, 650, 250, 9),
+    ],
+  },
+  {
+    id: 'bic-4',
+    title: 'Park içinde gençler arasında bıçaklı kavga',
+    address: 'İzmir / Bornova — Üniversite Mah. çocuk parkı yanı',
+    story:
+      'Parkta buluşan iki grup arasında çıkan kavga bıçaklı yaralanmayla sonuçlandı; mağdur bank yanında yarı kalkmış bulundu, sırt çantası yırtıldı. Çalılar arasında bıçak ve ayak izleri tespit edildi.',
+    scaleNote: '≈ 1 m = 95 piksel',
+    bulgular: [
+      { no: '1', desc: 'Mağdur (yaralı, bank yanı)' },
+      { no: '2', desc: 'Kesici alet yarası (bacak)' },
+      { no: '3', desc: 'Yırtık sırt çantası' },
+      { no: '4', desc: 'Bıçak (çalı arasında)' },
+      { no: '5', desc: 'Şüpheli ayak izleri' },
+      { no: '6', desc: 'Şüphelinin kaçış yönü' },
+    ],
+    objects: [
+      // Park düzeni
+      { s: 'out-fence', x: 200, y: 60, w: 180, h: 50 },
+      { s: 'out-fence', x: 400, y: 60, w: 180, h: 50 },
+      lbl('Park çevre duvarı', 390, 85, 9),
+      { s: 'out-tree-1', x: 240, y: 160, w: 90, h: 90, name: 'Ağaç 1' },
+      { s: 'out-tree-1', x: 880, y: 160, w: 90, h: 90, name: 'Ağaç 2' },
+      { s: 'out-bench', x: 400, y: 300, w: 90, h: 38, name: 'Bank' },
+      // Mağdur + yara + kan
+      { s: 'kk-injured', x: 620, y: 320, w: 105, h: 70, name: 'Mağdur (yaralı)' },
+      { s: 'in-stab', x: 640, y: 348, w: 44, h: 16, name: 'Kesici alet yarası (bacak)' },
+      { s: 'in-blood-pool', x: 600, y: 400, w: 85, h: 50 },
+      // Çanta + bıçak
+      { s: 'cl-backpack', x: 520, y: 340, w: 50, h: 44, name: 'Yırtık sırt çantası' },
+      { s: 'w-2', x: 730, y: 380, w: 46, h: 20, rot: -15, name: 'Bıçak (çalı arasında)' },
+      // İzler + kaçış
+      { s: 'tr-footprint', x: 800, y: 440, w: 26, h: 42 },
+      { s: 'tr-footprint', x: 846, y: 458, w: 26, h: 42, rot: 20 },
+      dash(900, 490, 1100, 560, 'Kaçış yönü'),
+      { s: 'out-street-light', x: 1000, y: 200, w: 40, h: 54 },
+      // Numaratörler
+      marker('1', 'Mağdur', 600, 290),
+      marker('2', 'Bacak yarası', 660, 310),
+      marker('3', 'Yırtık çanta', 520, 300),
+      marker('4', 'Bıçak (çalıda)', 760, 420),
+      marker('5', 'Şüpheli ayak izleri', 820, 500),
+      marker('6', 'Kaçış yönü', 1110, 545),
+      // Ölçüler + açıklamalar
+      arrow(400, 380, 500, 380, '≈ 1 m'),
+      callout('Kavga bank çevresinde başladı', 300, 420, 11),
+      callout('Olay 18.40 sıralarında', 950, 300, 11),
+      note('Çantanın içinde ders kitapları hasarlı.', 40, 640, 240, 9),
+    ],
+  },
+  {
+    id: 'bic-5',
+    title: 'Otoparkta park yeri tartışması sonucu bıçakla yaralama',
+    address: 'Adana / Seyhan — Kurtuluş Mah. sokak otoparkı',
+    story:
+      'Park yeri paylaşımı nedeniyle çıkan tartışmada araç sahibi bıçakla yaralandı; saldırgan aracından inerek kaçtı. Yerde bıçak, kan birikintisi ve ayak izleri bulundu; şüpheli aracı kameraya takıldı.',
+    scaleNote: '≈ 1 m = 95 piksel',
+    bulgular: [
+      { no: '1', desc: 'Saldırganın aracı (A-01)' },
+      { no: '2', desc: 'Mağdurun aracı (A-02)' },
+      { no: '3', desc: 'Mağdur (yerde, bacak bölgesinden yaralı)' },
+      { no: '4', desc: 'Bıçak (yerde)' },
+      { no: '5', desc: 'Kan birikintisi' },
+      { no: '6', desc: 'Şüphelinin kaçış yönü' },
+    ],
+    objects: [
+      // Park slotları
+      { s: 'ev-rect-hollow', x: 240, y: 160, w: 200, h: 100 },
+      { s: 'ev-rect-hollow', x: 470, y: 160, w: 200, h: 100 },
+      lbl('A-01', 340, 210, 10),
+      lbl('A-02', 570, 210, 10),
+      { s: 'v-sedan', x: 255, y: 172, w: 170, h: 74, name: 'Saldırganın aracı (A-01)' },
+      { s: 'v-panelvan', x: 485, y: 170, w: 175, h: 76, name: 'Mağdurun aracı (A-02)' },
+      { s: 'ts-parking', x: 140, y: 110, w: 40, h: 40 },
+      // Mağdur + yara + kan
+      { s: 'p-3', x: 700, y: 330, w: 38, h: 84, name: 'Mağdur (yerde)' },
+      { s: 'in-stab', x: 706, y: 372, w: 44, h: 16, name: 'Kesici alet yarası (bacak)' },
+      { s: 'in-blood-pool', x: 760, y: 380, w: 90, h: 55 },
+      // Bıçak + ayakkabı
+      { s: 'w-2', x: 640, y: 372, w: 46, h: 20, rot: 20, name: 'Bıçak (yerde)' },
+      { s: 'cl-shoe', x: 662, y: 438, w: 26, h: 26 },
+      // Kaçış
+      dash(820, 470, 1020, 550, 'Saldırganın kaçış yönü'),
+      { s: 'tr-footprint', x: 770, y: 480, w: 26, h: 42 },
+      { s: 'tr-footprint', x: 816, y: 496, w: 26, h: 42, rot: 22 },
+      { s: 'out-street-light', x: 120, y: 300, w: 40, h: 54 },
+      { s: 'out-cctv', x: 1080, y: 120, w: 52, h: 40, name: 'Sokak kamerası' },
+      // Numaratörler
+      marker('1', 'Saldırganın aracı', 340, 320),
+      marker('2', 'Mağdurun aracı', 570, 320),
+      marker('3', 'Mağdur', 700, 300),
+      marker('4', 'Bıçak', 640, 420),
+      marker('5', 'Kan birikintisi', 805, 460),
+      marker('6', 'Kaçış yönü', 1040, 530),
+      // Ölçüler + açıklamalar
+      arrow(240, 560, 670, 560, 'Park sırası ≈ 4,5 m'),
+      callout('Tartışma kapı önünde başladı', 300, 400, 11),
+      callout('Şüpheli araçla uzaklaştı (34 ABC 123)', 900, 250, 11),
+      note('Plaka bilgisi kamera kaydından alındı.', 40, 640, 250, 9),
+    ],
+  },
+];
+
+/* ------------------------------------------------------------------ */
+/* Grup 8: SILAHLA YARALAMA                                            */
+/* ------------------------------------------------------------------ */
+const silahlaYaralama: KrokiScenario[] = [
+  {
+    id: 'sil-1',
+    title: 'Sokakta silahlı saldırı sonucu ölüm',
+    address: 'Şanlıurfa / Haliliye — Bahçelievler Mah. sokak',
+    story:
+      'Gece yürüyen mağdura araçtan inen şahıs tarafından ateş edildi; mağdur yerde ölü bulundu. Yerde 2 boş kovan, deforme mermi ve mağdura ait tabanca tespit edildi; şüpheli araçla kaçtı.',
+    scaleNote: '≈ 1 m = 95 piksel',
+    bulgular: [
+      { no: '1', desc: 'Mağdur (yüzüstü, yaşamını yitirmiş)' },
+      { no: '2', desc: 'Giriş yarası (sırt bölgesi)' },
+      { no: '3', desc: 'Boş kovanlar (2 adet, saldırgana ait)' },
+      { no: '4', desc: 'Mağdurun tabancası (yerde)' },
+      { no: '5', desc: 'Kan birikintisi' },
+      { no: '6', desc: 'Atış yönü / şüphelinin kaçışı' },
+    ],
+    objects: [
+      roadH(20, 1346, 260, 150),
+      { s: 'out-street-light', x: 150, y: 100, w: 40, h: 54 },
+      { s: 'out-cctv', x: 1150, y: 100, w: 52, h: 40, name: 'Sokak kamerası' },
+      // Mağdur + yara + kan
+      { s: 'p-4', x: 560, y: 360, w: 36, h: 80, name: 'Mağdur (yüzüstü)' },
+      { s: 'in-bullet-in', x: 566, y: 396, w: 28, h: 28, name: 'Giriş yarası (sırt)' },
+      { s: 'in-blood-pool', x: 500, y: 440, w: 110, h: 65 },
+      // Silah + kovanlar + mermi
+      { s: 'w-1', x: 660, y: 396, w: 44, h: 30, rot: 15, name: 'Mağdurun tabancası (yerde)' },
+      { s: 'tr-casing-pistol', x: 470, y: 356, w: 26, h: 26 },
+      { s: 'tr-casing-pistol', x: 506, y: 346, w: 26, h: 26, rot: 20 },
+      { s: 'tr-bullet-deformed', x: 720, y: 350, w: 30, h: 30, name: 'Deforme mermi (zeminde)' },
+      // Kaçış yönü
+      dash(790, 330, 1000, 230, 'Atış yönü / kaçış'),
+      { s: 'p-13', x: 320, y: 400, w: 26, h: 34, name: 'İlk müdahale ekibi' },
+      { s: 'v-police', x: 180, y: 220, w: 130, h: 56, name: 'Polis aracı' },
+      // Numaratörler
+      marker('1', 'Mağdur', 578, 330),
+      marker('2', 'Giriş yarası', 620, 400),
+      marker('3', 'Boş kovanlar', 488, 320),
+      marker('4', 'Tabanca', 705, 450),
+      marker('5', 'Kan birikintisi', 555, 530),
+      marker('6', 'Atış yönü', 1010, 200),
+      // Ölçüler + açıklamalar
+      arrow(470, 520, 670, 520, '≈ 2,1 m'),
+      callout('İki el ateş edildi (2 kovan)', 300, 200, 11),
+      callout('Şüpheli koyu renk araçla uzaklaştı', 900, 160, 11),
+      note('Olay 22.45 te; kamera kaydı inceleniyor.', 40, 620, 260, 9),
+    ],
+  },
+  {
+    id: 'sil-2',
+    title: 'Araçtan ateş edilerek yaralama (trafik tartışması)',
+    address: 'Mersin / Yenişehir — Adana-Ankara karayolu kavşağı yaklaşısı',
+    story:
+      'Trafik tartışması sonrası şüpheli araçtan mağdur aracına ateş edildi; arka camdan giren mermi sürücüyü omzundan yaraladı. Mağdur araç frende durdu; yol üstünde boş kovan bulundu, şüpheli araç hızla uzaklaştı.',
+    scaleNote: '≈ 1 m = 95 piksel',
+    bulgular: [
+      { no: '1', desc: 'Mağdur aracı (arka cam isabet izi)' },
+      { no: '2', desc: 'Şüpheli aracı (kaçtı)' },
+      { no: '3', desc: 'Boş kovan (yol üstü)' },
+      { no: '4', desc: 'Mağdur aracının fren izi' },
+      { no: '5', desc: 'Araçtan taşan kan' },
+      { no: '6', desc: 'Şüpheli aracın kaçış yönü' },
+    ],
+    objects: [
+      roadH(20, 1346, 300, 150),
+      // Mağdur aracı + isabet
+      { s: 'v-sedan', x: 300, y: 240, w: 180, h: 78, name: 'Mağdur aracı (frende durdu)' },
+      { s: 'tr-bullet-glass', x: 428, y: 252, w: 30, h: 30, name: 'Arka camda isabet izi' },
+      { s: 'in-blood-smear', x: 340, y: 330, w: 85, h: 36, name: 'Araçtan taşan kan' },
+      { s: 'tr-skid-straight', x: 490, y: 300, w: 130, h: 34, name: 'Fren izi' },
+      // Şüpheli aracı + kovan
+      { s: 'v-sedan', x: 900, y: 240, w: 180, h: 78, name: 'Şüpheli aracı (uzaklaşıyor)' },
+      { s: 'tr-casing-pistol', x: 700, y: 350, w: 26, h: 26, name: 'Boş kovan (yol üstü)' },
+      // Kaçış
+      dash(1150, 300, 1320, 220, 'Kaçış yönü'),
+      { s: 'out-cctv', x: 1200, y: 110, w: 52, h: 40, name: 'Kavşak kamerası' },
+      { s: 'out-street-light', x: 150, y: 120, w: 40, h: 54 },
+      // Numaratörler
+      marker('1', 'Mağdur aracı', 390, 350),
+      marker('2', 'Şüpheli aracı', 990, 350),
+      marker('3', 'Boş kovan', 713, 400),
+      marker('4', 'Fren izi', 555, 400),
+      marker('5', 'Kan (yol üstü)', 382, 400),
+      marker('6', 'Kaçış yönü', 1290, 190),
+      // Ölçüler + açıklamalar
+      arrow(480, 400, 900, 400, 'Araçlar arası ≈ 4,4 m'),
+      callout('Sürücü omzundan yaralandı', 250, 170, 11),
+      callout('Atış arka camdan içeri girdi', 650, 170, 11),
+      note('Kavşak kamerası 19.20 de plakayı okudu.', 40, 620, 270, 9),
+    ],
+  },
+  {
+    id: 'sil-3',
+    title: 'Kafe önünde pompalı silahla yaralama',
+    address: 'Gaziantep / Şehitkamil — Batıkent Mah. kafe önü',
+    story:
+      'Kafe çıkışı mağdura pompalı silahla ateş edildi; mağdur kaçarken bacağından yaralandı ve kafe önünde yarı kalkmış bulundu. Yerde pompalı tüfek, 2 kovan ve kafe camına isabet eden saçma izleri mevcut.',
+    scaleNote: '≈ 1 m = 95 piksel',
+    bulgular: [
+      { no: '1', desc: 'Mağdur (yaralı, kafe önü)' },
+      { no: '2', desc: 'Giriş yarası (bacak)' },
+      { no: '3', desc: 'Pompalı tüfek (yerde bırakıldı)' },
+      { no: '4', desc: 'Pompalı kovanlar (2 adet)' },
+      { no: '5', desc: 'Kafe camındaki saçma isabet izi' },
+      { no: '6', desc: 'Saldırganın kaçış yönü' },
+    ],
+    objects: [
+      // Kafe
+      ...room(160, 80, 500, 360),
+      win(220, 76, 80, 0),
+      win(400, 76, 80, 0),
+      door(300, 440, 56, 0),
+      lbl('Kafe', 410, 300, 11),
+      // Cam isabet izi (sağ pencere kenarı duvar üstü)
+      { s: 'tr-bullet-glass', x: 590, y: 300, w: 28, h: 28, name: 'Cam isabet izi (sağ pencere)' },
+      // Mağdur + yara + kan
+      { s: 'kk-injured', x: 760, y: 400, w: 105, h: 70, name: 'Mağdur (yaralı, kaçarken)' },
+      { s: 'in-bullet-in', x: 792, y: 430, w: 28, h: 28, name: 'Giriş yarası (bacak)' },
+      { s: 'in-blood-pool', x: 820, y: 480, w: 90, h: 55 },
+      // Silah + kovanlar
+      { s: 'w-3', x: 660, y: 470, w: 60, h: 22, rot: -10, name: 'Pompalı tüfek (yerde)' },
+      { s: 'tr-casing-rifle', x: 600, y: 430, w: 26, h: 26 },
+      { s: 'tr-casing-rifle', x: 632, y: 444, w: 26, h: 26, rot: 15 },
+      // Kaçış
+      dash(950, 500, 1150, 580, 'Saldırganın kaçış yönü'),
+      { s: 'out-street-light', x: 950, y: 180, w: 40, h: 54 },
+      { s: 'out-cctv', x: 1080, y: 120, w: 52, h: 40, name: 'Sokak kamerası' },
+      // Numaratörler
+      marker('1', 'Mağdur', 760, 370),
+      marker('2', 'Bacak yarası', 830, 420),
+      marker('3', 'Pompalı tüfek', 690, 520),
+      marker('4', 'Kovanlar', 616, 400),
+      marker('5', 'Cam isabet izi', 604, 340),
+      marker('6', 'Kaçış yönü', 1160, 560),
+      // Ölçüler + açıklamalar
+      arrow(700, 580, 900, 580, '≈ 2,1 m'),
+      callout('Saldırgan tüfekli, yüzü maskeli', 300, 620, 11),
+      callout('Olay 21.05 te; 2 saçma kafe camına isabet etti', 750, 200, 11),
+      note('Tüfek otopsi ve balistik incelemeye sevk edildi.', 40, 650, 290, 9),
+    ],
+  },
+  {
+    id: 'sil-4',
+    title: 'Ev baskını sırasında savunma amaçlı silah kullanımı',
+    address: 'Antalya / Konyaaltı — Liman Mah. müstakil ev',
+    story:
+      'Gece kapıyı kırarak giren maskeli şahıs, ev sahibinin bacak bölgesine ateş etmesiyle yaralanarak yerde kaldı. Ev sahibinin ruhsatlı tabancası, bir boş kovan ve kan sürüntüsü tespit edildi.',
+    scaleNote: '≈ 1 m = 95 piksel',
+    bulgular: [
+      { no: '1', desc: 'Saldırgan (yaralı, yerde)' },
+      { no: '2', desc: 'Giriş yarası (bacak bölgesi)' },
+      { no: '3', desc: 'Ev sahibinin ruhsatlı tabancası' },
+      { no: '4', desc: 'Boş kovan' },
+      { no: '5', desc: 'Kan sürüntüsü (hol girişine)' },
+      { no: '6', desc: 'Kırılan giriş kapısı' },
+    ],
+    objects: [
+      ...room(120, 80, 860, 480),
+      // Kırılan giriş kapısı (alt duvar) — kanat duvar çizgisinde
+      door(200, 560, 56, 0),
+      lbl('Kapı zorlanarak açıldı', 250, 520, 9),
+      win(500, 76, 80, 0),
+      // Mobilya
+      { s: 'f-2', x: 160, y: 120, w: 140, h: 190, name: 'Yatak' },
+      { s: 'f-13', x: 700, y: 100, w: 130, h: 55, name: 'Gardırop' },
+      { s: 'f-9', x: 420, y: 200, w: 220, h: 140, name: 'Halı' },
+      // Saldırgan + yara + kan
+      { s: 'p-4', x: 400, y: 360, w: 36, h: 80, name: 'Saldırgan (yaralı, yerde)' },
+      { s: 'in-bullet-in', x: 406, y: 396, w: 28, h: 28, name: 'Giriş yarası (bacak)' },
+      { s: 'in-blood-smear', x: 460, y: 440, w: 90, h: 36, name: 'Kan sürüntüsü' },
+      // Silah + kovan
+      { s: 'w-1', x: 540, y: 440, w: 44, h: 30, rot: -15, name: 'Ev sahibinin tabancası' },
+      { s: 'tr-casing-pistol', x: 590, y: 470, w: 26, h: 26, name: 'Boş kovan' },
+      // Kolluk
+      { s: 'p-13', x: 300, y: 480, w: 26, h: 34, name: 'İlk müdahale ekibi' },
+      // Numaratörler
+      marker('1', 'Saldırgan', 418, 330),
+      marker('2', 'Bacak yarası', 452, 380),
+      marker('3', 'Tabanca', 562, 410),
+      marker('4', 'Boş kovan', 603, 500),
+      marker('5', 'Kan sürüntüsü', 505, 520),
+      marker('6', 'Kırılan kapı', 228, 470),
+      // Ölçüler + açıklamalar
+      arrow(200, 620, 460, 620, 'Kapı - saldırgan ≈ 2,7 m'),
+      callout('Saldırgan maskeli; kimliği tespit çalışması var', 700, 620, 11),
+      callout('Ev sahibi ifadede savunma hakkı kapsamında', 200, 200, 11),
+      note('Tabanca balistiğe sevk edildi; kovan tek atım.', 60, 650, 280, 9),
+    ],
+  },
+  {
+    id: 'sil-5',
+    title: 'Benzin istasyonunda silahlı soygun — görevli ayağından yaralandı',
+    address: 'Eskişehir / Tepebaşı — Çankaya Mah. benzin istasyonu',
+    story:
+      'Silahlı şahıs istasyon marketine girip kasadaki parayı istedi; görevlinin direnmesi üzerine ayağına ateş ederek yaya olarak kaçtı. Pompa önünde bekleyen şüpheli araç kamera kaydına girdi.',
+    scaleNote: '≈ 1 m = 95 piksel',
+    bulgular: [
+      { no: '1', desc: 'Market kasası (boşaltıldı)' },
+      { no: '2', desc: 'Görevli (yaralı, ayağından)' },
+      { no: '3', desc: 'Giriş yarası (ayak bileği)' },
+      { no: '4', desc: 'Kan birikintisi' },
+      { no: '5', desc: 'Şüphelinin kaçış yönü (yaya)' },
+      { no: '6', desc: 'Şüpheli araç (pompa önü, kamera kaydında)' },
+    ],
+    objects: [
+      // Market binası
+      ...room(300, 160, 500, 300),
+      lbl('Market', 550, 190, 11),
+      // Kasa
+      { s: 'ev-rect-hollow', x: 340, y: 200, w: 100, h: 60, name: 'Kasa (boşaltıldı)' },
+      lbl('Kasa', 390, 185, 9),
+      // Market kapısı (alt duvar) — kanat duvar çizgisinde
+      door(420, 460, 56, 0),
+      // Pompa adaları
+      { s: 'ev-rect-hollow', x: 900, y: 240, w: 110, h: 60 },
+      { s: 'ev-rect-hollow', x: 900, y: 400, w: 110, h: 60 },
+      lbl('Pompa 1', 955, 225, 9),
+      lbl('Pompa 2', 955, 385, 9),
+      // Görevli + yara + kan
+      { s: 'kk-injured', x: 500, y: 520, w: 105, h: 70, name: 'Görevli (yaralı)' },
+      { s: 'in-bullet-in', x: 528, y: 548, w: 28, h: 28, name: 'Giriş yarası (ayak bileği)' },
+      { s: 'in-blood-pool', x: 570, y: 570, w: 80, h: 50 },
+      // Kaçış + şüpheli araç
+      dash(700, 600, 900, 640, 'Kaçış yönü (yaya)'),
+      { s: 'v-sedan', x: 1000, y: 540, w: 180, h: 78, name: 'Şüpheli araç (pompa önü)' },
+      // Kamera + dubalar
+      { s: 'out-cctv', x: 350, y: 110, w: 52, h: 40, name: 'İstasyon kamerası' },
+      { s: 'ts-traffic-cone', x: 820, y: 300, w: 24, h: 24 },
+      { s: 'ts-traffic-cone', x: 860, y: 320, w: 24, h: 24 },
+      // Numaratörler
+      marker('1', 'Kasa', 390, 290),
+      marker('2', 'Görevli', 500, 490),
+      marker('3', 'Ayak bileği yarası', 560, 540),
+      marker('4', 'Kan birikintisi', 610, 650),
+      marker('5', 'Kaçış yönü', 880, 620),
+      marker('6', 'Şüpheli araç', 1090, 500),
+      // Ölçüler + açıklamalar
+      arrow(300, 700, 480, 700, 'Kapı - görevli ≈ 1,9 m'),
+      callout('Şahıs yüzü maskeli, tabancalı', 200, 300, 11),
+      callout('Olay 03.40 te; kasa 2.900 TL alındı', 900, 130, 11),
+      note('Görevli 112 ekiyle hastaneye kaldırıldı.', 40, 680, 270, 9),
+    ],
+  },
+];
+
+/* ------------------------------------------------------------------ */
 /* Dışa aktarım                                                        */
 /* ------------------------------------------------------------------ */
 
@@ -1458,6 +2503,34 @@ export const KROKI_CASE_GROUPS: KrokiCaseGroup[] = [
     desc: 'Ası sonucu ölümler: bağlantı noktası, ip, mağdur konumu ve bulgu yerleşimleri.',
     icon: 'HeartCrack',
     scenarios: intihar,
+  },
+  {
+    id: 'oto-hirsizlik',
+    name: 'Otodan Hırsızlık',
+    desc: 'Araç içi ve araçtan hırsızlık olayları: kırma yöntemi, iz ve delil yerleşimli kroki senaryoları.',
+    icon: 'Car',
+    scenarios: otoHirsizligi,
+  },
+  {
+    id: 'isyeri-hirsizlik',
+    name: 'İşyerinden Hırsızlık',
+    desc: 'Ofis, market ve işyeri hırsızlıkları: giriş yöntemi, kasa ve delil yerleşimli kroki senaryoları.',
+    icon: 'Briefcase',
+    scenarios: isyeriHirsizligi,
+  },
+  {
+    id: 'bicakla-yaralama',
+    name: 'Bıçakla Yaralama',
+    desc: 'Kesici aletle yaralama olayları: yara, kan paterni ve delil yerleşimli kroki senaryoları.',
+    icon: 'Slice',
+    scenarios: bicaklaYaralama,
+  },
+  {
+    id: 'silahla-yaralama',
+    name: 'Silahla Yaralama',
+    desc: 'Ateşli silahla yaralama olayları: kovan, isabet ve delil yerleşimli kroki senaryoları.',
+    icon: 'Crosshair',
+    scenarios: silahlaYaralama,
   },
 ];
 
