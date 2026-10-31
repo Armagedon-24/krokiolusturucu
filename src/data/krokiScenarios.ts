@@ -177,30 +177,21 @@ SYMBOL_CATEGORIES.forEach((cat) => {
 
 /**
  * Kroki çizimlerinde kullanılacak sembol görselini seçer.
- * Varsa sembolün uygulamanın KARAKALEM (çizgi teknikli, şeffaf zeminli) görseli
- * tercih edilir: renkli/realistik PNG ve basit SVG dolgular yerine klasik kroki
- * görünümü sağlar; üst üste binen sembollerde okunabilirliği korur.
- * İstisna: st-1 (Düz Yol) — büyük ölçekte vektör SVG netliği korur.
+ * KURAL (kullanıcı isteği): kroki sembolü, SEMBOL KÜTÜPHANESİNDE görüldüğü gibi
+ * olsun — kütüphane paneliyle BİREBİR aynı görsel (`thumbnail || src`).
+ * Ekstra tercih/ikame/desatürasyon YOK: krokide gördüğün, kütüphanedeki sembolün
+ * ta kendisidir.
  */
-const KROKI_SRC_VECTOR = new Set(['st-1']);
 const krokiSrc = (sym: SymbolEntry): string => {
   const th = (sym as { thumbnail?: unknown }).thumbnail;
-  if (typeof th === 'string' && th.includes('/karakalem/') && !KROKI_SRC_VECTOR.has(sym.id)) return th;
-  return sym.src;
+  return typeof th === 'string' && th.length > 0 ? th : sym.src;
 };
 
 /**
- * Realistik/iz ailesi semboller (kan, fren izi, ıslak zemin, krater, enkaz, cam,
- * duman, alev, lastik izi vb.) kroki çizimlerinde hafif saydam (kurşun kalem tarama
- * etkisi) kullanılır: altlarındaki nesneleri kapatmadan klasik kroki okunabilirliği sağlar.
- * 0.7 seçildi: 0.5 krokide zor seçiliyordu; 0.7 hem saydamlığı korur hem belirginleştirir.
+ * Realistik/iz ailesi semboller kroki çizimlerinde TAM opaklıkta çizilir:
+ * kütüphane görseliyle birebir aynı görünüm için saydamlaştırma yapılmaz.
  */
-const KROKI_SOFT_RE = /realistic|blood|skid|tire[_-]?track|liquid|mud|fingerprint|crack|crater|blast|debris|shattered|broken[_-]?wall|smoke|fire/i;
-const KROKI_SOFT_IDS = new Set(['st-wet', 'st-ice']);
-const krokiOpacity = (sym: SymbolEntry): number | undefined => {
-  const hay = `${sym.id} ${sym.src} ${String((sym as { thumbnail?: unknown }).thumbnail ?? '')}`;
-  return KROKI_SOFT_RE.test(hay) || KROKI_SOFT_IDS.has(sym.id) ? 0.7 : undefined;
-};
+const krokiOpacity = (_sym: SymbolEntry): number | undefined => undefined;
 
 /**
  * Minik delil/iz sembolleri (ayakkabı, telefon, anahtar, kovan, mermi izi vb.)
@@ -213,16 +204,10 @@ const krokiMinSizeExempt = (id: string): boolean =>
   KROKI_MIN_EXEMPT_PREFIX.some((p) => id === p || id.startsWith(p));
 
 /**
- * Kroki senaryolarında dolgulu (silüet) görünen sembollerin, uygulamanın mevcut
- * ÇİZGİ (karakalem) karşılıklarıyla değiştirilmesi — üst üste binmede okunabilirlik
- * ve klasik kroki görünümü için. Değiştirilen nesne orijinal sembol adını korur.
+ * NOT: Kütüphane dışı sembol İKAMESİ kaldırıldı (kullanıcı isteği) — krokideki her
+ * araç/nesne, kütüphanedeki seçilen sembolün birebir kendisidir (v-sedan, v-police,
+ * v-ambulance, v-truck artık olduğu gibi çizilir).
  */
-const KROKI_SYMBOL_SUBSTITUTE: Record<string, string> = {
-  'v-sedan': 'v-hatchback',     // Binek otomobil → çizgi binek otomobil
-  'v-police': 'v-gendarmerie',  // Polis aracı → çizgi jandarma aracı (ışık barlı)
-  'v-ambulance': 'v-panelvan',  // Ambulans → çizgi panelvan gövdeli ambulans
-  'v-truck': 'v-dump',          // Kamyon → çizgi damperli kamyon
-};
 
 /** Tasarım koordinatlarını gerçek çizim alanına çevirip tuval nesnelerini üretir. */
 export function buildScenarioObjects(
@@ -295,8 +280,7 @@ export function buildScenarioObjects(
     }
     if (p.s) {
       const origSym = SYMBOL_INDEX[p.s];
-      const subId = KROKI_SYMBOL_SUBSTITUTE[p.s];
-      const sym = (subId ? SYMBOL_INDEX[subId] : undefined) || origSym;
+      const sym = origSym;
       if (!sym) continue; // bilinmeyen sembol atlanır (uygulama güncellendiğinde dayanıklılık)
       let w = p.w ?? (typeof sym.width === 'number' ? sym.width : 100);
       let h = p.h ?? (typeof sym.height === 'number' ? sym.height : 100);
@@ -382,8 +366,8 @@ const hirsizlik: KrokiScenario[] = [
       { s: 'ei-cigarette', x: 528, y: 416, w: 32, h: 14, rot: 10 },
       marker('5', 'Kapı yanında sigara izmariti', 578, 424),
       marker('6', 'Boşaltılmış çekmeceler ve belgeler', 836, 316),
-      // ---- Ölçüler
-      arrow(120, 508, 232, 508, '110 cm'),
+      // ---- Ölçüler (kilit ↔ levye mesafesi; numaratörlerin altından geçmez)
+      arrow(100, 516, 222, 516, '≈ 125 cm'),
       arrow(370, 44, 370, 438, '≈ 410 cm'),
       // ---- Açıklamalar
       callout('Ganimet: takı ve 8.500 TL nakit alındı', 300, 570, 11),
@@ -411,8 +395,8 @@ const hirsizlik: KrokiScenario[] = [
     objects: [
       // ---- Ev gövdesi
       ...room(120, 40, 520, 520),
-      innerH(120, 340, 180),
-      { s: 'arch-w1i', x: 380, y: 336, w: 260, h: 8 },
+      innerH(120, 340, 186),
+      { s: 'arch-w1i', x: 362, y: 336, w: 278, h: 8 },
       door(306, 340, 56, 0),
       // Arka pencere (giriş noktası) — sol duvar
       { s: 'arch-win', x: 128, y: 120, w: 80, h: 12, rot: 90 },
@@ -443,8 +427,8 @@ const hirsizlik: KrokiScenario[] = [
       marker('4', 'İçeride çamur ve ayakkabı izleri', 372, 262),
       marker('5', 'Yerde kalan para ve anahtarlar', 478, 300),
       marker('6', 'Yem atılmış köpek maması kabı', 190, 632),
-      // ---- Ölçüler ve açıklamalar
-      arrow(120, 160, 498, 164, '≈ 385 cm'),
+      // ---- Ölçüler ve açıklamalar (ev iç genişliği, iki duvar arasında)
+      arrow(122, 52, 638, 52, '≈ 5,4 m'),
       callout('Ganimet: 2 altın bilezik ve 1.200 TL', 300, 590, 11),
       callout('Cam kırılarak pencereden girildi', 208, 314, 11),
       note('Bekçi köpeğine yem atıldığı değerlendirildi.', 260, 660, 250),
@@ -490,9 +474,9 @@ const hirsizlik: KrokiScenario[] = [
       { s: 'ev-rect-hollow', x: 470, y: 108, w: 56, h: 40 },
       lbl('Koli', 498, 128, 9),
       { s: 'ei-lock-broken', x: 352, y: 366, w: 30, h: 30 },
-      marker('1', 'Kapı kancasında kırılmış asma kilit', 404, 378),
+      marker('1', 'Kapı kancasında kırılmış asma kilit', 404, 414),
       { s: 'tr-3', x: 430, y: 330, w: 20, h: 20 },
-      marker('3', 'Kapı kasasından parmak izi', 462, 336),
+      marker('3', 'Kapı kasasından parmak izi', 466, 444),
       // ---- Koridor delilleri
       { s: 'ei-crowbar', x: 520, y: 420, w: 18, h: 44, rot: 30 },
       marker('2', 'Koridorda bulunan levye', 560, 430),
@@ -510,7 +494,7 @@ const hirsizlik: KrokiScenario[] = [
       ...box(600, 120, 60, 42, 'Koli'),
       ...box(880, 126, 58, 42),
       // ---- Ölçüler ve açıklamalar
-      arrow(420, 396, 520, 420, '105 cm'),
+      arrow(424, 402, 522, 422, '≈ 105 cm'),
       callout('Çalınan: bisiklet ve elektrikli el aletleri', 240, 610, 11),
       callout('Koridor kamerası şüpheliyi kaydetti', 900, 592, 11),
       note('Merdiven boşluğu', 1010, 520, 130),
@@ -560,17 +544,17 @@ const hirsizlik: KrokiScenario[] = [
       { s: 'tr-footprint', x: 517, y: 421, w: 26, h: 42, rot: -8 },
       marker('3', 'Salon zemininde ayakkabı izleri', 468, 430),
       { s: 'tr-3', x: 478, y: 448, w: 22, h: 22 },
-      marker('4', 'Teras kapısı kasasından parmak izi', 636, 500),
+      marker('4', 'Teras kapısı kasasından parmak izi', 612, 478),
       { s: 'ei-bottle', x: 700, y: 330, w: 18, h: 44 },
       marker('5', 'Zeminde şüpheliye ait şişe', 744, 352),
       { s: 'ei-cigarette', x: 742, y: 392, w: 32, h: 14, rot: 12 },
       { s: 'out-cctv', x: 986, y: 92, w: 30, h: 42 },
-      marker('6', 'Bahçe güvenlik kamerası', 996, 150, 30),
+      marker('6', 'Bahçe güvenlik kamerası', 940, 98, 30),
       { s: 'ei-documents', x: 556, y: 424, w: 58, h: 48, rot: -8 },
       { s: 'ei-documents', x: 640, y: 438, w: 50, h: 42, rot: 10 },
       { s: 'ei-money', x: 442, y: 428, w: 40, h: 28 },
-      // ---- Ölçüler ve açıklamalar
-      arrow(340, 52, 530, 460, '≈ 6,1 m'),
+      // ---- Ölçüler ve açıklamalar (çitten terasa şüpheli yaklaşım çizgisi)
+      arrow(340, 52, 530, 460, '≈ 4,7 m'),
       callout('Teras kapısı camı kırılarak sürgü kaldırıldı', 660, 300, 11),
       callout('Çekmeceler boşaltıldı; nakit ve takı alındı', 250, 540, 11),
       note('Ganimet: 1 adet dizüstü bilgisayar, takı, 12.000 TL', 680, 560, 280),
@@ -627,9 +611,9 @@ const hirsizlik: KrokiScenario[] = [
       callout('Balkon kapısı sürgüsü dışarıdan kaldırılmış', 780, 262, 11),
       note('Banyo karıştırılmamış.', 640, 210, 140, 9),
       note('Yangın merdiveni üzerinden kaçış', 850, 480, 200),
-      dash(820, 440, 950, 560),
+      dash(778, 470, 950, 560),
       lbl('Yangın merdiveni', 1010, 600, 10),
-      marker('1', 'Giriş noktası: balkon kapısı', 742, 470, 30),
+      marker('1', 'Giriş noktası: balkon kapısı', 742, 440, 30),
       marker('6', 'Kaçış güzergâhı: yangın merdiveni', 960, 520, 30),
     ],
   },
@@ -676,8 +660,8 @@ const kaza: KrokiScenario[] = [
       { s: 'v-sedan', x: 430, y: 322, w: 150, h: 66, rot: 0, name: 'Hafif ticari araç (A)' },
       // ---- Araç B: binek (kırmızı ışıkta, kuzeyden)
       { s: 'v-damaged-front', x: 640, y: 176, w: 78, h: 150, rot: 0, name: 'Ağır hasarlı binek (B)' },
-      // Fren izi (B aracının kavşak öncesi)
-      { s: 'tr-skid-straight', x: 741, y: 20, w: 190, h: 88, rot: 90, name: 'Fren izi' },
+      // Fren izi (B aracının kavşak öncesi) — ölçü oku şeridin içinde, geçitle çakışmaz
+      { s: 'tr-skid-straight', x: 760, y: 20, w: 240, h: 88, rot: 90, name: 'Fren izi' },
       // ---- Kazazede ve kan
       { s: 'p-9', x: 560, y: 428, w: 115, h: 52, name: 'Sürücü (cenaze)' },
       { s: 'in-blood-pool', x: 612, y: 470, w: 115, h: 85 },
@@ -693,9 +677,9 @@ const kaza: KrokiScenario[] = [
       marker('3', 'Binek aracının fren izi (≈ 18 m)', 800, 80, 30),
       marker('4', 'Çarpışma sonrası dağılan cam parçaları', 600, 352),
       marker('5', 'Binek yönü sinyal: kırmızı (kamera)', 828, 240, 30),
-      // ---- Ölçüler
-      arrow(745, 30, 745, 200, '≈ 18 m'),
-      arrow(605, 556, 755, 556, '15 m'),
+      // ---- Ölçüler (fren izi boyu = 216 px ≈ 18 m; yaya geçidi genişliği)
+      arrow(760, 30, 760, 246, '≈ 18 m'),
+      arrow(615, 556, 745, 556, '≈ 11 m'),
       // ---- Açıklamalar
       callout('Işık ihlali: B aracı kırmızıda kavşağa girdi', 300, 150, 11),
       callout('Çarpışma açısı ≈ 90° (T-bone)', 940, 470, 11),
@@ -723,8 +707,8 @@ const kaza: KrokiScenario[] = [
       { s: 'out-zebra', x: 905, y: 295, w: 130, h: 55, rot: 90 },
       // Araç (fren izi bitiminde, geçit üzerinde)
       { s: 'v-sedan', x: 505, y: 318, w: 140, h: 62, name: 'Binek otomobil' },
-      // Fren izi (sağ yaklaşım)
-      { s: 'tr-skid-straight', x: 960, y: 318, w: 210, h: 92, name: 'Fren izi' },
+      // Fren izi (sağ yaklaşım) — 26 m ≈ 312 px
+      { s: 'tr-skid-straight', x: 858, y: 318, w: 312, h: 92, name: 'Fren izi' },
       // ---- Yaya ve deliller
       { s: 'p-3', x: 415, y: 322, w: 34, h: 76, name: 'Yaya (cenaze)' },
       { s: 'in-blood-pool', x: 462, y: 386, w: 105, h: 78 },
@@ -743,9 +727,9 @@ const kaza: KrokiScenario[] = [
       marker('3', 'Çarpma bölgesinde kan birikintisi', 520, 470),
       marker('4', 'Fren izi başlangıcı (≈ 26 m)', 1160, 330, 30),
       marker('5', 'Yaya geçidi uyarı tabelası', 878, 190, 30),
-      // ---- Ölçüler
-      arrow(900, 350, 660, 350, '≈ 26 m'),
-      arrow(500, 480, 590, 480, '≈ 8 m'),
+      // ---- Ölçüler (fren izi boyu ve aracın iz bitimine kadar kayma mesafesi)
+      arrow(862, 364, 1168, 364, '≈ 26 m'),
+      arrow(650, 358, 855, 358, '≈ 17 m'),
       // ---- Açıklamalar
       callout('Araç hız sınırında (kamera/fren izi uyumlu)', 250, 200, 11),
       callout('Yaya aniden geçide girdi (tanık beyanı)', 820, 560, 11),
@@ -788,13 +772,13 @@ const kaza: KrokiScenario[] = [
       { s: 'v-police', x: 1130, y: 400, w: 130, h: 56 },
       // ---- Numaratörler
       marker('1', 'Motosikletli cenazesi (≈ 12 m savrulma)', 450, 400),
-      marker('2', 'Savrulma hattında kan birikintisi', 600, 560),
+      marker('2', 'Savrulma hattında kan birikintisi', 600, 580),
       marker('3', 'Savrulan kask', 532, 224),
       marker('4', 'Devrilmiş motosiklet', 700, 260),
       marker('5', 'Otomobilin sürtünme/fren izi', 960, 480, 30),
-      // ---- Ölçüler
+      // ---- Ölçüler (kan birikintisi genişliği; savrulma hattı)
       arrow(640, 296, 520, 420, '≈ 12 m'),
-      arrow(590, 540, 700, 540, '≈ 9 m'),
+      arrow(544, 540, 648, 540, '≈ 9 m'),
       // ---- Açıklamalar
       callout('Motosiklet sola dönerken çarpıştı', 260, 150, 11),
       callout('Kask takılıydı; darbe kafes bölgesine', 950, 580, 11),
@@ -819,11 +803,11 @@ const kaza: KrokiScenario[] = [
       ...intersection(),
       // Islak zemin
       { s: 'st-wet', x: 380, y: 300, w: 120, h: 84 },
-      { s: 'st-wet', x: 840, y: 380, w: 120, h: 84 },
+      { s: 'st-wet', x: 920, y: 270, w: 120, h: 84 },
       lbl('Islak zemin', 420, 420, 9),
       // Dur tabelaları (dikey yol)
       { s: 'ts-stop', x: 598, y: 168, w: 30, h: 30 },
-      { s: 'ts-stop', x: 732, y: 556, w: 30, h: 30 },
+      { s: 'ts-stop', x: 762, y: 548, w: 30, h: 30 },
       lbl('Dur', 636, 180, 9),
       // Hız sınırı
       { s: 'ts-speed', x: 598, y: 120, w: 30, h: 30 },
@@ -832,8 +816,8 @@ const kaza: KrokiScenario[] = [
       // ---- Devrilmiş araç
       { s: 'v-overturned', x: 760, y: 312, w: 145, h: 72, name: 'Devrilmiş kamyonet' },
       { s: 'v-sedan', x: 470, y: 322, w: 140, h: 62, name: 'Binek otomobil (çarpan)' },
-      // Fren izi (kamyonet yaklaşımı)
-      { s: 'tr-skid-straight', x: 715, y: 60, w: 150, h: 80, rot: 90, name: 'Fren izi' },
+      // Fren izi (kamyonet yaklaşımı) — 14 m ≈ 168 px; kamyonet gövdesinin doğusunda
+      { s: 'tr-skid-straight', x: 790, y: 60, w: 180, h: 80, rot: 90, name: 'Fren izi' },
       // ---- Kazazede
       { s: 'p-4', x: 884, y: 440, w: 34, h: 76, name: 'Sürücü (cenaze)' },
       { s: 'in-blood-pool', x: 848, y: 500, w: 105, h: 78 },
@@ -847,9 +831,9 @@ const kaza: KrokiScenario[] = [
       marker('3', 'Fren izi (≈ 14 m)', 830, 100, 30),
       marker('4', 'Dur işareti (uyulmamış)', 566, 140, 30),
       marker('5', 'Islak zemin bölgesi', 350, 280, 30),
-      // ---- Ölçüler
-      arrow(745, 70, 745, 210, '≈ 14 m'),
-      arrow(870, 470, 780, 380, '≈ 1,4 m'),
+      // ---- Ölçüler (fren izi boyu 168 px ≈ 14 m; devrilmiş araç ↔ sürücü mesafesi)
+      arrow(790, 66, 790, 234, '≈ 14 m'),
+      arrow(890, 386, 890, 438, '≈ 4,3 m'),
       // ---- Açıklamalar
       callout('Sürücü kanda %1,32 alkol (adli rapor)', 240, 480, 11),
       callout('Binek araçta kilitli fren izi yok — sağlam duruma geçti', 300, 590, 11),
@@ -880,8 +864,8 @@ const kaza: KrokiScenario[] = [
       { s: 'ts-crossroads', x: 896, y: 150, w: 32, h: 30 },
       { s: 'ts-speed-90', x: 1236, y: 236, w: 30, h: 30 },
       lbl('Hız sınırı 90', 1244, 206, 9),
-      // ---- Kamyon (ana yoldan, fren izi)
-      { s: 'tr-skid-straight', x: 960, y: 318, w: 200, h: 92, name: 'Fren izi' },
+      // ---- Kamyon (ana yoldan, fren izi) — 19 m ≈ 228 px
+      { s: 'tr-skid-straight', x: 920, y: 318, w: 240, h: 92, name: 'Fren izi' },
       { s: 'v-truck', x: 700, y: 322, w: 190, h: 64, name: 'Yüklü kamyon' },
       // ---- Traktör (devrilmiş/savrilmiş)
       { s: 'v-tractor', x: 618, y: 180, w: 62, h: 124, name: 'Traktör (savrulmuş)' },
@@ -894,16 +878,16 @@ const kaza: KrokiScenario[] = [
       { s: 'tr-liquid-pool', x: 560, y: 430, w: 70, h: 45, name: 'Dizel yakıt birikintisi' },
       // Ekipler
       { s: 'v-police', x: 1140, y: 420, w: 130, h: 56 },
-      { s: 'v-ambulance', x: 1120, y: 320, w: 150, h: 60 },
+      { s: 'v-ambulance', x: 1160, y: 170, w: 150, h: 60 },
       // ---- Numaratörler
       marker('1', 'Traktör sürücüsü cenazesi', 566, 450),
       marker('2', 'Savrulan traktör', 560, 200),
       marker('3', 'Dökülen yük (enkaz)', 800, 330),
       marker('4', 'Kamyonun fren izi (≈ 19 m)', 1170, 300, 30),
       marker('5', 'Kavşak uyarı tabelası', 872, 190, 30),
-      // ---- Ölçüler
-      arrow(1150, 300, 960, 300, '≈ 19 m'),
-      arrow(640, 250, 680, 300, '≈ 4,5 m'),
+      // ---- Ölçüler (fren izi boyu; traktör ↔ dökülen yük mesafesi)
+      arrow(924, 330, 1152, 330, '≈ 19 m'),
+      arrow(676, 306, 760, 354, '≈ 8 m'),
       // ---- Açıklamalar
       callout('Traktör yol vermedi (tanık + izler)', 260, 150, 11),
       callout('Kamyon yasal hızda, frenleme yetersiz', 950, 590, 11),
@@ -1015,12 +999,12 @@ const cinayet: KrokiScenario[] = [
       marker('1', 'Mağdur cesedi (yüzüstü)', 168, 320),
       marker('2', '3 adet boş kovan (9 mm)', 428, 428),
       marker('3', 'Yatak başlığında kan sıçraması', 292, 172, 30),
-      marker('4', 'Duvar isabet izleri', 130, 172, 30),
+      marker('4', 'Duvar isabet izleri', 124, 144, 30),
       marker('5', 'Pencere altında ayakkabı izi', 520, 96, 30),
       marker('6', 'Kan birikintisi', 356, 330),
-      // Ölçüler
-      arrow(402, 406, 100, 172, '2,6 m'),
-      arrow(258, 180, 230, 328, '1,5 m'),
+      // Ölçüler (kovan kümesinin duvar isabet izlerine yatay uzaklığı)
+      arrow(402, 406, 100, 172, '≈ 4 m'),
+      arrow(258, 180, 230, 328, '≈ 1,5 m'),
       // Açıklamalar
       callout('3 boş kovan — 9 mm tabanca', 660, 300, 11),
       callout('Atış mesafesi yakın (< 1 m) — adli tıp', 680, 360, 11),
@@ -1065,10 +1049,10 @@ const cinayet: KrokiScenario[] = [
       marker('2', 'Boyun bölgesinde ekimozlar', 486, 150, 30),
       marker('3', 'Mağdurun telefonu', 288, 350),
       marker('4', 'Bilinmeyen kişiye ait ayakkabı izleri', 296, 430),
-      marker('5', 'Yatak üstünde mücadele izi', 195, 112, 30),
-      // Ölçüler
-      arrow(252, 190, 374, 192, '1,3 m'),
-      arrow(200, 130, 200, 288, '≈ 1,6 m'),
+      marker('5', 'Yatak üstünde mücadele izi', 166, 130, 30),
+      // Ölçüler (yatak boyu; cesedin yatağa uzaklığı)
+      arrow(252, 190, 374, 192, '≈ 1,3 m'),
+      arrow(200, 94, 200, 286, '≈ 2 m'),
       // Açıklamalar
       callout('Ölüm mekaniği: mekanik asfiksi (adli tıp ilk raporu)', 350, 560, 11),
       callout('Oda düzenli; tanıdık ziyaret olasılığı', 700, 300, 11),
@@ -1225,7 +1209,7 @@ const intihar: KrokiScenario[] = [
       marker('2', 'İp bağlantı noktası', 368, 106, 30),
       marker('3', 'El yazısı intihar notu', 452, 282, 30),
       marker('4', 'Telefon (veda mesajı taslağı)', 262, 364),
-      marker('5', 'Çıkarılmış ayakkabılar', 128, 430, 30),
+      marker('5', 'Çıkarılmış ayakkabılar', 150, 440, 30),
       marker('6', 'Devrik tabure', 452, 386, 30),
       // Ölçüler
       arrow(246, 132, 294, 132, '≈ 50 cm'),
@@ -1269,9 +1253,9 @@ const intihar: KrokiScenario[] = [
       { s: 'cl-shoe', x: 408, y: 434, w: 24, h: 24, rot: 15 },
       // Numaratörler
       marker('1', 'Mağdur (asılı konum)', 300, 190),
-      marker('2', 'İp bağlantı noktası: duş teli', 352, 84, 30),
-      marker('3', 'Katlanmış intihar notu', 560, 260, 30),
-      marker('4', 'Telefon (lavabo üstü)', 580, 120, 30),
+      marker('2', 'İp bağlantı noktası: duş teli', 352, 104, 30),
+      marker('3', 'Katlanmış intihar notu', 528, 296, 30),
+      marker('4', 'Telefon (lavabo üstü)', 520, 100, 30),
       marker('5', 'Çıkarılmış ayakkabılar', 480, 448, 30),
       marker('6', 'Duş suyu birikintisi', 330, 330, 30),
       // Ölçüler
@@ -1314,16 +1298,18 @@ const intihar: KrokiScenario[] = [
       { s: 'cl-shoe', x: 330, y: 148, w: 22, h: 22 },
       { s: 'cl-shoe', x: 356, y: 156, w: 22, h: 22, rot: 25 },
       lbl('Alt kat holü', 250, 540, 10),
+      // Giriş kapısı + hol duvar segmenti (kapı duvar üzerinde oturur)
+      { s: 'arch-w1i', x: 520, y: 496, w: 190, h: 8 },
       door(600, 500, 54, 0),
       lbl('Giriş kapısı', 660, 520, 9),
       // Numaratörler
       marker('1', 'Mağdur (asılı konum)', 585, 250),
       marker('2', 'İp bağlantı noktası: korkuluk', 380, 110, 30),
-      marker('3', 'Katlanmış intihar notu', 150, 470, 30),
-      marker('4', 'Telefon ve anahtarlar (sahanlık)', 356, 458, 30),
+      marker('3', 'Katlanmış intihar notu', 110, 470, 30),
+      marker('4', 'Telefon ve anahtarlar (sahanlık)', 330, 395, 30),
       marker('5', 'Çıkarılmış ayakkabılar', 310, 200, 30),
-      // Ölçüler
-      arrow(470, 402, 280, 452, '≈ 3,1 m'),
+      // Ölçüler (sahanlık genişliği; merdiven alt uçuş boyu)
+      arrow(152, 458, 358, 458, '≈ 2,2 m'),
       arrow(150, 80, 150, 340, '≈ 2,7 m'),
       // Açıklamalar
       callout('Mağdur korkuluk demirine ip bağlamış', 700, 200, 11),
@@ -1371,7 +1357,7 @@ const intihar: KrokiScenario[] = [
       marker('1', 'Mağdur (asılı konum)', 378, 330),
       marker('2', 'İp bağlantı noktası: kiriş', 472, 212, 30),
       marker('3', 'İntihar notu', 210, 370, 30),
-      marker('4', 'Kimlik ve anahtarlar', 300, 420, 30),
+      marker('4', 'Kimlik ve anahtarlar', 300, 392, 30),
       marker('5', 'Devrik tabure', 668, 400, 30),
       marker('6', 'Toz tabakada ayakkabı izleri', 390, 225, 30),
       // Ölçüler
@@ -1426,7 +1412,7 @@ const intihar: KrokiScenario[] = [
       { s: 'tr-footprint', x: 377, y: 397, w: 26, h: 42 },
       { s: 'tr-footprint', x: 417, y: 381, w: 26, h: 42, rot: -10 },
       // Numaratörler
-      marker('1', 'Mağdur (asılı konum)', 430, 262),
+      marker('1', 'Mağdur (asılı konum)', 430, 240),
       marker('2', 'İp bağlantı noktası: ana dal', 560, 190, 30),
       marker('3', 'Katlanmış intihar notu', 670, 380, 30),
       marker('4', 'Telefon (bank üstü)', 790, 380, 30),
@@ -1434,7 +1420,7 @@ const intihar: KrokiScenario[] = [
       marker('6', 'Bahçede çamur izleri', 340, 500, 30),
       // Ölçüler
       arrow(545, 260, 1005, 300, '≈ 5,2 m'),
-      arrow(200, 300, 500, 280, '≈ 3,2 m'),
+      arrow(152, 300, 498, 280, '≈ 3,6 m'),
       // Açıklamalar
       callout('Ayaklar yerden 25 cm — ölüm mekaniği ası (adli tıp)', 260, 560, 11),
       callout('Bahçe kapısı içeriden sürgülüydü', 780, 560, 11),
@@ -1476,7 +1462,7 @@ const otoHirsizligi: KrokiScenario[] = [
       // Şüpheli izleri + kaçış
       { s: 'tr-footprint', x: 980, y: 330, w: 26, h: 42 },
       { s: 'tr-footprint', x: 1024, y: 318, w: 26, h: 42, rot: -12 },
-      dash(1100, 340, 1300, 240, 'Kaçış yönü'),
+      dash(1052, 340, 1300, 240, 'Kaçış yönü'),
       // Kamera
       { s: 'out-cctv', x: 1180, y: 110, w: 52, h: 40, name: 'Güvenlik kamerası' },
       lbl('Kamera görüş alanı', 1180, 175, 9),
@@ -1487,8 +1473,8 @@ const otoHirsizligi: KrokiScenario[] = [
       marker('4', 'Şüpheli ayak izleri', 1002, 408),
       marker('5', 'Kaçış yönü', 1240, 205),
       marker('6', 'Güvenlik kamerası', 1252, 145, 30),
-      // Ölçüler + açıklamalar
-      arrow(600, 430, 780, 430, '≈ 4,5 m'),
+      // Ölçüler + açıklamalar (cam kırıkları ↔ ayak izleri mesafesi)
+      arrow(806, 352, 978, 352, '≈ 1,8 m'),
       callout('Sağ arka cam taş ile kırıldı', 420, 175, 11),
       callout('Olay 22.30 - 07.00 arasında gerçekleşti', 900, 160, 11),
       note('Kamera kaydı komşu apartman yönetiminden talep edildi.', 40, 640, 270, 9),
@@ -1539,8 +1525,8 @@ const otoHirsizligi: KrokiScenario[] = [
       marker('4', 'Düşen gözlük', 540, 370),
       marker('5', 'Şüpheli ayak izleri', 830, 480),
       marker('6', 'Otopark kamerası', 1252, 180, 30),
-      // Ölçüler + açıklamalar
-      arrow(240, 560, 900, 560, 'Park sırası ≈ 7 m'),
+      // Ölçüler + açıklamalar (park sırası genişliği, slot kenarları arasında)
+      arrow(240, 280, 900, 280, 'Park sırası ≈ 7 m'),
       callout('Konsoldan ses sistemi sökülmüş', 380, 400, 11),
       callout('Kapı kilidi zorlanmamış — cam kırılmış', 950, 640, 11),
       note('Kamera görüntüleri 21.00-23.00 arası incelendi.', 60, 640, 250, 9),
@@ -1591,8 +1577,8 @@ const otoHirsizligi: KrokiScenario[] = [
       marker('4', 'Şüpheli ayak izleri', 730, 500),
       marker('5', 'İtiliş yönü', 1010, 600),
       marker('6', 'Site kamerası', 1160, 190, 30),
-      // Ölçüler + açıklamalar
-      arrow(320, 620, 770, 620, 'Park sırası ≈ 4,7 m'),
+      // Ölçüler + açıklamalar (park sırası genişliği, slot kenarları arasında)
+      arrow(320, 180, 770, 180, 'Park sırası ≈ 4,7 m'),
       callout('Zincir kesici aletle kesilmiş', 240, 460, 11),
       callout('Olay 02.00-03.30 arasında', 950, 160, 11),
       note('Kamera kaydında iki şahıs motosikleti iterek çıkardı.', 60, 660, 280, 9),
@@ -1637,8 +1623,8 @@ const otoHirsizligi: KrokiScenario[] = [
       marker('4', 'Şüpheli ayak izleri', 870, 390),
       marker('5', 'Kaçış yönü', 1180, 175),
       marker('6', 'Durak kamerası', 1120, 180, 30),
-      // Ölçüler + açıklamalar
-      arrow(400, 400, 590, 400, '≈ 4,2 m'),
+      // Ölçüler + açıklamalar (valiz kilidi ↔ ayak izleri mesafesi)
+      arrow(672, 340, 848, 340, '≈ 1,9 m'),
       callout('Valiz 23.40 sıralarında alınmış', 300, 442, 11),
       callout('Şoför bagajı kontrol etmeden kalktı', 900, 480, 11),
       note('Kamera kaydında şüpheli yürüyerek istikamet değiştirdi.', 40, 560, 280, 9),
@@ -1675,7 +1661,7 @@ const otoHirsizligi: KrokiScenario[] = [
       { s: 'tr-mud', x: 300, y: 420, w: 90, h: 55 },
       { s: 'tr-footprint', x: 420, y: 420, w: 26, h: 42 },
       { s: 'tr-footprint', x: 466, y: 436, w: 26, h: 42, rot: 20 },
-      dash(540, 470, 740, 560, 'Kaçış yönü'),
+      dash(494, 470, 740, 560, 'Kaçış yönü'),
       // Kamera
       { s: 'out-street-light', x: 120, y: 300, w: 40, h: 54 },
       { s: 'out-cctv', x: 620, y: 90, w: 52, h: 40, name: 'Sokak kamerası' },
@@ -1686,8 +1672,8 @@ const otoHirsizligi: KrokiScenario[] = [
       marker('4', 'Tırmanma izleri', 530, 130, 30),
       marker('5', 'Kaçış yönü', 760, 540),
       marker('6', 'Sokak kamerası', 656, 160, 30),
-      // Ölçüler + açıklamalar
-      arrow(300, 560, 520, 560, '≈ 2,3 m'),
+      // Ölçüler + açıklamalar (kamyonetten çamur izlerine kaçış güzergâhı)
+      arrow(460, 352, 394, 418, '≈ 1 m'),
       callout('Bahçe kapısı kilitli bulundu', 200, 200, 11),
       callout('Olay 23.00 - 06.30 arasında', 900, 440, 11),
       note('Çamur izleri lastik taban deseniyle eşleştirilecek.', 40, 640, 270, 9),
@@ -1744,14 +1730,14 @@ const isyeriHirsizligi: KrokiScenario[] = [
       // Kamera
       { s: 'out-cctv', x: 230, y: 110, w: 52, h: 40, name: 'Ofis kamerası' },
       // Numaratörler
-      marker('1', 'Giriş kapısı', 390, 470),
+      marker('1', 'Giriş kapısı', 390, 445),
       marker('2', 'Kasa', 930, 220),
-      marker('3', 'Ayak izleri hattı', 520, 415),
-      marker('4', 'Dağıtılan evraklar', 445, 470),
+      marker('3', 'Ayak izleri hattı', 520, 370),
+      marker('4', 'Dağıtılan evraklar', 445, 500),
       marker('5', 'Gardırop', 805, 330),
       marker('6', 'Ofis kamerası', 300, 155, 30),
-      // Ölçüler + açıklamalar
-      arrow(350, 520, 850, 520, 'Kapı - kasa ≈ 5,3 m'),
+      // Ölçüler + açıklamalar (giriş kapısından kasaya olay güzergâhı)
+      arrow(356, 504, 820, 225, 'Kapı - kasa ≈ 5,7 m'),
       callout('Kilit tezgahla zorlanmış, kanat sağlam', 480, 620, 11),
       callout('Kamera kaydında şahıs 02.10 da girdi', 1000, 620, 11),
       note('Kasa hasar kaydı tutanağa eklendi.', 60, 650, 230, 9),
@@ -1801,10 +1787,10 @@ const isyeriHirsizligi: KrokiScenario[] = [
       marker('2', 'Yazar kasa', 955, 260),
       marker('3', 'Kırıcı alet', 640, 520),
       marker('4', 'Raf 2 (sigara)', 425, 520),
-      marker('5', 'Şüpheli ayak izleri', 560, 560),
+      marker('5', 'Şüpheli ayak izleri', 560, 596),
       marker('6', 'Market kamerası', 1070, 190, 30),
-      // Ölçüler + açıklamalar
-      arrow(160, 620, 1100, 620, 'Cephe ≈ 10 m'),
+      // Ölçüler + açıklamalar (cephe genişliği, duvar köşeleri arasında)
+      arrow(162, 568, 1098, 568, 'Cephe ≈ 10 m'),
       callout('Cam taşla kırıldı; alarm 03.12 de çaldı', 700, 170, 11),
       callout('Kasada 4.850 TL bulunduğu bildirildi', 500, 660, 11),
       note('Raf 2 deki ürünlerin ENVANTER farkı tutanağa geçirildi.', 60, 660, 300, 9),
@@ -1828,7 +1814,7 @@ const isyeriHirsizligi: KrokiScenario[] = [
     objects: [
       ...room(120, 80, 1000, 480),
       // Arka pencere (sağ duvar, kırılan)
-      { s: 'arch-win', x: 1116, y: 200, w: 80, h: 12, rot: 90 },
+      { s: 'arch-win', x: 1126, y: 200, w: 80, h: 12, rot: 90 },
       { s: 'ex-4', x: 1040, y: 240, w: 64, h: 44, name: 'Pencere camı kırıkları (içeride)' },
       // Platform + araç
       { s: 'ev-rect-hollow', x: 320, y: 180, w: 240, h: 140, name: 'Yükseltici platform' },
@@ -1857,8 +1843,8 @@ const isyeriHirsizligi: KrokiScenario[] = [
       marker('4', 'Ayak izleri hattı', 960, 410),
       marker('5', 'Alet dolabı', 255, 520),
       marker('6', 'Servis kamerası', 220, 155, 30),
-      // Ölçüler + açıklamalar
-      arrow(320, 560, 560, 560, 'Platform ≈ 2,5 m'),
+      // Ölçüler + açıklamalar (platform genişliği)
+      arrow(322, 348, 558, 348, 'Platform ≈ 2,5 m'),
       callout('Pencere kelepçesi içeriden açılmış', 900, 590, 11),
       callout('Konvertör sökümünde alet izi var', 200, 600, 11),
       note('Raf envanteri ile eksik parça listesi tutanağa eklendi.', 60, 650, 300, 9),
@@ -1910,8 +1896,8 @@ const isyeriHirsizligi: KrokiScenario[] = [
       marker('4', 'Şüpheli ayak izleri', 445, 500),
       marker('5', 'Dağılan malzeme', 460, 270),
       marker('6', 'Salon kamerası', 300, 175, 30),
-      // Ölçüler + açıklamalar
-      arrow(200, 620, 1000, 620, 'Cephe ≈ 8,4 m'),
+      // Ölçüler + açıklamalar (cephe genişliği)
+      arrow(202, 548, 998, 548, 'Cephe ≈ 8,4 m'),
       callout('Kilit sökme aletiyle zorlanmış', 700, 658, 11),
       callout('Kasada ≈ 3.200 TL bulunuyordu', 470, 658, 11),
       note('Kamera kaydı 01.40-02.05 arası inceleniyor.', 60, 655, 270, 9),
@@ -1958,14 +1944,14 @@ const isyeriHirsizligi: KrokiScenario[] = [
       { s: 'out-cctv', x: 1060, y: 120, w: 52, h: 40, name: 'Şantiye kamerası' },
       { s: 'out-street-light', x: 900, y: 400, w: 40, h: 54 },
       // Numaratörler
-      marker('1', 'Konteiner', 420, 330),
+      marker('1', 'Konteiner', 420, 345),
       marker('2', 'Boş makara yeri', 465, 190),
       marker('3', 'Forklift lastik izi', 580, 410),
       marker('4', 'Tel örgü kesik', 680, 660),
       marker('5', 'Şüpheli ayak izleri', 590, 480),
       marker('6', 'Şantiye kamerası', 1130, 190, 30),
-      // Ölçüler + açıklamalar
-      arrow(300, 480, 540, 480, 'Konteiner ≈ 2,5 m'),
+      // Ölçüler + açıklamalar (konteiner genişliği)
+      arrow(302, 320, 538, 320, 'Konteiner ≈ 2,5 m'),
       callout('3 makara (yaklaşık 1.200 m kablo)', 820, 300, 11),
       callout('Forklift anahtarı konteynerdeydi', 820, 360, 11),
       note('Kesik tel örgü fotoğraflanarak numunesi alındı.', 60, 660, 280, 9),
@@ -2025,8 +2011,8 @@ const bicaklaYaralama: KrokiScenario[] = [
       marker('4', 'Devrik sandalye', 600, 175),
       marker('5', 'Kanlı ayak izleri', 495, 540),
       marker('6', 'Kaçış yönü', 215, 590),
-      // Ölçüler + açıklamalar
-      arrow(700, 480, 830, 480, '≈ 1,4 m'),
+      // Ölçüler + açıklamalar (mağdur ile giriş kapısı arası olay mesafesi)
+      arrow(256, 560, 700, 352, '≈ 5,1 m'),
       callout('Mağdur karın ve kol bölgesinden yaralandı', 460, 652, 11),
       callout('Şüpheli tanıdı; görüntü çalışması sürüyor', 800, 620, 11),
       note('Bıçak 12 cm bıçak boyu, mutfak tipi.', 60, 650, 230, 9),
@@ -2071,8 +2057,8 @@ const bicaklaYaralama: KrokiScenario[] = [
       marker('4', 'Kep', 775, 355),
       marker('5', 'Şüpheli ayak izleri', 875, 500),
       marker('6', 'Kaçış yönü', 1180, 545),
-      // Ölçüler + açıklamalar
-      arrow(560, 540, 700, 540, '≈ 1,5 m'),
+      // Ölçüler + açıklamalar (mağdur ile yerdeki bıçak arası)
+      arrow(658, 420, 718, 420, '≈ 0,6 m'),
       callout('Sırt bölgesine tek bıçak darbesi', 300, 400, 11),
       callout('Olay 01.20 de kamera kaydında', 850, 200, 11),
       note('Kep ve bıçak delil olarak alındı.', 40, 640, 230, 9),
@@ -2119,9 +2105,9 @@ const bicaklaYaralama: KrokiScenario[] = [
       marker('4', 'Bıçak (tezgahta)', 713, 90),
       marker('5', 'Devrik tabure', 630, 245),
       marker('6', 'Ayakkabı', 300, 530),
-      // Ölçüler + açıklamalar
-      arrow(180, 620, 560, 620, 'Mutfak genişliği ≈ 4 m'),
-      callout('Tartışma tezgah başında başladı', 260, 300, 11),
+      // Ölçüler + açıklamalar (tezgah boyu)
+      arrow(182, 270, 408, 270, 'Tezgah ≈ 2,4 m'),
+      callout('Tartışma tezgah başında başladı', 260, 330, 11),
       callout('Şüpheli olay sonrası daireden ayrıldı', 700, 300, 11),
       note('Mağdur 112 ekiyle hastaneye kaldırıldı.', 60, 650, 250, 9),
     ],
@@ -2167,9 +2153,9 @@ const bicaklaYaralama: KrokiScenario[] = [
       marker('3', 'Yırtık çanta', 520, 300),
       marker('4', 'Bıçak (çalıda)', 760, 420),
       marker('5', 'Şüpheli ayak izleri', 820, 500),
-      marker('6', 'Kaçış yönü', 1110, 545),
-      // Ölçüler + açıklamalar
-      arrow(400, 380, 500, 380, '≈ 1 m'),
+      marker('6', 'Kaçış yönü', 1120, 580),
+      // Ölçüler + açıklamalar (bank ile çanta arası)
+      arrow(402, 342, 498, 342, '≈ 1 m'),
       callout('Kavga bank çevresinde başladı', 300, 420, 11),
       callout('Olay 18.40 sıralarında', 950, 300, 11),
       note('Çantanın içinde ders kitapları hasarlı.', 40, 640, 240, 9),
@@ -2217,10 +2203,10 @@ const bicaklaYaralama: KrokiScenario[] = [
       marker('2', 'Mağdurun aracı', 570, 320),
       marker('3', 'Mağdur', 700, 300),
       marker('4', 'Bıçak', 640, 420),
-      marker('5', 'Kan birikintisi', 805, 460),
+      marker('5', 'Kan birikintisi', 805, 435),
       marker('6', 'Kaçış yönü', 1040, 530),
-      // Ölçüler + açıklamalar
-      arrow(240, 560, 670, 560, 'Park sırası ≈ 4,5 m'),
+      // Ölçüler + açıklamalar (park sırası genişliği)
+      arrow(242, 280, 668, 280, 'Park sırası ≈ 4,5 m'),
       callout('Tartışma kapı önünde başladı', 300, 400, 11),
       callout('Şüpheli araçla uzaklaştı (34 ABC 123)', 900, 250, 11),
       note('Plaka bilgisi kamera kaydından alındı.', 40, 640, 250, 9),
@@ -2269,10 +2255,10 @@ const silahlaYaralama: KrokiScenario[] = [
       marker('2', 'Giriş yarası', 620, 400),
       marker('3', 'Boş kovanlar', 488, 320),
       marker('4', 'Tabanca', 705, 450),
-      marker('5', 'Kan birikintisi', 555, 530),
+      marker('5', 'Kan birikintisi', 555, 560),
       marker('6', 'Atış yönü', 1010, 200),
-      // Ölçüler + açıklamalar
-      arrow(470, 520, 670, 520, '≈ 2,1 m'),
+      // Ölçüler + açıklamalar (kan birikintisi genişliği)
+      arrow(502, 520, 608, 520, '≈ 1,1 m'),
       callout('İki el ateş edildi (2 kovan)', 300, 200, 11),
       callout('Şüpheli koyu renk araçla uzaklaştı', 900, 160, 11),
       note('Olay 22.45 te; kamera kaydı inceleniyor.', 40, 620, 260, 9),
@@ -2304,7 +2290,7 @@ const silahlaYaralama: KrokiScenario[] = [
       { s: 'v-sedan', x: 900, y: 240, w: 180, h: 78, name: 'Şüpheli aracı (uzaklaşıyor)' },
       { s: 'tr-casing-pistol', x: 700, y: 350, w: 26, h: 26, name: 'Boş kovan (yol üstü)' },
       // Kaçış
-      dash(1150, 300, 1320, 220, 'Kaçış yönü'),
+      dash(1082, 290, 1320, 220, 'Kaçış yönü'),
       { s: 'out-cctv', x: 1200, y: 110, w: 52, h: 40, name: 'Kavşak kamerası' },
       { s: 'out-street-light', x: 150, y: 120, w: 40, h: 54 },
       // Numaratörler
@@ -2314,8 +2300,8 @@ const silahlaYaralama: KrokiScenario[] = [
       marker('4', 'Fren izi', 555, 400),
       marker('5', 'Kan (yol üstü)', 382, 400),
       marker('6', 'Kaçış yönü', 1290, 190),
-      // Ölçüler + açıklamalar
-      arrow(480, 400, 900, 400, 'Araçlar arası ≈ 4,4 m'),
+      // Ölçüler + açıklamalar (araçlar arası mesafe)
+      arrow(482, 280, 898, 280, 'Araçlar arası ≈ 4,4 m'),
       callout('Sürücü omzundan yaralandı', 250, 170, 11),
       callout('Atış arka camdan içeri girdi', 650, 170, 11),
       note('Kavşak kamerası 19.20 de plakayı okudu.', 40, 620, 270, 9),
@@ -2364,8 +2350,8 @@ const silahlaYaralama: KrokiScenario[] = [
       marker('4', 'Kovanlar', 616, 400),
       marker('5', 'Cam isabet izi', 604, 340),
       marker('6', 'Kaçış yönü', 1160, 560),
-      // Ölçüler + açıklamalar
-      arrow(700, 580, 900, 580, '≈ 2,1 m'),
+      // Ölçüler + açıklamalar (tüfek ile kan birikintisi arası)
+      arrow(722, 510, 818, 510, '≈ 1 m'),
       callout('Saldırgan tüfekli, yüzü maskeli', 300, 620, 11),
       callout('Olay 21.05 te; 2 saçma kafe camına isabet etti', 750, 200, 11),
       note('Tüfek otopsi ve balistik incelemeye sevk edildi.', 40, 650, 290, 9),
@@ -2404,7 +2390,7 @@ const silahlaYaralama: KrokiScenario[] = [
       { s: 'w-1', x: 540, y: 440, w: 44, h: 30, rot: -15, name: 'Ev sahibinin tabancası' },
       { s: 'tr-casing-pistol', x: 590, y: 470, w: 26, h: 26, name: 'Boş kovan' },
       // Kolluk
-      { s: 'p-13', x: 300, y: 480, w: 26, h: 34, name: 'İlk müdahale ekibi' },
+      { s: 'p-13', x: 270, y: 430, w: 26, h: 34, name: 'İlk müdahale ekibi' },
       // Numaratörler
       marker('1', 'Saldırgan', 418, 330),
       marker('2', 'Bacak yarası', 452, 380),
@@ -2412,8 +2398,8 @@ const silahlaYaralama: KrokiScenario[] = [
       marker('4', 'Boş kovan', 603, 500),
       marker('5', 'Kan sürüntüsü', 505, 520),
       marker('6', 'Kırılan kapı', 228, 470),
-      // Ölçüler + açıklamalar
-      arrow(200, 620, 460, 620, 'Kapı - saldırgan ≈ 2,7 m'),
+      // Ölçüler + açıklamalar (kapıdan saldırgana olay mesafesi)
+      arrow(230, 528, 416, 402, 'Kapı - saldırgan ≈ 2,4 m'),
       callout('Saldırgan maskeli; kimliği tespit çalışması var', 700, 620, 11),
       callout('Ev sahibi ifadede savunma hakkı kapsamında', 200, 200, 11),
       note('Tabanca balistiğe sevk edildi; kovan tek atım.', 60, 650, 280, 9),
@@ -2453,7 +2439,7 @@ const silahlaYaralama: KrokiScenario[] = [
       { s: 'in-bullet-in', x: 528, y: 548, w: 28, h: 28, name: 'Giriş yarası (ayak bileği)' },
       { s: 'in-blood-pool', x: 570, y: 570, w: 80, h: 50 },
       // Kaçış + şüpheli araç
-      dash(700, 600, 900, 640, 'Kaçış yönü (yaya)'),
+      dash(652, 610, 900, 640, 'Kaçış yönü (yaya)'),
       { s: 'v-sedan', x: 1000, y: 540, w: 180, h: 78, name: 'Şüpheli araç (pompa önü)' },
       // Kamera + dubalar
       { s: 'out-cctv', x: 350, y: 110, w: 52, h: 40, name: 'İstasyon kamerası' },
@@ -2461,13 +2447,13 @@ const silahlaYaralama: KrokiScenario[] = [
       { s: 'ts-traffic-cone', x: 860, y: 320, w: 24, h: 24 },
       // Numaratörler
       marker('1', 'Kasa', 390, 290),
-      marker('2', 'Görevli', 500, 490),
+      marker('2', 'Görevli', 460, 505),
       marker('3', 'Ayak bileği yarası', 560, 540),
       marker('4', 'Kan birikintisi', 610, 650),
-      marker('5', 'Kaçış yönü', 880, 620),
+      marker('5', 'Kaçış yönü', 880, 660),
       marker('6', 'Şüpheli araç', 1090, 500),
-      // Ölçüler + açıklamalar
-      arrow(300, 700, 480, 700, 'Kapı - görevli ≈ 1,9 m'),
+      // Ölçüler + açıklamalar (kapı ile görevli arası)
+      arrow(476, 470, 512, 518, '≈ 0,6 m'),
       callout('Şahıs yüzü maskeli, tabancalı', 200, 300, 11),
       callout('Olay 03.40 te; kasa 2.900 TL alındı', 900, 130, 11),
       note('Görevli 112 ekiyle hastaneye kaldırıldı.', 40, 680, 270, 9),

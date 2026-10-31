@@ -262,7 +262,65 @@ export const drawExportObject = (ctx: CanvasRenderingContext2D, obj: any, img: H
     return;
   }
 
-  // 5) Görsel tabanlı sembol/fotoğraf
+  // 4b) DUVAR MOTORU — ekrandaki düz koyu çubuğun aynası. (Karakalem duvar PNG'si
+  //     %92 şeffaf olduğundan drawImage ile basılırsa PDF/print'te duvar görünmez.)
+  if (symbolId === 'arch-w1i' || symbolId === 'arch-w1vi') {
+    ctx.fillStyle = '#2e2e2e';
+    ctx.fillRect(0, 0, w, h);
+    return;
+  }
+
+  // 4c) KAPI MOTORU — ekrandakiyle aynı: alt %15 beyaz açıklık bandı (duvarı keser)
+  //     + kapı imajı kutuyu birebir doldurur (kaydırma yok → duvar çizgisiyle hizalı).
+  if (symbolId === 'arch-d1r' || symbolId === 'arch-d1l' || symbolId === 'arch-d2') {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, h * 0.85, w, h * 0.15);
+    if (obj.src && img) ctx.drawImage(img, 0, 0, w, h);
+    return;
+  }
+
+  // 4d) PENCERE MOTORU — ekrandakiyle aynı: beyaz zemin + çift kenar + sarı cam çizgisi.
+  if (symbolId === 'arch-win') {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, 0.5); ctx.lineTo(w, 0.5); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, h - 0.5); ctx.lineTo(w, h - 0.5); ctx.stroke();
+    ctx.strokeStyle = obj.fill || '#F5C518';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(0, h / 2); ctx.lineTo(w, h / 2); ctx.stroke();
+    return;
+  }
+
+  // 5) Bulgu işaretleyicileri — görsel çiziminden ÖNCE yakalanmalı (numaratörün
+  //    karakalem PNG'si boş daire olduğundan drawImage'a düşerse sarı daire ve
+  //    bulgu numarası çıktıda kaybolur).
+  if (symbolId === 'ev-circle') {
+    ctx.beginPath(); ctx.arc(w / 2, h / 2, Math.min(w, h) / 2, 0, Math.PI * 2);
+    ctx.fillStyle = '#F5C518'; ctx.fill();
+    ctx.strokeStyle = '#000'; ctx.lineWidth = 2; ctx.stroke();
+    if (obj.findingNo) {
+      ctx.font = `bold ${w * 0.4}px Arial`; ctx.fillStyle = '#000';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(String(obj.findingNo), w / 2, h / 2);
+      ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    }
+    return;
+  }
+  if (symbolId === 'ev-square') {
+    ctx.fillStyle = '#F5C518'; ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = '#000'; ctx.lineWidth = 2; ctx.strokeRect(0, 0, w, h);
+    if (obj.findingNo) {
+      ctx.font = `bold ${w * 0.4}px Arial`; ctx.fillStyle = '#000';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(String(obj.findingNo), w / 2, h / 2);
+      ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    }
+    return;
+  }
+
+  // 6) Görsel tabanlı sembol/fotoğraf
   if (obj.src && img) {
     ctx.drawImage(img, 0, 0, w, h);
     return;
@@ -296,30 +354,8 @@ export const drawExportObject = (ctx: CanvasRenderingContext2D, obj: any, img: H
     return;
   }
 
-  // 7) Bulgu işaretleyicileri
-  if (symbolId === 'ev-circle') {
-    ctx.beginPath(); ctx.arc(w / 2, h / 2, Math.min(w, h) / 2, 0, Math.PI * 2);
-    ctx.fillStyle = '#F5C518'; ctx.fill();
-    ctx.strokeStyle = '#000'; ctx.lineWidth = 2; ctx.stroke();
-    if (obj.findingNo) {
-      ctx.font = `bold ${w * 0.4}px Arial`; ctx.fillStyle = '#000';
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(String(obj.findingNo), w / 2, h / 2);
-      ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-    }
-    return;
-  }
-  if (symbolId === 'ev-square') {
-    ctx.fillStyle = '#F5C518'; ctx.fillRect(0, 0, w, h);
-    ctx.strokeStyle = '#000'; ctx.lineWidth = 2; ctx.strokeRect(0, 0, w, h);
-    if (obj.findingNo) {
-      ctx.font = `bold ${w * 0.4}px Arial`; ctx.fillStyle = '#000';
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(String(obj.findingNo), w / 2, h / 2);
-      ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-    }
-    return;
-  }
+  // 7) Bulgu işaretleyicileri yukarıda (5. adım) ele alınıyor — drawImage'dan önce
+  //    yakalanmazsa sarı daire yerine boş karakalem PNG basılıyordu.
 
   // 8) Mesafe/hız etiketi (ev-callout vb. hariç — ekrandaki kuralla aynı)
   const labelExcluded = ['ev-arrow-desc', 'ev-arrow-desc-ellipse', 'ev-callout', 'ev-shooting-trajectory'];
@@ -332,8 +368,11 @@ export const drawExportObject = (ctx: CanvasRenderingContext2D, obj: any, img: H
     if (textRotation > 90) textRotation -= 180;
     if (textRotation < -90) textRotation += 180;
     const fontSize = obj.distanceFontSize || (isDistanceTool ? 10 : 14);
-    const gx = isDistanceTool ? w / 2 : 0;
-    const gy = isDistanceTool ? h / 2 : (symbolId === 'ev-arrow-text' ? -20 : (h ? h + 5 : 50));
+    // Ekranla aynı kural: koordinatlı oklarda grup orijini = çizgi orta noktası → (0,0);
+    // koordinatsız oklarda çizgi 0..w aralığında → (w/2, h/2).
+    const hasArrowCoords = obj.startX !== undefined && obj.endX !== undefined;
+    const gx = isDistanceTool ? (hasArrowCoords ? 0 : w / 2) : 0;
+    const gy = isDistanceTool ? (hasArrowCoords ? 0 : h / 2) : (symbolId === 'ev-arrow-text' ? -20 : (h ? h + 5 : 50));
     ctx.save();
     ctx.translate(gx, gy);
     ctx.rotate((textRotation * Math.PI) / 180);
@@ -1542,12 +1581,18 @@ const IndividualObject = ({
               </Group>
             ) : (
             <>
-            {/* 2D Wall-Gap Fix: Masks the wall under the threshold for integration */}
+            {/* KAPI MOTORU (duvar hizası): imaj, nesne kutusunu BİREBİR doldurur
+                (offsetY YOK — eski 0.8h kaydırma kapıyı duvardan ~45 px yukarı
+                koparıyordu). Kapı görselinin alt %15'lik BEYAZ bandı kutunun
+                altına denk gelir; kapı duvar merkez çizgisine oturtulduğunda bu
+                bant duvarın üzerinden geçer ve kapı boşluğunu (açıklığı) çizer.
+                Emin olmak için bandın bulunduğu bölge ayrıca beyaz vektör olarak
+                boyanır (görsel yüklenemezse bile boşluk korunur). */}
             <Rect
               x={0}
-              y={0} 
+              y={shapeProps.height * 0.85}
               width={shapeProps.width}
-              height={15}
+              height={shapeProps.height * 0.15}
               fill="white"
               listening={false}
             />
@@ -1560,8 +1605,7 @@ const IndividualObject = ({
               scaleX={shapeProps.scaleX || 1}
               scaleY={shapeProps.scaleY || 1}
               offsetX={(shapeProps.scaleX === -1) ? shapeProps.width : 0}
-              offsetY={shapeProps.height * 0.8}
-              filters={[RemoveWhiteFilter]}
+              offsetY={(shapeProps.scaleY === -1) ? shapeProps.height : 0}
               brightness={0}
             />
             </>
@@ -2593,11 +2637,15 @@ const IndividualObject = ({
         {shapeProps.distance && !['ev-arrow-desc', 'ev-arrow-desc-ellipse', 'ev-callout', 'ev-shooting-trajectory'].includes(shapeProps.symbolId || '') && (
           (() => {
             const isDistanceTool = shapeProps.isDistanceArrow || shapeProps.symbolId === 'a-4';
-            
-            // For arrows, the group is already centered at the midpoint in most cases, 
-            // but we ensure it by using width/2 if startX/endX are relative or missing.
-            const textX = isDistanceTool ? (shapeProps.width / 2) : 0;
-            const textY = isDistanceTool ? (shapeProps.height / 2) : 0;
+
+            // Etiket çizgi ORTASINA konumlanır: koordinatlı oklarda (startX/endX tanımlı)
+            // grup orijini zaten çizginin orta noktasıdır → yerel (0,0). Koordinatsız
+            // (kütüphaneden sürüklenmiş) oklarda çizgi 0..w yayılımındadır → (w/2, h/2).
+            // ESKİ DAVRANIŞ (hata): koordinatlı oklarda da (w/2, h/2) kullanılıyordu;
+            // etiket orta nokta yerine ok ucuna düşüyordu.
+            const hasArrowCoords = shapeProps.startX !== undefined && shapeProps.endX !== undefined;
+            const textX = isDistanceTool ? (hasArrowCoords ? 0 : shapeProps.width / 2) : 0;
+            const textY = isDistanceTool ? (hasArrowCoords ? 0 : shapeProps.height / 2) : 0;
 
             const angle = isDistanceTool && shapeProps.startX !== undefined
               ? Math.atan2(shapeProps.endY - shapeProps.startY, shapeProps.endX - shapeProps.startX) * (180 / Math.PI)
