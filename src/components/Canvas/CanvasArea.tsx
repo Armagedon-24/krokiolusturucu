@@ -24,7 +24,7 @@ import { FallAnimationCanvas } from './FallAnimationCanvas';
 import { PedestrianLaunchCanvas } from './PedestrianLaunchCanvas';
 import { PageControlBar } from './PageControlBar';
 import type { CanvasObject } from '../../types';
-import { resolveTileMode, drawTiledImage, tilePatternParams } from '../../utils/tiledRender';
+import { resolveTileMode, drawTiledImage, tilePatternParams, SYMBOL_TILE_MODES } from '../../utils/tiledRender';
 
 const RemoveWhiteFilter = (imageData: any) => {
   const data = imageData.data;
@@ -329,7 +329,13 @@ export const drawExportObject = (ctx: CanvasRenderingContext2D, obj: any, img: H
   //     Şerit/Karo modunda uzatılan görselin deseni periyodu korunarak tekrar eder;
   //     esnetme bozulması olmaz. obj.tileMode ile yüklenen görseller de desteklenir.
   if (obj.src && img) {
-    const tMode = resolveTileMode(obj);
+    const tMode = resolveTileMode(
+      obj,
+      w,
+      h,
+      img.naturalWidth || img.width,
+      img.naturalHeight || img.height
+    );
     if (tMode !== 'stretch' && drawTiledImage(ctx, img, w, h, tMode)) return;
   }
 
@@ -514,6 +520,7 @@ const IndividualObject = ({
   const groupRef = useRef<any>(null);
   const imgRef = useRef<any>(null);
   const trRef = useRef<any>(null);
+  const transformAnchorRef = useRef<string | null>(null);
   const image = useSmartImage(shapeProps?.src);
 
   useEffect(() => {
@@ -522,6 +529,16 @@ const IndividualObject = ({
       trRef.current.getLayer().batchDraw();
     }
   }, [isSelected]);
+
+  // Uzatma niyeti: hangi tutamaçla başladı? Kenar (orta) tutamaçlar tek ekseni
+  // uzatır → yol/refüj/şerit dokularında "uzatma" eylemi budur.
+  const handleTransformStart = () => {
+    try {
+      transformAnchorRef.current = trRef.current?.getActiveAnchor?.() || null;
+    } catch {
+      transformAnchorRef.current = null;
+    }
+  };
 
   useEffect(() => {
     if (imgRef.current && image) {
@@ -657,6 +674,31 @@ const IndividualObject = ({
         height: Math.max(1, shapeProps.height * scaleY),
       };
 
+      // OTO ŞERİT GEÇİŞİ — görsel tabanlı sembol KENAR (orta) tutamağıyla belirgin
+      // şekilde TEK YÖNLÜ uzatıldıysa bu bir "şerit uzatma" eylemidir (yol/refüj/
+      // kaldırım/şerit). Metadata'sı olmayan görsellerde (kullanıcı yüklemeleri
+      // dahil) desen tekrarına otomatik geçilir; böylece uzatınca form bozulmaz.
+      // Kullanıcının açık seçimi (Doku: NORMAL vb.) ve kütüphane metadata'sı
+      // her zaman öncelikli tutulur.
+      const anchor = transformAnchorRef.current;
+      const isEdgeAnchor = anchor === 'middle-left' || anchor === 'middle-right' ||
+                           anchor === 'top-center' || anchor === 'bottom-center';
+      if (
+        isEdgeAnchor &&
+        shapeProps.src &&
+        (shapeProps.type === 'symbol' || shapeProps.type === 'image') &&
+        image &&
+        (!shapeProps.tileMode || shapeProps.tileMode === 'auto') &&
+        !(shapeProps.symbolId && SYMBOL_TILE_MODES[shapeProps.symbolId])
+      ) {
+        const sx = updates.width / (image.width || 1);
+        const sy = updates.height / (image.height || 1);
+        const anisotropy = Math.max(sx, sy) / Math.max(0.01, Math.min(sx, sy));
+        if (anisotropy >= 1.6) {
+          updates.tileMode = 'strip-auto';
+        }
+      }
+
       // Eğer objenin bir açıklaması/mesafesi varsa, yazı boyutunu da ölçekle
       // NOT: Kullanıcı isteği üzerine 'a-4' (Mesafe Oku) için yazı boyutu sabit kalmalı
       if (shapeProps.distance !== undefined && shapeProps.symbolId !== 'a-4' && !shapeProps.isDistanceArrow) {
@@ -712,7 +754,13 @@ const IndividualObject = ({
   // UZATMA MOTORU (ekran) — etkin desen modu ve Konva pattern parametreleri.
   // imgRef görseli yüklüyse şerit/karo modunda desen tekrarıyla çizilir; aksi halde
   // görsel yüklenene kadar normal esnetme gösterilir.
-  const effectiveTileMode = resolveTileMode(shapeProps);
+  const effectiveTileMode = resolveTileMode(
+    shapeProps,
+    shapeProps.width || 0,
+    shapeProps.height || 0,
+    image?.width || 0,
+    image?.height || 0
+  );
   const tilePattern = tilePatternParams(
     effectiveTileMode,
     shapeProps.width || 0,
@@ -956,6 +1004,7 @@ const IndividualObject = ({
         onTap={() => {
           onSelect();
         }}
+        onTransformStart={handleTransformStart}
         onTransformEnd={(e) => {
           handleTransformEnd();
           e.target.getLayer()?.batchDraw();
@@ -2703,6 +2752,7 @@ const IndividualObject = ({
             fillPatternImage={image}
             fillPatternRepeat={tilePattern.repeat}
             fillPatternScale={{ x: tilePattern.scale, y: tilePattern.scale }}
+            opacity={shapeProps.opacity ?? 1}
             scaleX={shapeProps.scaleX || 1}
             scaleY={shapeProps.scaleY || 1}
             offsetX={(shapeProps.scaleX === -1) ? shapeProps.width : 0}

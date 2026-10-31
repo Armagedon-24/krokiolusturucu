@@ -40,20 +40,52 @@ export const SYMBOL_TILE_MODES: Record<string, TileMode> = {
 export interface TileModeSource {
   tileMode?: TileMode;
   symbolId?: string;
+  type?: string;
 }
+
+/** Göreli eşik: nesne, görselin doğal en-boy oranına göre bu kadar uzar/sıkışırsa şerit moduna geçer. */
+export const ADAPTIVE_ASPECT_THRESHOLD = 2.0;
+/** Mutlak eşik: uzun eksen görselin doğal piksel boyutunun bu katına çıkarsa… */
+export const ADAPTIVE_LEN_SCALE = 2.4;
+/** …ve kesit (kısa eksen) doğal boyutunun bu katını aşmıyorsa şerit moduna geç. */
+export const ADAPTIVE_CROSS_SCALE = 1.35;
 
 /**
  * Nesnenin etkin desen modunu çözümler:
  * 1) Nesnede açık seçim varsa ('auto' dahil) o kazanır.
  * 2) 'auto' veya tanımsızsa kütüphane metadata'sına bak.
- * 3) Metadata yoksa 'stretch' (klasik esnetme).
+ * 3) Metadata yoksa ADAPTİF kural: görsel, doğal oranına/boyutuna göre belirgin bir
+ *    uzun şerit haline geldiyse (yol/refüj/şerit dokularının tipik uzatması) desen
+ *    tekrarına geç; değilse klasik esnetme ('stretch').
+ *    → Kullanıcının yüklediği yol/refüj dokuları için metadata gerekmez.
  */
-export function resolveTileMode(obj: TileModeSource | null | undefined): TileMode {
+export function resolveTileMode(
+  obj: TileModeSource | null | undefined,
+  w?: number,
+  h?: number,
+  imgW?: number,
+  imgH?: number
+): TileMode {
   if (!obj) return 'stretch';
   const explicit = obj.tileMode;
   if (explicit && explicit !== 'auto') return explicit;
   const meta = obj.symbolId ? SYMBOL_TILE_MODES[obj.symbolId] : undefined;
-  return meta || 'stretch';
+  if (meta) return meta;
+
+  // ADAPTİF: kütüphane metadata'sı olmayan görseller (kullanıcı yüklemeleri dahil)
+  if (w && h && imgW && imgH && (obj.type === 'symbol' || obj.type === 'image' || !obj.type)) {
+    const nativeRatio = imgW / imgH;
+    if (nativeRatio > 0) {
+      const rel = w / h / nativeRatio;
+      if (rel >= ADAPTIVE_ASPECT_THRESHOLD) return 'strip-x';
+      if (rel <= 1 / ADAPTIVE_ASPECT_THRESHOLD) return 'strip-y';
+    }
+    const sx = w / imgW;
+    const sy = h / imgH;
+    if (sx >= ADAPTIVE_LEN_SCALE && sy <= ADAPTIVE_CROSS_SCALE) return 'strip-x';
+    if (sy >= ADAPTIVE_LEN_SCALE && sx <= ADAPTIVE_CROSS_SCALE) return 'strip-y';
+  }
+  return 'stretch';
 }
 
 /** 'strip-auto'yu yerel en/boy oranına göre somut yöne çevirir. */
