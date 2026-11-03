@@ -112,83 +112,331 @@ const roadPortPoint = (o: any, which: 0 | 1) => {
   return { x: (o.x || 0) + lx * cos - ly * sin, y: (o.y || 0) + lx * sin + ly * cos };
 };
 
-/** Portun gövde içine bakan birim yönünü CANVAS uzayında döndürür. */
-const roadPortInward = (o: any, which: 0 | 1) => {
-  const r = ((o.rotation || 0) * Math.PI) / 180;
-  const s = which === 0 ? 1 : -1;
-  return { x: Math.cos(r) * s, y: Math.sin(r) * s };
+// ═══ YOL BİRLEŞİM MOTORU v2 — YARIM DAİRE + FİLLET GEÇİŞLERİ ═══
+// Kullanıcı isteği: iki st-1 düz yol PORTLARINDAN birleştiğinde birleşim yeri
+// YARIM DAİRE (yuvarlak balgun) geçişle birleşsin; yollar gövdeleriyle
+// kesiştiğinde veya biri diğerinin gövdesine bindiğinde kenarlar karşı gövde
+// içinde kesilip köşeler YUMUŞAK FİLLET yaylarıyla bağlansın.
+// Tüm geometri tek yerde op listesi (JxOp) olarak üretilir; ekran (Konva) ve
+// export (canvas 2D) aynı listeyi çizer → birebir aynı görünüm.
+
+interface JxPt { x: number; y: number }
+type JxOp =
+  | { op:'clip'; cx:number; cy:number; r:number; ops:JxOp[] }                       // daire içine kırp
+  | { op:'fc'; cx:number; cy:number; r:number }                                     // beyaz dolu daire
+  | { op:'sc'; cx:number; cy:number; r:number; w:number }                           // siyah halka
+  | { op:'fr'; x:number; y:number; w:number; h:number; rot:number }                 // beyaz dikdörtgen (x,y)=kısa kenar ortası
+  | { op:'ln'; x1:number; y1:number; x2:number; y2:number; w:number; dash?:boolean }// dash→kesikli siyah; değilse beyaz silgi
+  | { op:'arc'; x1:number; y1:number; x2:number; y2:number; r:number; ref:JxPt; w:number }; // fillet yayı (siyah)
+
+const jxPerp = (u: JxPt): JxPt => ({ x: -u.y, y: u.x });
+const jxCross = (a: JxPt, b: JxPt): number => a.x * b.y - a.y * b.x;
+
+interface JxSeg { p0: JxPt; p1: JxPt; u: JxPt; len: number; wh: number; e: number; mid: boolean; obj: any }
+
+const jxSeg = (o: any): JxSeg => {
+  const p0 = roadPortPoint(o, 0), p1 = roadPortPoint(o, 1);
+  const dx = p1.x - p0.x, dy = p1.y - p0.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const h = o.height || 40;
+  return { p0, p1, u: { x: dx / len, y: dy / len }, len, wh: h / 2, e: Math.max(1.5, h / 20), mid: roadShowsMiddleLine(o), obj: o };
 };
 
-interface RoadJunctionPad {
-  cx: number; cy: number;   // canvas uzayında ped merkezi
-  dirX: number; dirY: number; // ped ana ekseni (bisektör) birim vektörü
-  L: number;                // ana eksen boyunca yarı eksen
-  r: number;                // enine yarı eksen (yol yarı genişliği + kenar)
-  edge: number;             // kenar kalınlığı
-  mid: boolean;             // iki yolun da orta çizgisi varsa ped üstüne köprü çizilir
-}
+const jxNorm2pi = (a: number): number => { let x = a % (2 * Math.PI); if (x < 0) x += 2 * Math.PI; return x; };
 
-/** Kendi portlarıyla çakışan yol motoru sembolleri (st-1/cadde/sokak) için
- *  birleşim pedlerini hesaplar. Farklı tür yollar (cadde↔sokak) da birleşebilir.
- *  W = MAX yükseklik: ped geniş yolun dış köşelerini de kaplar (dar yolda hafif
- *  ağız genişlemesi olur — kavşak ağzı gibi okunur, sert ek yeri kalmaz). */
-const collectRoadJunctionPads = (self: any, all: any[]): RoadJunctionPad[] => {
+/** T1→T2 yayı (yarıçap r); yay ref noktasına doğru bükey. SVG path (y-down). */
+const jxArcPath = (T1: JxPt, T2: JxPt, r: number, ref: JxPt): string => {
+  const dx = T2.x - T1.x, dy = T2.y - T1.y;
+  const len = Math.hypot(dx, dy);
+  if (!isFinite(len) || len < 1e-6) return '';
+  const rr = Math.max(r, len / 2 + 0.01);
+  const d = Math.sqrt(Math.max(0, rr * rr - (len * len) / 4)); // merkez apotemi
+  const mx = (T1.x + T2.x) / 2, my = (T1.y + T2.y) / 2;
+  const nx = -dy / len, ny = dx / len;
+  const h = rr - d;
+  const m1 = { x: mx + nx * h, y: my + ny * h }, m2 = { x: mx - nx * h, y: my - ny * h };
+  const pickM1 = ((m1.x - ref.x) ** 2 + (m1.y - ref.y) ** 2) <= ((m2.x - ref.x) ** 2 + (m2.y - ref.y) ** 2);
+  const M = pickM1 ? m1 : m2;
+  const sM = pickM1 ? 1 : -1;
+  const ctr = { x: mx - nx * sM * d, y: my - ny * sM * d };
+  const a1 = Math.atan2(T1.y - ctr.y, T1.x - ctr.x);
+  const a2 = Math.atan2(T2.y - ctr.y, T2.x - ctr.x);
+  const am = Math.atan2(M.y - ctr.y, M.x - ctr.x);
+  const sweep = jxNorm2pi(am - a1) < jxNorm2pi(a2 - a1) ? 1 : 0;
+  return `M ${T1.x.toFixed(2)} ${T1.y.toFixed(2)} A ${rr.toFixed(2)} ${rr.toFixed(2)} 0 0 ${sweep} ${T2.x.toFixed(2)} ${T2.y.toFixed(2)}`;
+};
+
+/** Köşe C'de kesişen iki kenara teğet fillet yayı.
+ *  n1/n2: kenarların gövde içine bakan birim normalleri. */
+const jxFillet = (C: JxPt, u1: JxPt, n1: JxPt, u2: JxPt, n2: JxPt, f: number) => {
+  const den = jxCross(u1, u2);
+  if (Math.abs(den) < 1e-6) return null;
+  const m = { x: f * (n2.x - n1.x), y: f * (n2.y - n1.y) };
+  const t = jxCross(m, u2) / den;
+  const ctr = { x: C.x + u1.x * t + f * n1.x, y: C.y + u1.y * t + f * n1.y };
+  const T1 = { x: ctr.x - f * n1.x, y: ctr.y - f * n1.y };
+  const T2 = { x: ctr.x - f * n2.x, y: ctr.y - f * n2.y };
+  return { T1, T2, d: jxArcPath(T1, T2, f, C) };
+};
+
+const jxFilletRadius = (S: JxSeg, X: JxSeg): number =>
+  Math.max(4, Math.min(16, 0.3 * Math.min(S.obj.height || 40, X.obj.height || 40)));
+
+/** S'in (ep başlangıçlı, uS yönlü) çizgisinin X gövdesi içinde kaldığı t aralığı.
+ *  Uçlar bant (kenar çizgisi) sınırından mı, X'in boyu sınırından mı gelir bildirir. */
+const jxBodyInterval = (ep: JxPt, uS: JxPt, X: JxSeg) => {
+  const nX = jxPerp(X.u);
+  const c0 = (ep.x - X.p0.x) * nX.x + (ep.y - X.p0.y) * nX.y;
+  const cu = uS.x * nX.x + uS.y * nX.y;
+  const s0 = (ep.x - X.p0.x) * X.u.x + (ep.y - X.p0.y) * X.u.y;
+  const su = uS.x * X.u.x + uS.y * X.u.y;
+  const lim = X.wh + X.e / 2;
+  let a = -Infinity, b = Infinity, aBand = false, bBand = false;
+  if (Math.abs(cu) < 1e-9) {
+    if (Math.abs(c0) > lim) return null;
+  } else {
+    const ta = (-lim - c0) / cu, tb = (lim - c0) / cu;
+    a = Math.min(ta, tb); b = Math.max(ta, tb); aBand = true; bBand = true;
+  }
+  if (Math.abs(su) < 1e-9) {
+    if (s0 < -1e-6 || s0 > X.len + 1e-6) return null;
+  } else {
+    const sa = (0 - s0) / su, sb = (X.len - s0) / su;
+    const lo = Math.min(sa, sb), hi = Math.max(sa, sb);
+    if (lo > a) { a = lo; aBand = false; }
+    if (hi < b) { b = hi; bBand = false; }
+  }
+  if (b <= a) return null;
+  return { a, b, aBand, bBand };
+};
+
+/** PORT-PORT BİRLEŞME — yarım daire (balgun) geçiş pedi.
+ *  Beyaz dolgu ek yerini kapatır; siyah halka yolların gövdesi DIŞINDA kalır
+ *  (gövde bantları içindeki halka beyaz bandlarla silinir) → birleşim yerinde
+ *  iki yarım daire çıkıntı belirir, gövde üzerinde leke olmaz. */
+const jxCircleJoinOps = (A: JxSeg, B: JxSeg, portA: 0 | 1, portB: 0 | 1): JxOp[] => {
+  const pa = portA === 0 ? A.p0 : A.p1;
+  const pb = portB === 0 ? B.p0 : B.p1;
+  const joint = { x: (pa.x + pb.x) / 2, y: (pa.y + pb.y) / 2 };
+  const sgnA = portA === 0 ? 1 : -1, sgnB = portB === 0 ? 1 : -1;
+  const uA = { x: A.u.x * sgnA, y: A.u.y * sgnA };
+  const uB = { x: B.u.x * sgnB, y: B.u.y * sgnB };
+  const W = Math.max(A.obj.height || 40, B.obj.height || 40);
+  const e = Math.max(1.5, W / 20);
+  const R = W / 2 + e + Math.max(4, W * 0.2);
+  const straight = (uA.x * uB.x + uA.y * uB.y) < -0.95;
+  const sub: JxOp[] = [
+    { op: 'fc', cx: joint.x, cy: joint.y, r: Math.max(2, R - e / 2) },
+    { op: 'sc', cx: joint.x, cy: joint.y, r: R, w: e },
+  ];
+  for (const s of [A, B]) {
+    const u = s === A ? uA : uB;
+    const port = s === A ? pa : pb;
+    const n = jxPerp(u);
+    const bw = s.wh + s.e + 0.5;
+    // gövde bandı: halkanın gövde içi kısmını + kenarları siler
+    // (rot DERECE — Konva rotation prop'u ve ctx.rotate derece bekler)
+    sub.push({ op: 'fr', x: port.x, y: port.y, w: R + e + ROAD_JUNCTION_TOL, h: 2 * bw, rot: (Math.atan2(u.y, u.x) * 180) / Math.PI });
+    // kenar çizgilerini halkaya kadar geri çiz (halkanın dışında yol kenarı sürsün)
+    const tRe = Math.sqrt(Math.max(0, R * R - Math.pow(s.wh + s.e / 2, 2)));
+    for (const sd of [-1, 1]) {
+      const ox = n.x * sd * (s.wh + s.e / 2), oy = n.y * sd * (s.wh + s.e / 2);
+      sub.push({
+        op: 'ln',
+        x1: joint.x + u.x * (tRe - 0.5) + ox, y1: joint.y + u.y * (tRe - 0.5) + oy,
+        x2: joint.x + u.x * (R + e + ROAD_JUNCTION_TOL) + ox, y2: joint.y + u.y * (R + e + ROAD_JUNCTION_TOL) + oy,
+        w: s.e,
+      });
+    }
+  }
+  if (straight && A.mid && B.mid) {
+    const u = uA;
+    sub.push({
+      op: 'ln', dash: true,
+      x1: joint.x - u.x * (R + e), y1: joint.y - u.y * (R + e),
+      x2: joint.x + u.x * (R + e), y2: joint.y + u.y * (R + e),
+      w: e,
+    });
+  }
+  return [{ op: 'clip', cx: joint.x, cy: joint.y, r: R + e, ops: sub }];
+};
+
+/** GÖVDE ÇAKIŞMASI — S'in kenar/orta çizgilerini X'in gövdesi içinde keser;
+ *  bant sınırlı uçlarda köşeleri fillet yaylarıyla yuvarlatır. Hem X kesişmesi
+ *  hem T ağzı hem kısmi bindirmeler bu tek rutinle çözülür. */
+const jxOverlapOps = (S: JxSeg, X: JxSeg): JxOp[] => {
+  if (Math.abs(jxCross(S.u, X.u)) < 0.25) return []; // yaklaşık paralel → dokunma
+  const ops: JxOp[] = [];
+  const nS = jxPerp(S.u);
+  const nX = jxPerp(X.u);
+  const f = jxFilletRadius(S, X);
+  for (const sA of [-1, 0, 1] as const) {
+    const isDash = sA === 0;
+    const off = sA * (S.wh + S.e / 2);
+    const ep = { x: S.p0.x + nS.x * off, y: S.p0.y + nS.y * off };
+    const iv = jxBodyInterval(ep, S.u, X);
+    if (!iv) continue;
+    const a = Math.max(iv.a, 0), b = Math.min(iv.b, S.len);
+    if (b - a < 0.5) continue;
+    if (isDash) {
+      // orta kesikli çizgiyi gövde içinde düz kes
+      ops.push({ op: 'ln', x1: ep.x + S.u.x * a, y1: ep.y + S.u.y * a, x2: ep.x + S.u.x * b, y2: ep.y + S.u.y * b, w: S.e + 1 });
+      continue;
+    }
+    let ea = a, eb = b;
+    // bant sınırlı uçlarda fillet yayı + silmeyi teğet noktasına geri çek
+    const ends = [
+      { t: a, band: iv.aBand && iv.a >= -1e-6, first: true },
+      { t: b, band: iv.bBand && iv.b <= S.len + 1e-6, first: false },
+    ];
+    for (const en of ends) {
+      if (!en.band) continue;
+      const C = { x: ep.x + S.u.x * en.t, y: ep.y + S.u.y * en.t };
+      const perpAtC = (C.x - X.p0.x) * nX.x + (C.y - X.p0.y) * nX.y;
+      const sideX = perpAtC >= 0 ? 1 : -1;
+      const n1 = { x: -nS.x * sA, y: -nS.y * sA };
+      const n2 = { x: -nX.x * sideX, y: -nX.y * sideX };
+      const fl = jxFillet(C, S.u, n1, X.u, n2, f);
+      if (!fl) continue;
+      const tT = (fl.T1.x - ep.x) * S.u.x + (fl.T1.y - ep.y) * S.u.y;
+      if (en.first) {
+        if (tT <= ea || tT > b) continue;
+        ea = tT;
+      } else {
+        if (tT >= eb || tT < a) continue;
+        eb = tT;
+      }
+      ops.push({ op: 'arc', x1: fl.T1.x, y1: fl.T1.y, x2: fl.T2.x, y2: fl.T2.y, r: f, ref: C, w: Math.max(S.e, X.e) });
+    }
+    if (eb - ea > 0.25) {
+      ops.push({ op: 'ln', x1: ep.x + S.u.x * ea, y1: ep.y + S.u.y * ea, x2: ep.x + S.u.x * eb, y2: ep.y + S.u.y * eb, w: S.e + 1 });
+    }
+  }
+  return ops;
+};
+
+/** Bir yol için tüm birleşim op'larını üretir (ekran + export ortak). */
+const computeRoadJunctionOps = (self: any, all: any[]): JxOp[] => {
   if (!self || !isRoadEngineSymbol(self.symbolId) || (self.curvature || 0) !== 0) return [];
-  const pads: RoadJunctionPad[] = [];
+  const A = jxSeg(self);
+  if (A.len < 8) return [];
+  const ops: JxOp[] = [];
   for (const other of (all || [])) {
     if (!other || other.id === self.id || other.hidden) continue;
     if (!isRoadEngineSymbol(other.symbolId) || (other.curvature || 0) !== 0) continue;
-    for (let pi = 0; pi < 2; pi++) {
-      const pA = roadPortPoint(self, pi as 0 | 1);
-      for (let pj = 0; pj < 2; pj++) {
-        const pB = roadPortPoint(other, pj as 0 | 1);
-        if (Math.hypot(pB.x - pA.x, pB.y - pA.y) > ROAD_JUNCTION_TOL) continue;
-        const ia = roadPortInward(self, pi as 0 | 1);
-        const ib = roadPortInward(other, pj as 0 | 1);
-        const W = Math.max(self.height || 40, other.height || 40);
-        const edge = Math.max(1.5, W / 20);
-        const r = W / 2 + edge;
-        const dot = Math.max(-1, Math.min(1, ia.x * ib.x + ia.y * ib.y));
-        const beta = Math.acos(dot); // gövdeler arası açı (0..π)
-        let dirX: number, dirY: number, L: number;
-        if (beta > 2.85) {
-          // Düz devam (≈180°) — eksen yönünde hafif uzatılmış elips (kapsül geçiş)
-          dirX = ia.x; dirY = ia.y;
-          L = r * 1.35;
-        } else {
-          // Açılı birleşim — bisektör yönünde elips; dış köşeleri tam kaplar:
-          // L = r / sin(β/2) elipsi iki dış gövde köşesinden geçirir.
-          let bx = ia.x + ib.x, by = ia.y + ib.y;
-          const bl = Math.hypot(bx, by);
-          if (bl < 1e-6) { dirX = ia.x; dirY = ia.y; } else { dirX = bx / bl; dirY = by / bl; }
-          L = Math.min(r * 2.8, r / Math.max(0.35, Math.sin(beta / 2)));
+    const B = jxSeg(other);
+    if (B.len < 8) continue;
+    // 1) port-port birleşme → yarım daire pedi
+    let joined = false;
+    for (let i = 0; i < 2 && !joined; i++) {
+      for (let j = 0; j < 2 && !joined; j++) {
+        const pa = i === 0 ? A.p0 : A.p1;
+        const pb = j === 0 ? B.p0 : B.p1;
+        if (Math.hypot(pb.x - pa.x, pb.y - pa.y) <= ROAD_JUNCTION_TOL) {
+          ops.push(...jxCircleJoinOps(A, B, i as 0 | 1, j as 0 | 1));
+          joined = true;
         }
-        pads.push({
-          cx: (pA.x + pB.x) / 2,
-          cy: (pA.y + pB.y) / 2,
-          dirX, dirY, L, r, edge,
-          mid: roadShowsMiddleLine(self) && roadShowsMiddleLine(other),
-        });
+      }
+    }
+    if (joined) continue;
+    // 2) gövde çakışması (X kesişmesi / T ağzı / bindirme) → fillet geçişleri
+    ops.push(...jxOverlapOps(A, B));
+    ops.push(...jxOverlapOps(B, A));
+  }
+  return ops;
+};
+
+/** Canvas uzayındaki op'ları yolun LOKAL (grup) uzayına çevirir. */
+const jxOpsToLocal = (ops: JxOp[], obj: any): JxOp[] => {
+  const rot = ((obj.rotation || 0) * Math.PI) / 180;
+  const cos = Math.cos(-rot), sin = Math.sin(-rot);
+  const ox = obj.x || 0, oy = obj.y || 0;
+  const tp = (x: number, y: number): JxPt => ({ x: (x - ox) * cos - (y - oy) * sin, y: (x - ox) * sin + (y - oy) * cos });
+  const map = (op: JxOp): JxOp => {
+    switch (op.op) {
+      case 'clip': { const p = tp(op.cx, op.cy); return { ...op, cx: p.x, cy: p.y, ops: op.ops.map(map) }; }
+      case 'fc': case 'sc': { const p = tp(op.cx, op.cy); return { ...op, cx: p.x, cy: p.y }; }
+      case 'fr': { const p = tp(op.x, op.y); return { ...op, x: p.x, y: p.y, rot: op.rot - (obj.rotation || 0) }; }
+      case 'ln': { const p1 = tp(op.x1, op.y1), p2 = tp(op.x2, op.y2); return { ...op, x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y }; }
+      case 'arc': { const p1 = tp(op.x1, op.y1), p2 = tp(op.x2, op.y2), rf = tp(op.ref.x, op.ref.y); return { ...op, x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, ref: rf }; }
+    }
+  };
+  return ops.map(map);
+};
+
+/** Op listesini canvas 2D bağlamına çizer (export — lokal uzayda). */
+const jxDrawOpsCtx = (ctx: CanvasRenderingContext2D, ops: JxOp[]) => {
+  for (const op of ops) {
+    switch (op.op) {
+      case 'clip':
+        ctx.save(); ctx.beginPath(); ctx.arc(op.cx, op.cy, op.r, 0, Math.PI * 2); ctx.clip();
+        jxDrawOpsCtx(ctx, op.ops);
+        ctx.restore();
+        break;
+      case 'fc':
+        ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(op.cx, op.cy, op.r, 0, Math.PI * 2); ctx.fill();
+        break;
+      case 'sc':
+        ctx.strokeStyle = '#000000'; ctx.lineWidth = op.w; ctx.beginPath(); ctx.arc(op.cx, op.cy, op.r, 0, Math.PI * 2); ctx.stroke();
+        break;
+      case 'fr':
+        ctx.save(); ctx.translate(op.x, op.y); ctx.rotate((op.rot * Math.PI) / 180);
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(0, -op.h / 2, op.w, op.h);
+        ctx.restore();
+        break;
+      case 'ln':
+        ctx.lineCap = 'butt';
+        if (op.dash) { ctx.strokeStyle = '#000000'; ctx.setLineDash([20, 20]); } else { ctx.strokeStyle = '#ffffff'; }
+        ctx.lineWidth = op.w;
+        ctx.beginPath(); ctx.moveTo(op.x1, op.y1); ctx.lineTo(op.x2, op.y2); ctx.stroke();
+        if (op.dash) ctx.setLineDash([]);
+        break;
+      case 'arc': {
+        const d = jxArcPath({ x: op.x1, y: op.y1 }, { x: op.x2, y: op.y2 }, op.r, op.ref);
+        if (d) { ctx.strokeStyle = '#000000'; ctx.lineWidth = op.w; ctx.lineCap = 'butt'; ctx.stroke(new Path2D(d)); }
+        break;
       }
     }
   }
-  return pads;
 };
 
-/** Canvas uzayındaki pedi yolun LOKAL (grup) uzayına çevirir. */
-const roadPadToLocal = (pad: RoadJunctionPad, obj: any) => {
-  const rot = ((obj.rotation || 0) * Math.PI) / 180;
-  const cos = Math.cos(-rot), sin = Math.sin(-rot);
-  const dx = pad.cx - (obj.x || 0), dy = pad.cy - (obj.y || 0);
-  return {
-    lx: dx * cos - dy * sin,
-    ly: dx * sin + dy * cos,
-    rotDeg: (Math.atan2(pad.dirY, pad.dirX) * 180) / Math.PI - (obj.rotation || 0),
-    L: pad.L,
-    r: pad.r,
-    edge: pad.edge,
-  };
-};
+/** Op listesini Konva elemanlarına çevirir (ekran — lokal uzayda). */
+const jxRenderKonva = (ops: JxOp[]): any[] =>
+  ops.map((op, i) => {
+    switch (op.op) {
+      case 'clip':
+        return (
+          <Group
+            key={`jxc-${i}`}
+            clipFunc={(ctx: any) => {
+              ctx.beginPath();
+              ctx.arc(op.cx, op.cy, op.r, 0, Math.PI * 2);
+              ctx.clip();
+            }}
+            listening={false}
+          >
+            {jxRenderKonva(op.ops)}
+          </Group>
+        );
+      case 'fc':
+        return <Circle key={`jxf-${i}`} x={op.cx} y={op.cy} radius={op.r} fill="#ffffff" listening={false} perfectDrawEnabled={false} />;
+      case 'sc':
+        return <Circle key={`jxs-${i}`} x={op.cx} y={op.cy} radius={op.r} stroke="#000000" strokeWidth={op.w} listening={false} perfectDrawEnabled={false} />;
+      case 'fr':
+        return <Rect key={`jxr-${i}`} x={op.x} y={op.y} width={op.w} height={op.h} offsetX={0} offsetY={op.h / 2} rotation={op.rot} fill="#ffffff" listening={false} perfectDrawEnabled={false} />;
+      case 'ln':
+        return op.dash ? (
+          <Line key={`jxd-${i}`} points={[op.x1, op.y1, op.x2, op.y2]} stroke="#000000" strokeWidth={op.w} dash={[20, 20]} lineCap="butt" listening={false} perfectDrawEnabled={false} />
+        ) : (
+          <Line key={`jxe-${i}`} points={[op.x1, op.y1, op.x2, op.y2]} stroke="#ffffff" strokeWidth={op.w} lineCap="butt" listening={false} perfectDrawEnabled={false} />
+        );
+      case 'arc': {
+        const d = jxArcPath({ x: op.x1, y: op.y1 }, { x: op.x2, y: op.y2 }, op.r, op.ref);
+        if (!d) return null;
+        return <Path key={`jxa-${i}`} data={d} stroke="#000000" strokeWidth={op.w} lineCap="butt" listening={false} />;
+      }
+    }
+  });
 
 const wrapTextByWidth = (text: string, fontSize: number, maxWidth: number): string[] => {
   const out: string[] = [];
@@ -979,28 +1227,8 @@ export const drawExportObject = (ctx: CanvasRenderingContext2D, obj: any, img: H
       ctx.stroke(p);
       ctx.setLineDash([]);
     }
-    // ── ELİPS BİRLEŞİM PEDLERİ (export) — ekran motorunun birebir aynası ──
-    const exPads = collectRoadJunctionPads(obj, sceneObjects || []);
-    for (const pad of exPads) {
-      const lp = roadPadToLocal(pad, obj);
-      ctx.save();
-      ctx.translate(lp.lx, lp.ly);
-      ctx.rotate((lp.rotDeg * Math.PI) / 180);
-      ctx.fillStyle = '#000000';
-      ctx.beginPath(); ctx.ellipse(0, 0, pad.L, pad.r, 0, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.ellipse(0, 0, Math.max(2, pad.L - pad.edge * 1.7), Math.max(2, pad.r - pad.edge), 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = '#000000';
-      ctx.lineWidth = pad.edge;
-      if (pad.mid) {
-        ctx.setLineDash([20, 20]);
-        ctx.beginPath(); ctx.moveTo(-pad.L * 0.72, 0); ctx.lineTo(pad.L * 0.72, 0); ctx.stroke();
-        ctx.setLineDash([]);
-      }
-      ctx.restore();
-    }
+    // ── YOL BİRLEŞİM GEÇİŞLERİ (export) — yarım daire + fillet, ekranla birebir aynı ──
+    jxDrawOpsCtx(ctx, jxOpsToLocal(computeRoadJunctionOps(obj, sceneObjects || []), obj));
     // ── CADDE/SOKAK ADI ETİKETİ (export) — ekranla birebir aynı konum/punto ──
     const sname = String(obj.streetName || '').trim();
     if (sname) {
@@ -2392,29 +2620,8 @@ const IndividualObject = ({
                       lineJoin="round"
                     />
                   )}
-                  {/* ── ELİPS BİRLEŞİM PEDLERİ ── Diğer st-1 yollarla uç uca gelen
-                      portlarda sert ek yeri yerine yumuşak elips geçiş çizilir.
-                      Hem bu yol hem karşı yol aynı pedi çizer; üstteki temiz
-                      görünümü sağlar. Karşı yol sonra çizilse bile onun kendi
-                      pedi bu yolun but ucunu örter. */}
-                  {(() => {
-                    const pads = allObjects ? collectRoadJunctionPads(shapeProps, allObjects) : [];
-                    if (!pads.length) return null;
-                    return pads.map((pad, i) => {
-                      const p = roadPadToLocal(pad, shapeProps);
-                      return (
-                        <Group key={`jx-${pad.cx.toFixed(1)}-${pad.cy.toFixed(1)}-${i}`} x={p.lx} y={p.ly} rotation={p.rotDeg} listening={false}>
-                          <Ellipse radiusX={p.L} radiusY={p.r} fill="#000000" />
-                          <Ellipse radiusX={Math.max(2, p.L - p.edge * 1.7)} radiusY={Math.max(2, p.r - p.edge)} fill="#ffffff" />
-                          {pad.mid && (
-                            <Line points={[-p.L * 0.72, 0, p.L * 0.72, 0]} stroke="#000000" strokeWidth={p.edge} dash={[20, 20]} />
-                          )}
-                        </Group>
-                      );
-                    });
-                  })()}
                   {/* ── CADDE/SOKAK ADI ETİKETİ ── Yol bandının ortasına yazılır;
-                      özellik panelinden girilir. Birleşim pedlerinin ÜSTÜNE çizilir. */}
+                      özellik panelinden girilir. Birleşim geçişlerinin ÜSTÜNE çizilir. */}
                   {!!(shapeProps.streetName || '').trim() && (
                     <Text
                       text={String(shapeProps.streetName)}
@@ -3669,20 +3876,29 @@ const IndividualObject = ({
                 )}
                 rotation={textRotation}
               >
-                {/* Distance Text (Above Line) */}
-                <Text
-                  text={String(shapeProps.text || shapeProps.distance || '')}
-                  fontSize={fontSize}
-                  fontStyle="bold"
-                  fill={shapeProps.distanceColor || '#000000'}
-                  x={0}
-                  y={-fontSize - 8}
-                  width={400}
-                  align="center"
-                  padding={0}
-                  listening={false}
-                  offsetX={200}
-                />
+                {/* Distance Text (Above Line) — genişlik METNE göre: sabit 400px
+                    kutu grup sınırlarını şişirip seçim çerçevesini oktan uzun
+                    yapıyordu (kullanıcı raporu: çerçeve ok boyunda olsun). */}
+                {(() => {
+                  const lt = String(shapeProps.text || shapeProps.distance || '');
+                  const lw = Math.max(30, Math.min(420, lt.length * fontSize * 0.75 + 12));
+                  return (
+                    <Text
+                      text={lt}
+                      fontSize={fontSize}
+                      fontStyle="bold"
+                      fill={shapeProps.distanceColor || '#000000'}
+                      x={0}
+                      y={-fontSize - 8}
+                      width={lw}
+                      align="center"
+                      padding={0}
+                      listening={false}
+                      offsetX={lw / 2}
+                      wrap="none"
+                    />
+                  );
+                })()}
                 
                 {/* Speed Text (Below Line) - Conditional */}
                 {shapeProps.showSpeedInfo && (() => {
@@ -3708,11 +3924,12 @@ const IndividualObject = ({
                         fill="#059669" // Emerald-600
                         x={0}
                         y={5}
-                        width={400}
+                        width={Math.max(40, fontSize * 0.85 * 10)}
                         align="center"
                         padding={0}
                         listening={false}
-                        offsetX={200}
+                        offsetX={Math.max(20, fontSize * 0.85 * 5)}
+                        wrap="none"
                       />
                     );
                   }
@@ -3751,6 +3968,17 @@ const IndividualObject = ({
         )}
 
       </Group>
+
+      {/* ── YOL BİRLEŞİM GEÇİŞLERİ (kanvas uzayı, ana grubun DIŞINDA) ──
+          Ana grubun içinde dursaydı kırpılmış ped içerikleri Transformer
+          sınırlarını yoldan uzun gösterirdi (kullanıcı raporu). Ayrı grup:
+          hem sınırları bozmaz hem de lokal dönüşüm gerektirmez. Her iki yol
+          aynı op listesini çizer (idempotent) → sıra fark etmez. */}
+      {isRoadEngineSymbol(shapeProps.symbolId) && allObjects && (() => {
+        const jxOps = computeRoadJunctionOps(shapeProps, allObjects);
+        if (!jxOps.length) return null;
+        return <Group listening={false}>{jxRenderKonva(jxOps)}</Group>;
+      })()}
 
       {isSelected && (!shapeProps.isTemplate || (shapeProps.id === 'corporate-logo' && isAdmin)) && (
         <Transformer
@@ -3810,7 +4038,7 @@ const IndividualObject = ({
 
 export const CanvasArea: React.FC = () => {
   const { 
-    objects, 
+    objects,
     backgroundImage, 
     backgroundOpacity, 
     backgroundGrayscale, 
