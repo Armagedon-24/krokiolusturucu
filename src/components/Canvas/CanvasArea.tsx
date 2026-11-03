@@ -73,6 +73,123 @@ const drawArrowHeadExport = (ctx: CanvasRenderingContext2D, fromX: number, fromY
   ctx.fill();
 };
 
+// ═══ OK MOTORU — ORANTILI BAŞ ÖLÇEĞİ ═══
+// Kullanıcı isteği: oklar kenar/köşe tutamağından büyütülüp küçültüldüğünde
+// ok başları (pointer) da orantılı büyüyüp küçülmeli. Baş boyutu objeye
+// 'arrowHead' alanıyla yazılır; ekran (Konva Arrow pointer*) ve export
+// (drawArrowHeadExport) aynı değeri okur.
+const ARROW_HEAD_MIN = 5;
+const ARROW_HEAD_MAX = 120;
+const ARROW_HEAD_DEFAULT = 12;
+
+// ═══ DÜZ YOL BİRLEŞİM MOTORU — ELİPS GEÇİŞ PEDİ ═══
+// Kullanıcı isteği: iki st-1 düz yol birleştiğinde (uç portları çakıştığında)
+// birleşim yeri sert ek yeri değil, YUMUŞAK ELİPS geçişle birleşsin.
+// Ped: bisektör yönünde yönlendirilmiş elips (siyah kenar + beyaz gövde +
+// kesikli orta çizgi köprüsü). Ekran (IndividualObject) ve export
+// (drawExportObject) aynı geometriyi üretir.
+const ROAD_JUNCTION_TOL = 24; // px — port çakışma toleransı (snap eşiğiyle uyumlu)
+
+// ═══ YOL MOTORU AİLESİ ═══
+// st-1 (Düz Yol) Bezier yol motorunu paylaşan semboller. st-cadde / st-sokak:
+// kullanici isteği — düz yol görselinden orta çizgisiz, sokak/cadde adı yazılabilen
+// bantlar; birleşim yerleri yuvarlak yumuşak geçiş (elips pedi) ile birleşir.
+const ROAD_ENGINE_IDS = ['st-1', 'st-cadde', 'st-sokak'];
+const isRoadEngineSymbol = (sid?: string | null): boolean => !!sid && ROAD_ENGINE_IDS.includes(sid);
+/** Orta kesikli şerit çizgisi görünür mü? (st-1: varsayılan açık; cadde/sokak: varsayılan kapalı) */
+const roadShowsMiddleLine = (o: any): boolean =>
+  o.roadMiddleLine !== undefined ? !!o.roadMiddleLine : (o.symbolId || '') === 'st-1';
+/** Yol adı punto boyutu — yükseklik orantılı varsayılan */
+const roadNameFontSize = (o: any): number =>
+  o.streetFontSize || Math.max(11, Math.min(30, (o.height || 40) * 0.32));
+
+/** st-1 yolunun uç port (kısa kenar orta noktası) merkezini CANVAS uzayında döndürür. */
+const roadPortPoint = (o: any, which: 0 | 1) => {
+  const r = ((o.rotation || 0) * Math.PI) / 180;
+  const cos = Math.cos(r), sin = Math.sin(r);
+  const lx = which === 0 ? 0 : (o.width || 0);
+  const ly = (o.height || 0) / 2;
+  return { x: (o.x || 0) + lx * cos - ly * sin, y: (o.y || 0) + lx * sin + ly * cos };
+};
+
+/** Portun gövde içine bakan birim yönünü CANVAS uzayında döndürür. */
+const roadPortInward = (o: any, which: 0 | 1) => {
+  const r = ((o.rotation || 0) * Math.PI) / 180;
+  const s = which === 0 ? 1 : -1;
+  return { x: Math.cos(r) * s, y: Math.sin(r) * s };
+};
+
+interface RoadJunctionPad {
+  cx: number; cy: number;   // canvas uzayında ped merkezi
+  dirX: number; dirY: number; // ped ana ekseni (bisektör) birim vektörü
+  L: number;                // ana eksen boyunca yarı eksen
+  r: number;                // enine yarı eksen (yol yarı genişliği + kenar)
+  edge: number;             // kenar kalınlığı
+  mid: boolean;             // iki yolun da orta çizgisi varsa ped üstüne köprü çizilir
+}
+
+/** Kendi portlarıyla çakışan yol motoru sembolleri (st-1/cadde/sokak) için
+ *  birleşim pedlerini hesaplar. Farklı tür yollar (cadde↔sokak) da birleşebilir.
+ *  W = MAX yükseklik: ped geniş yolun dış köşelerini de kaplar (dar yolda hafif
+ *  ağız genişlemesi olur — kavşak ağzı gibi okunur, sert ek yeri kalmaz). */
+const collectRoadJunctionPads = (self: any, all: any[]): RoadJunctionPad[] => {
+  if (!self || !isRoadEngineSymbol(self.symbolId) || (self.curvature || 0) !== 0) return [];
+  const pads: RoadJunctionPad[] = [];
+  for (const other of (all || [])) {
+    if (!other || other.id === self.id || other.hidden) continue;
+    if (!isRoadEngineSymbol(other.symbolId) || (other.curvature || 0) !== 0) continue;
+    for (let pi = 0; pi < 2; pi++) {
+      const pA = roadPortPoint(self, pi as 0 | 1);
+      for (let pj = 0; pj < 2; pj++) {
+        const pB = roadPortPoint(other, pj as 0 | 1);
+        if (Math.hypot(pB.x - pA.x, pB.y - pA.y) > ROAD_JUNCTION_TOL) continue;
+        const ia = roadPortInward(self, pi as 0 | 1);
+        const ib = roadPortInward(other, pj as 0 | 1);
+        const W = Math.max(self.height || 40, other.height || 40);
+        const edge = Math.max(1.5, W / 20);
+        const r = W / 2 + edge;
+        const dot = Math.max(-1, Math.min(1, ia.x * ib.x + ia.y * ib.y));
+        const beta = Math.acos(dot); // gövdeler arası açı (0..π)
+        let dirX: number, dirY: number, L: number;
+        if (beta > 2.85) {
+          // Düz devam (≈180°) — eksen yönünde hafif uzatılmış elips (kapsül geçiş)
+          dirX = ia.x; dirY = ia.y;
+          L = r * 1.35;
+        } else {
+          // Açılı birleşim — bisektör yönünde elips; dış köşeleri tam kaplar:
+          // L = r / sin(β/2) elipsi iki dış gövde köşesinden geçirir.
+          let bx = ia.x + ib.x, by = ia.y + ib.y;
+          const bl = Math.hypot(bx, by);
+          if (bl < 1e-6) { dirX = ia.x; dirY = ia.y; } else { dirX = bx / bl; dirY = by / bl; }
+          L = Math.min(r * 2.8, r / Math.max(0.35, Math.sin(beta / 2)));
+        }
+        pads.push({
+          cx: (pA.x + pB.x) / 2,
+          cy: (pA.y + pB.y) / 2,
+          dirX, dirY, L, r, edge,
+          mid: roadShowsMiddleLine(self) && roadShowsMiddleLine(other),
+        });
+      }
+    }
+  }
+  return pads;
+};
+
+/** Canvas uzayındaki pedi yolun LOKAL (grup) uzayına çevirir. */
+const roadPadToLocal = (pad: RoadJunctionPad, obj: any) => {
+  const rot = ((obj.rotation || 0) * Math.PI) / 180;
+  const cos = Math.cos(-rot), sin = Math.sin(-rot);
+  const dx = pad.cx - (obj.x || 0), dy = pad.cy - (obj.y || 0);
+  return {
+    lx: dx * cos - dy * sin,
+    ly: dx * sin + dy * cos,
+    rotDeg: (Math.atan2(pad.dirY, pad.dirX) * 180) / Math.PI - (obj.rotation || 0),
+    L: pad.L,
+    r: pad.r,
+    edge: pad.edge,
+  };
+};
+
 const wrapTextByWidth = (text: string, fontSize: number, maxWidth: number): string[] => {
   const out: string[] = [];
   const charW = fontSize * 0.58;
@@ -522,10 +639,15 @@ export const drawExportObject = (ctx: CanvasRenderingContext2D, obj: any, img: H
   const symbolId: string = obj.symbolId || '';
 
   // 1) ev-callout — dinamik balon (ekrandaki Path + Text ile aynı geometri)
+  //    Kullanıcı isteği: kenar/köşe tutamağıyla balon büyütülüp küçültüldüğünde
+  //    ÇERÇEVESİ genişler/daralır; punto sabit kalır, metin yeniden sarılır → bozulma yok.
+  //    Efektif boyut = max(otomatik metin sığma boyutu, nesnenin width/height'ı).
   if (symbolId === 'ev-callout') {
     const text = String(obj.distance || '');
     const fontSize = obj.distanceFontSize || 14;
-    const { w: cw, h: ch } = calculateCalloutSize(text, fontSize);
+    const auto = calculateCalloutSize(text, fontSize);
+    const cw = Math.max(auto.w, obj.width || 0);
+    const ch = Math.max(auto.h, obj.height || 0);
     const r = 4;
     const tailH = ch * 0.25;
     const boxH = ch - tailH;
@@ -601,7 +723,7 @@ export const drawExportObject = (ctx: CanvasRenderingContext2D, obj: any, img: H
     ctx.fillStyle = obj.fill || '#000000';
     ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(mx, my); ctx.stroke();
-    drawArrowHeadExport(ctx, ax, ay, mx, my, 10);
+    drawArrowHeadExport(ctx, ax, ay, mx, my, obj.arrowHead || 10);
     // Çerçeve
     ctx.strokeStyle = '#000000';
     ctx.lineWidth = 1.5;
@@ -682,8 +804,9 @@ export const drawExportObject = (ctx: CanvasRenderingContext2D, obj: any, img: H
     ctx.lineWidth = isMeasurement ? 5 : (obj.strokeWidth || 5);
     ctx.lineCap = 'round';
     ctx.beginPath(); ctx.moveTo(pts[0], pts[1]); ctx.lineTo(pts[2], pts[3]); ctx.stroke();
-    drawArrowHeadExport(ctx, pts[0], pts[1], pts[2], pts[3], 12);
-    if (isMeasurement) drawArrowHeadExport(ctx, pts[2], pts[3], pts[0], pts[1], 12);
+    const arrowHeadLen = obj.arrowHead || 12; // resize'da orantılı büyüyen/küçülen baş
+    drawArrowHeadExport(ctx, pts[0], pts[1], pts[2], pts[3], arrowHeadLen);
+    if (isMeasurement) drawArrowHeadExport(ctx, pts[2], pts[3], pts[0], pts[1], arrowHeadLen);
     return;
   }
 
@@ -807,7 +930,8 @@ export const drawExportObject = (ctx: CanvasRenderingContext2D, obj: any, img: H
   //     KAPAK+KESİT (3-slice): uçlar sabit, orta bant tekrar eder → parçalanma yok.
   //     st-1..st-4 vektör yol/kavşak motorlarında çizilir (aşağıda) — dokuya düşmez;
   //     aksi halde kayıtlı tileMode eski SVG dokusunu fayanslayıp siyah dikiş bırakır.
-  if (obj.src && img && symbolId !== 'st-1' && symbolId !== 'st-2' && symbolId !== 'st-3' && symbolId !== 'st-4') {
+  //     st-cadde / st-sokak da aynı yol motorunda çizilir — doku motoruna düşmez.
+  if (obj.src && img && symbolId !== 'st-1' && symbolId !== 'st-2' && symbolId !== 'st-3' && symbolId !== 'st-4' && !isRoadEngineSymbol(symbolId)) {
     const tex = getTextureInfo(img);
     const resolved = resolveConcreteTileMode(
       obj,
@@ -829,9 +953,12 @@ export const drawExportObject = (ctx: CanvasRenderingContext2D, obj: any, img: H
     }
   }
 
-  // 5f) YOL MOTORU (st-1) — ekrandaki Bezier vektör yol motorunun aynası.
-  //     Sabit [20,20] kesikli orta çizgi periyoduyla uzatma bozulması olmaz.
-  if (symbolId === 'st-1') {
+  // 5f) YOL MOTORU (st-1 / st-cadde / st-sokak) — ekrandaki Bezier vektör yol
+  //     motorunun aynası. Sabit [20,20] kesikli orta çizgi periyoduyla uzatma
+  //     bozulması olmaz. st-cadde/st-sokak: orta çizgisiz + yol adı etiketli.
+  //     Ek olarak: diğer yol motoru sembolleriyle uç uca gelen portlarda ELİPS
+  //     BİRLEŞİM PEDİ çizilir (ekrandaki motorla aynı geometri → PDF birebir aynı).
+  if (isRoadEngineSymbol(symbolId)) {
     const curv = obj.curvature || 0;
     const curvX = obj.curvatureX !== undefined ? obj.curvatureX : w / 2;
     const controlY = h / 2 + curv * 2;
@@ -845,11 +972,47 @@ export const drawExportObject = (ctx: CanvasRenderingContext2D, obj: any, img: H
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = h;
     ctx.stroke(p);
-    ctx.strokeStyle = '#000000';
-    ctx.lineWidth = e;
-    ctx.setLineDash([20, 20]);
-    ctx.stroke(p);
-    ctx.setLineDash([]);
+    if (roadShowsMiddleLine(obj)) {
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = e;
+      ctx.setLineDash([20, 20]);
+      ctx.stroke(p);
+      ctx.setLineDash([]);
+    }
+    // ── ELİPS BİRLEŞİM PEDLERİ (export) — ekran motorunun birebir aynası ──
+    const exPads = collectRoadJunctionPads(obj, sceneObjects || []);
+    for (const pad of exPads) {
+      const lp = roadPadToLocal(pad, obj);
+      ctx.save();
+      ctx.translate(lp.lx, lp.ly);
+      ctx.rotate((lp.rotDeg * Math.PI) / 180);
+      ctx.fillStyle = '#000000';
+      ctx.beginPath(); ctx.ellipse(0, 0, pad.L, pad.r, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, Math.max(2, pad.L - pad.edge * 1.7), Math.max(2, pad.r - pad.edge), 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = pad.edge;
+      if (pad.mid) {
+        ctx.setLineDash([20, 20]);
+        ctx.beginPath(); ctx.moveTo(-pad.L * 0.72, 0); ctx.lineTo(pad.L * 0.72, 0); ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      ctx.restore();
+    }
+    // ── CADDE/SOKAK ADI ETİKETİ (export) — ekranla birebir aynı konum/punto ──
+    const sname = String(obj.streetName || '').trim();
+    if (sname) {
+      const sfs = roadNameFontSize(obj);
+      ctx.fillStyle = obj.distanceColor || '#000000';
+      ctx.font = `bold ${sfs}px ${obj.fontFamily || 'Inter'}, Arial, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(sname, w / 2, h / 2);
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'alphabetic';
+    }
     return;
   }
 
@@ -1219,10 +1382,64 @@ const IndividualObject = ({
       }
 
       // Eğer objenin bir açıklaması/mesafesi varsa, yazı boyutunu da ölçekle
-      // NOT: Kullanıcı isteği üzerine 'a-4' (Mesafe Oku) için yazı boyutu sabit kalmalı
-      if (shapeProps.distance !== undefined && shapeProps.symbolId !== 'a-4' && !shapeProps.isDistanceArrow) {
+      // NOT: Kullanıcı isteği üzerine 'a-4' (Mesafe Oku) için yazı boyutu sabit kalmalı.
+      // NOT: 'ev-callout' balonunda da punto sabit kalmalı — tutamaç yalnızca balon
+      // çerçevesini büyütür/küçültür, metin aynı puntoyla yeniden sarılır (bozulma yok).
+      if (shapeProps.distance !== undefined && shapeProps.symbolId !== 'a-4' && shapeProps.symbolId !== 'ev-callout' && !shapeProps.isDistanceArrow) {
         const scale = Math.max(Math.abs(scaleX), Math.abs(scaleY));
         updates.distanceFontSize = Math.max(2, (shapeProps.distanceFontSize || 14) * scale);
+      }
+
+      // ── OK MOTORU: baş orantılı büyüsün/küçülsün + koordinatlı ok boyutlanması ──
+      // Kullanıcı isteği: oklar kenar/köşe tutamağıyla büyütülürken/küçültülürken
+      // OK BAŞLARI da ölçekle orantılı değişmeli. Ayrıca koordinatlı oklarda
+      // (MESAFE ÖLÇ vb. — startX/endX taşıyanlar) koordinatlar ölçeklenmezse
+      // ok görsel olarak boyutlanmazdı; artık uçlar da ölçeklenir ve seçim
+      // çerçevesi (transformer) okla birebir uyumlu oluşur.
+      if (isNativeArrow) {
+        const hasArrowCoords = shapeProps.startX !== undefined && shapeProps.endX !== undefined;
+        let headScale: number;
+        if (hasArrowCoords) {
+          updates.startX = node.x() + (shapeProps.startX - shapeProps.x) * scaleX;
+          updates.startY = node.y() + (shapeProps.startY - shapeProps.y) * scaleY;
+          updates.endX = node.x() + (shapeProps.endX - shapeProps.x) * scaleX;
+          updates.endY = node.y() + (shapeProps.endY - shapeProps.y) * scaleY;
+          // Baş ölçeği = ok EKSENİNDEKİ uzunluk değişimi (yön bağımlı doğru hesap;
+          // max(|sx|,|sy|) yatay küçültmede scaleY=1'den dolayı 1 çıkıp başı donuk
+          // bırakıyordu — kullanıcı testinde yakalandı).
+          const adx = shapeProps.endX - shapeProps.startX;
+          const ady = shapeProps.endY - shapeProps.startY;
+          const oldLen = Math.hypot(adx, ady) || 1;
+          headScale = Math.hypot(adx * scaleX, ady * scaleY) / oldLen;
+        } else {
+          // Kütüphaneden gelen oklar lokal x ekseninde yataydır → uzunluk scaleX ile ölçeklenir
+          headScale = Math.abs(scaleX);
+        }
+        const baseHead = shapeProps.arrowHead || ARROW_HEAD_DEFAULT;
+        updates.arrowHead = Math.min(ARROW_HEAD_MAX, Math.max(ARROW_HEAD_MIN, baseHead * headScale));
+      }
+
+      // ── AÇIKLAMA OKU (ev-arrow-desc / -ellipse): çerçeve + tutamaklar ölçeklensin ──
+      // Çerçeve (frameWidth/Height) ve alt tutamak noktaları (textX/Y, markerX/Y)
+      // nesne ölçeğiyle birlikte büyür/küçülür; ok başı da orantılı değişir.
+      if (shapeProps.symbolId === 'ev-arrow-desc' || shapeProps.symbolId === 'ev-arrow-desc-ellipse') {
+        if (shapeProps.frameWidth !== undefined) updates.frameWidth = Math.max(24, shapeProps.frameWidth * scaleX);
+        if (shapeProps.frameHeight !== undefined) updates.frameHeight = Math.max(16, shapeProps.frameHeight * scaleY);
+        if (shapeProps.textX !== undefined) updates.textX = shapeProps.textX * scaleX;
+        if (shapeProps.textY !== undefined) updates.textY = shapeProps.textY * scaleY;
+        if (shapeProps.markerX !== undefined) updates.markerX = shapeProps.markerX * scaleX;
+        if (shapeProps.markerY !== undefined) updates.markerY = shapeProps.markerY * scaleY;
+        const headScale = Math.sqrt(Math.abs(scaleX * scaleY));
+        updates.arrowHead = Math.min(ARROW_HEAD_MAX, Math.max(ARROW_HEAD_MIN, (shapeProps.arrowHead || 10) * headScale));
+      }
+
+      // ── AÇIKLAMA BALONU (ev-callout): çerçeve alt sınırı ──
+      // Balon, metnin otomatik sığma boyutunun altına küçültülürse metin taşardı;
+      // bu yüzden efektif çerçeve en az otomatik boyut kadar kalır (bozulma yok).
+      if (shapeProps.symbolId === 'ev-callout') {
+        const autoCallout = calculateCalloutSize(String(shapeProps.distance || ''), shapeProps.distanceFontSize || 14);
+        updates.width = Math.max(autoCallout.w, updates.width);
+        updates.height = Math.max(autoCallout.h, updates.height);
       }
 
       onChange({
@@ -1418,12 +1635,13 @@ const IndividualObject = ({
             newY = Math.round((newY - drawingArea.y) / gridSize) * gridSize + drawingArea.y;
           }
 
-          // Road & Wall Snapping Logic
+          // Road & Wall Snapping Logic — yol motoru ailesi (st-1/cadde/sokak) snap'e dahil
           const isRoad = shapeProps.symbolId?.startsWith('st-') && ['st-1', 'st-2', 'st-3', 'st-4'].includes(shapeProps.symbolId);
+          const isRoadEngine = isRoadEngineSymbol(shapeProps.symbolId);
           const isWall = WALLLIKE_IDS.includes(shapeProps.symbolId || '');
           const isSnapTarget = DOORLIKE_SNAP_IDS.includes(shapeProps.symbolId || '');
 
-          if ((isRoad || isWall || isSnapTarget) && allObjects) {
+          if ((isRoad || isRoadEngine || isWall || isSnapTarget) && allObjects) {
             const threshold = 20;
             for (const other of allObjects) {
               if (other.id === shapeProps.id) continue;
@@ -1431,7 +1649,7 @@ const IndividualObject = ({
               const isOtherRoad = other.symbolId?.startsWith('st-');
               const isOtherWall = other.symbolId === 'arch-1' || other.symbolId === 'arch-1v';
 
-              if (isRoad && isOtherRoad) {
+              if ((isRoad || isRoadEngine) && isOtherRoad) {
                 // Road to Road Snapping
                 const otherW = other.width || 0;
                 const otherH = other.height || 0;
@@ -1659,8 +1877,8 @@ const IndividualObject = ({
             return (
               <Arrow
                 points={pts}
-                pointerLength={12}
-                pointerWidth={12}
+                pointerLength={shapeProps.arrowHead || 12}
+                pointerWidth={shapeProps.arrowHead || 12}
                 fill={isMeasurement ? "#000000" : (shapeProps.fill || "#000000")}
                 stroke={isMeasurement ? "#000000" : (shapeProps.stroke || "#000000")}
                 strokeWidth={isMeasurement ? 5 : (shapeProps.strokeWidth || 5)}
@@ -2128,8 +2346,9 @@ const IndividualObject = ({
               }
             })()}
           </Group>
-        ) : shapeProps.symbolId === 'st-1' ? (
+        ) : isRoadEngineSymbol(shapeProps.symbolId) ? (
           // Advanced Vector Road Engine with Curvature & Inflection Support
+          // (st-1 Düz Yol + st-cadde Cadde + st-sokak Sokak aynı motoru paylaşır)
           <Group>
             {(() => {
               const curv = shapeProps.curvature || 0;
@@ -2161,15 +2380,57 @@ const IndividualObject = ({
                     lineCap="butt"
                     lineJoin="round"
                   />
-                  {/* Center Dashed Line (Siyah şerit çizgisi) */}
-                  <Path
-                    data={pathData}
-                    stroke="#000000"
-                    strokeWidth={edgeBase}
-                    dash={[20, 20]}
-                    lineCap="butt"
-                    lineJoin="round"
-                  />
+                  {/* Center Dashed Line (Siyah şerit çizgisi) — cadde/sokakta ve
+                      kullanıcı kapatırsa çizilmez (roadMiddleLine) */}
+                  {roadShowsMiddleLine(shapeProps) && (
+                    <Path
+                      data={pathData}
+                      stroke="#000000"
+                      strokeWidth={edgeBase}
+                      dash={[20, 20]}
+                      lineCap="butt"
+                      lineJoin="round"
+                    />
+                  )}
+                  {/* ── ELİPS BİRLEŞİM PEDLERİ ── Diğer st-1 yollarla uç uca gelen
+                      portlarda sert ek yeri yerine yumuşak elips geçiş çizilir.
+                      Hem bu yol hem karşı yol aynı pedi çizer; üstteki temiz
+                      görünümü sağlar. Karşı yol sonra çizilse bile onun kendi
+                      pedi bu yolun but ucunu örter. */}
+                  {(() => {
+                    const pads = allObjects ? collectRoadJunctionPads(shapeProps, allObjects) : [];
+                    if (!pads.length) return null;
+                    return pads.map((pad, i) => {
+                      const p = roadPadToLocal(pad, shapeProps);
+                      return (
+                        <Group key={`jx-${pad.cx.toFixed(1)}-${pad.cy.toFixed(1)}-${i}`} x={p.lx} y={p.ly} rotation={p.rotDeg} listening={false}>
+                          <Ellipse radiusX={p.L} radiusY={p.r} fill="#000000" />
+                          <Ellipse radiusX={Math.max(2, p.L - p.edge * 1.7)} radiusY={Math.max(2, p.r - p.edge)} fill="#ffffff" />
+                          {pad.mid && (
+                            <Line points={[-p.L * 0.72, 0, p.L * 0.72, 0]} stroke="#000000" strokeWidth={p.edge} dash={[20, 20]} />
+                          )}
+                        </Group>
+                      );
+                    });
+                  })()}
+                  {/* ── CADDE/SOKAK ADI ETİKETİ ── Yol bandının ortasına yazılır;
+                      özellik panelinden girilir. Birleşim pedlerinin ÜSTÜNE çizilir. */}
+                  {!!(shapeProps.streetName || '').trim() && (
+                    <Text
+                      text={String(shapeProps.streetName)}
+                      x={0}
+                      y={0}
+                      width={w}
+                      height={h}
+                      align="center"
+                      verticalAlign="middle"
+                      fontSize={roadNameFontSize(shapeProps)}
+                      fontStyle="bold"
+                      fontFamily={shapeProps.fontFamily || 'Inter'}
+                      fill={shapeProps.distanceColor || '#000000'}
+                      listening={false}
+                    />
+                  )}
                   {/* Curvature & Inflection Handle (Free Move) */}
                   {isSelected && (
                     <Circle
@@ -2379,11 +2640,16 @@ const IndividualObject = ({
           </Group>
         ) : shapeProps.symbolId === 'ev-callout' ? (
           <Group>
-            {/* Dynamic Callout Balloon Vector - Auto Resizing */}
+            {/* Dynamic Callout Balloon Vector — Kullanıcı isteği: kenar/köşe
+                tutamağıyla balon büyütülüp küçültüldüğünde çerçevesi bozulmadan
+                değişir; punto sabit kalır, metin yeniden sarılır. Efektif boyut
+                = max(otomatik metin sığma boyutu, nesnenin width/height'ı). */}
             {(() => {
               const text = String(shapeProps.distance || '');
               const fontSize = shapeProps.distanceFontSize || 14;
-              const { w, h } = calculateCalloutSize(text, fontSize);
+              const auto = calculateCalloutSize(text, fontSize);
+              const w = Math.max(auto.w, shapeProps.width || 0);
+              const h = Math.max(auto.h, shapeProps.height || 0);
               const r = 4; // Tight corner radius
               const tailH = h * 0.25;
               const boxH = h - tailH;
@@ -2486,11 +2752,11 @@ const IndividualObject = ({
 
               return (
                 <Group>
-                  {/* The Dynamic Arrow */}
+                  {/* The Dynamic Arrow — baş, arrowHead ile orantılı (resize'da büyür/küçülür) */}
                   <Arrow
                     points={[arrowStartX, arrowStartY, mx, my]}
-                    pointerLength={10}
-                    pointerWidth={8}
+                    pointerLength={shapeProps.arrowHead || 10}
+                    pointerWidth={(shapeProps.arrowHead || 10) * 0.8}
                     fill={shapeProps.fill || "#000000"}
                     stroke={shapeProps.fill || "#000000"}
                     strokeWidth={2}
@@ -3324,8 +3590,8 @@ const IndividualObject = ({
             stroke="#000000"
             fill="#000000"
             strokeWidth={3}
-            pointerLength={10}
-            pointerWidth={10}
+            pointerLength={shapeProps.arrowHead || 10}
+            pointerWidth={shapeProps.arrowHead || 10}
             pointerAtBeginning={true}
             pointerAtEnding={true}
             opacity={1}
@@ -4950,33 +5216,45 @@ export const CanvasArea: React.FC = () => {
             setPromptState(prev => ({ ...prev, isOpen: false }));
           }
         });
-      } else if (symbol.id === 'st-1') {
-          let finalX = pos.x - 200;
-          let finalY = pos.y - 40;
+      } else if (symbol.id === 'st-1' || symbol.id === 'st-cadde' || symbol.id === 'st-sokak') {
+          // Yol motoru ailesi: st-1 (Düz Yol) + st-cadde (Cadde) + st-sokak (Sokak).
+          // Cadde/sokak: orta çizgisiz bant; özellik panelinden sokak/cadde adı yazılır.
+          const isCadde = symbol.id === 'st-cadde';
+          const isSokak = symbol.id === 'st-sokak';
+          const defW = isSokak ? 300 : 400;
+          const defH = isSokak ? 52 : 80;
+          let finalX = pos.x - defW / 2;
+          let finalY = pos.y - defH / 2;
           if (drawingArea) {
-            finalX = Math.max(drawingArea.x, Math.min(finalX, drawingArea.x + drawingArea.width - 400));
-            finalY = Math.max(drawingArea.y, Math.min(finalY, drawingArea.y + drawingArea.height - 80));
+            finalX = Math.max(drawingArea.x, Math.min(finalX, drawingArea.x + drawingArea.width - defW));
+            finalY = Math.max(drawingArea.y, Math.min(finalY, drawingArea.y + drawingArea.height - defH));
           }
           addObject({
             ...symbol,
             id: uuidv4(),
-            symbolId: 'st-1',
+            symbolId: symbol.id,
             categoryId: 'streets',
+            name: isCadde ? 'Cadde' : (isSokak ? 'Sokak' : 'Düz Yol'),
             x: finalX,
             y: finalY,
-            width: 400,
-            height: 80,
+            width: defW,
+            height: defH,
             rotation: 0,
             scaleX: 1,
             scaleY: 1,
             curvature: 0,
             ratioFixed: false,
+            // Orta kesikli çizgi: yalnız st-1'de varsayılan açık; cadde/sokakta kapalı
+            roadMiddleLine: symbol.id === 'st-1',
+            streetName: '',
             zIndex: objects.length,
         });
         addNotification({
           type: 'info',
-          message: 'Yol Eklendi',
-          description: 'Esnek yol tuvale eklendi.'
+          message: isCadde ? 'Cadde Eklendi' : (isSokak ? 'Sokak Eklendi' : 'Yol Eklendi'),
+          description: isCadde || isSokak
+            ? 'Orta çizgisiz bant eklendi. Üst panelden cadde/sokak adını yazabilirsin; diğer yollarla birleşiminde yumuşak geçiş oluşur.'
+            : 'Esnek yol tuvale eklendi.'
         });
       } else if (symbol.id === 'ev-rope') {
         addObject({
@@ -5999,6 +6277,44 @@ export const CanvasArea: React.FC = () => {
                     </div>
                   )}
 
+                  {/* Group 2.5: YOL ADI + ORTA ÇİZGİ (Yol motoru ailesi: st-1/cadde/sokak) */}
+                  {['st-1', 'st-cadde', 'st-sokak'].includes(selectedObj.symbolId || '') && (
+                    <div className="flex items-center gap-2 px-2 border-r border-[#333]">
+                      <span className="text-[9px] font-bold text-orange-400 uppercase">
+                        {selectedObj.symbolId === 'st-cadde' ? 'CADDE ADI:' : selectedObj.symbolId === 'st-sokak' ? 'SOKAK ADI:' : 'YOL ADI:'}
+                      </span>
+                      <input
+                        type="text"
+                        placeholder={selectedObj.symbolId === 'st-cadde' ? 'Örn. Atatürk Caddesi' : selectedObj.symbolId === 'st-sokak' ? 'Örn. 5. Sokak' : 'Örn. İstasyon Yolu'}
+                        value={selectedObj.streetName || ''}
+                        onChange={(e) => updateObject(selectedId, { streetName: e.target.value } as any, true)}
+                        onBlur={() => saveHistory()}
+                        onKeyDown={(e) => e.stopPropagation()}
+                        className="border border-[#333] bg-[#111] rounded px-2 py-1 text-[10px] text-gray-200 focus:ring-1 focus:ring-[#F5C518]/50 outline-none w-36"
+                      />
+                      <span className="text-[9px] font-bold text-gray-400 uppercase">Punto:</span>
+                      <input
+                        type="number"
+                        value={Math.round(selectedObj.streetFontSize || Math.max(11, Math.min(30, (selectedObj.height || 40) * 0.32)))}
+                        onChange={(e) => updateObject(selectedId, { streetFontSize: parseInt(e.target.value) || undefined } as any, true)}
+                        onBlur={() => saveHistory()}
+                        className="bg-[#111] border border-[#333] text-white text-[10px] rounded px-1 py-0.5 w-10 text-center"
+                      />
+                      <div className="flex items-center gap-1 ml-1 border-l border-[#333] pl-2">
+                        <input
+                          type="checkbox"
+                          id="roadMidLine"
+                          checked={selectedObj.roadMiddleLine !== undefined ? !!selectedObj.roadMiddleLine : selectedObj.symbolId === 'st-1'}
+                          onChange={(e) => updateObject(selectedId, { roadMiddleLine: e.target.checked } as any)}
+                          className="accent-orange-500 w-3 h-3 cursor-pointer"
+                        />
+                        <label htmlFor="roadMidLine" className="text-[9px] font-bold text-orange-300 uppercase cursor-pointer">
+                          ORTA ÇİZGİ
+                        </label>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Group 3: Label/Annotation (Available for everything that isn't raw text) */}
                   {selectedObj.type !== 'text' && selectedObj.symbolId !== 'ev-shooting-trajectory' && (
                     <div className="flex items-center gap-2 px-2 border-r border-[#333]">
@@ -6010,8 +6326,14 @@ export const CanvasArea: React.FC = () => {
                         onChange={(e) => {
                           const newText = e.target.value;
                           if (selectedObj.symbolId === 'ev-callout') {
+                            // Balon çerçevesi KORUNUR: kullanıcı balonu tutamaçla büyüttüyse
+                            // metin düzenlemek çerçeveyi otomatik sığma boyutuna küçültmez.
                             const size = calculateCalloutSize(newText, selectedObj.distanceFontSize || 14);
-                            updateObject(selectedId, { distance: newText, width: size.w, height: size.h }, true);
+                            updateObject(selectedId, {
+                              distance: newText,
+                              width: Math.max(size.w, selectedObj.width || 0),
+                              height: Math.max(size.h, selectedObj.height || 0),
+                            }, true);
                           } else {
                             updateObject(selectedId, { distance: newText }, true);
                           }

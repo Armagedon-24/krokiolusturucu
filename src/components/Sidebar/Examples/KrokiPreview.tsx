@@ -45,10 +45,10 @@ export const KrokiPreview: React.FC<KrokiPreviewProps> = ({ scenario, width = 33
   );
 
   const symbols = objects.filter(
-    (o) => o.type === 'symbol' && o.src && !['a-4', 'a-5', 'ev-callout', 'ev-circle', 'ev-square', 'st-1', 'arch-w1i', 'arch-w1vi'].includes(o.symbolId || ''),
+    (o) => o.type === 'symbol' && o.src && !['a-4', 'a-5', 'ev-callout', 'ev-circle', 'ev-square', 'st-1', 'st-cadde', 'st-sokak', 'arch-w1i', 'arch-w1vi'].includes(o.symbolId || ''),
   );
   // Düz yollar tuvaldeki dinamik motorla aynı biçimde çizilir (beyaz bant + siyah kenar/şerit)
-  const roads = objects.filter((o) => o.type === 'symbol' && o.symbolId === 'st-1');
+  const roads = objects.filter((o) => o.type === 'symbol' && ['st-1', 'st-cadde', 'st-sokak'].includes(o.symbolId || ''));
   // Duvarlar: PNG kaynak %92 şeffaf olduğundan önizlemede kaybolur — düz çubuk olarak çizilir
   const walls = objects.filter((o) => o.type === 'symbol' && (o.symbolId === 'arch-w1i' || o.symbolId === 'arch-w1vi'));
   // Kapılar: duvar çubuğu kapı açıklığının üzerinden geçmesin — kapı imajının alt %15'lik
@@ -91,9 +91,27 @@ export const KrokiPreview: React.FC<KrokiPreviewProps> = ({ scenario, width = 33
               left: 0,
               right: 0,
               top: '50%',
-              borderTop: '2px dashed #000000',
+              borderTop: o.roadMiddleLine !== false ? '2px dashed #000000' : 'none',
             }}
           />
+          {!!(o.streetName || '').trim() && (
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: Math.max(6, Math.min(16, (o.height || 40) * 0.32) * s),
+                fontWeight: 700,
+                color: '#000000',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+              }}
+            >
+              {o.streetName}
+            </div>
+          )}
         </div>
       ))}
 

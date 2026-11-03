@@ -79,6 +79,22 @@ export interface CanvasObject {
   mu?: number;           // Friction coefficient
   efficiency?: number;   // Braking efficiency
   showSpeedInfo?: boolean; // Show calculated speed on canvas
+  /** Ok motoru — ok başı (pointer) uzunluğu; kenar/köşe tutamağıyla ölçeklemede orantılı değişir */
+  arrowHead?: number;
+  /** Açıklama oku çerçevesi (ev-arrow-desc / -ellipse) — tutamakla büyütülüp küçültülür */
+  frameWidth?: number;
+  frameHeight?: number;
+  /** Açıklama oku alt tutamak noktaları (lokal uzay) */
+  textX?: number;
+  textY?: number;
+  markerX?: number;
+  markerY?: number;
+  /** Yol motoru (st-1 / st-cadde / st-sokak) — yol üzerine yazılan cadde/sokak adı */
+  streetName?: string;
+  /** Cadde/sokak adı punto boyutu */
+  streetFontSize?: number;
+  /** Yolun orta kesikli şerit çizgisi görünür mü? (st-1: varsayılan açık, cadde/sokak: varsayılan kapalı) */
+  roadMiddleLine?: boolean;
 }
 
 export interface ProjectInfo {
