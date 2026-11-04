@@ -127,6 +127,7 @@ type JxOp =
   | { op:'sc'; cx:number; cy:number; r:number; w:number }                           // siyah halka
   | { op:'fr'; x:number; y:number; w:number; h:number; rot:number }                 // beyaz dikdörtgen (x,y)=kısa kenar ortası
   | { op:'ln'; x1:number; y1:number; x2:number; y2:number; w:number; dash?:boolean }// dash→kesikli siyah; değilse beyaz silgi
+  | { op:'lnk'; x1:number; y1:number; x2:number; y2:number; w:number }              // DOLU siyah çizgi (kenar köprüsü)
   | { op:'arc'; x1:number; y1:number; x2:number; y2:number; r:number; ref:JxPt; w:number }; // fillet yayı (siyah)
 
 const jxPerp = (u: JxPt): JxPt => ({ x: -u.y, y: u.x });
@@ -167,20 +168,23 @@ const jxArcPath = (T1: JxPt, T2: JxPt, r: number, ref: JxPt): string => {
 };
 
 /** Köşe C'de kesişen iki kenara teğet fillet yayı.
- *  n1/n2: kenarların gövde içine bakan birim normalleri. */
+ *  n1/n2: kenarların gövde içine bakan birim normalleri.
+ *  DÜZELTME (st-2 görünümü): yay merkezi iki gövdenin DIŞINDAKİ beyaz köşeye
+ *  konur → kenarlar köşede DIŞA doğru yumuşak açıyla flarflanır (ağız içinde
+ *  kanca/çiçek kıvrımı oluşmaz). */
 const jxFillet = (C: JxPt, u1: JxPt, n1: JxPt, u2: JxPt, n2: JxPt, f: number) => {
   const den = jxCross(u1, u2);
   if (Math.abs(den) < 1e-6) return null;
-  const m = { x: f * (n2.x - n1.x), y: f * (n2.y - n1.y) };
+  const m = { x: -f * (n2.x - n1.x), y: -f * (n2.y - n1.y) };
   const t = jxCross(m, u2) / den;
-  const ctr = { x: C.x + u1.x * t + f * n1.x, y: C.y + u1.y * t + f * n1.y };
-  const T1 = { x: ctr.x - f * n1.x, y: ctr.y - f * n1.y };
-  const T2 = { x: ctr.x - f * n2.x, y: ctr.y - f * n2.y };
+  const ctr = { x: C.x + u1.x * t - f * n1.x, y: C.y + u1.y * t - f * n1.y };
+  const T1 = { x: ctr.x + f * n1.x, y: ctr.y + f * n1.y };
+  const T2 = { x: ctr.x + f * n2.x, y: ctr.y + f * n2.y };
   return { T1, T2, d: jxArcPath(T1, T2, f, C) };
 };
 
 const jxFilletRadius = (S: JxSeg, X: JxSeg): number =>
-  Math.max(4, Math.min(16, 0.3 * Math.min(S.obj.height || 40, X.obj.height || 40)));
+  Math.max(4, Math.min(14, 0.22 * Math.min(S.obj.height || 40, X.obj.height || 40)));
 
 /** S'in (ep başlangıçlı, uS yönlü) çizgisinin X gövdesi içinde kaldığı t aralığı.
  *  Uçlar bant (kenar çizgisi) sınırından mı, X'in boyu sınırından mı gelir bildirir. */
@@ -210,55 +214,43 @@ const jxBodyInterval = (ep: JxPt, uS: JxPt, X: JxSeg) => {
   return { a, b, aBand, bBand };
 };
 
-/** PORT-PORT BİRLEŞME — yarım daire (balgun) geçiş pedi.
- *  Beyaz dolgu ek yerini kapatır; siyah halka yolların gövdesi DIŞINDA kalır
- *  (gövde bantları içindeki halka beyaz bandlarla silinir) → birleşim yerinde
- *  iki yarım daire çıkıntı belirir, gövde üzerinde leke olmaz. */
-const jxCircleJoinOps = (A: JxSeg, B: JxSeg, portA: 0 | 1, portB: 0 | 1): JxOp[] => {
+/** PORT-PORT BİRLEŞME — TEMİZ DEVAM (balgun/daire YOK — st-2 görünümü).
+ *  Portlar çakışık/açık yakınsa ve yollar karşı karşıya (düz devam) ise yalnızca
+ *  portlar arasındaki olası boşluk/ek yeri beyaz yamayla kapatılır ve kenar
+ *  çizgileri boşluk boyunca DOLU SİYAH köprülerle uzatılır. Kesikli orta
+ *  çizgilere dokunulmaz; fazlar kendi doğal düzeniyle buluşur. Açılı
+ *  birleşmeler overlap motoruna (fillet ağızları) bırakılır. */
+const jxPortGapOps = (A: JxSeg, B: JxSeg, portA: 0 | 1, portB: 0 | 1): JxOp[] => {
   const pa = portA === 0 ? A.p0 : A.p1;
   const pb = portB === 0 ? B.p0 : B.p1;
-  const joint = { x: (pa.x + pb.x) / 2, y: (pa.y + pb.y) / 2 };
-  const sgnA = portA === 0 ? 1 : -1, sgnB = portB === 0 ? 1 : -1;
-  const uA = { x: A.u.x * sgnA, y: A.u.y * sgnA };
-  const uB = { x: B.u.x * sgnB, y: B.u.y * sgnB };
+  const sgnA = portA === 0 ? 1 : -1;
+  const uA = { x: A.u.x * sgnA, y: A.u.y * sgnA }; // A gövdesine doğru
+  const dx = pb.x - pa.x, dy = pb.y - pa.y;
+  const axial = dx * uA.x + dy * uA.y;             // pb'nin eksen konumu (negatif = A'nın arkasında boşluk)
+  const lateral = Math.abs(-dx * uA.y + dy * uA.x);
+  const eM = Math.max(A.e, B.e);
+  if (axial >= -0.75 || lateral > eM + 2) return []; // çakışık/çakışma veya yanal kayma → yama gereksiz
+  const gap = -axial;
   const W = Math.max(A.obj.height || 40, B.obj.height || 40);
-  const e = Math.max(1.5, W / 20);
-  const R = W / 2 + e + Math.max(4, W * 0.2);
-  const straight = (uA.x * uB.x + uA.y * uB.y) < -0.95;
-  const sub: JxOp[] = [
-    { op: 'fc', cx: joint.x, cy: joint.y, r: Math.max(2, R - e / 2) },
-    { op: 'sc', cx: joint.x, cy: joint.y, r: R, w: e },
+  const rot = (Math.atan2(uA.y, uA.x) * 180) / Math.PI;
+  const ops: JxOp[] = [
+    // boşluk şeridi yaması: iki gövde arasındaki boşluğu tam gövde genişliğinde kapat
+    { op: 'fr', x: pb.x, y: pb.y, w: gap + 3, h: W + 2 * eM + 1, rot },
   ];
-  for (const s of [A, B]) {
-    const u = s === A ? uA : uB;
-    const port = s === A ? pa : pb;
-    const n = jxPerp(u);
-    const bw = s.wh + s.e + 0.5;
-    // gövde bandı: halkanın gövde içi kısmını + kenarları siler
-    // (rot DERECE — Konva rotation prop'u ve ctx.rotate derece bekler)
-    sub.push({ op: 'fr', x: port.x, y: port.y, w: R + e + ROAD_JUNCTION_TOL, h: 2 * bw, rot: (Math.atan2(u.y, u.x) * 180) / Math.PI });
-    // kenar çizgilerini halkaya kadar geri çiz (halkanın dışında yol kenarı sürsün)
-    const tRe = Math.sqrt(Math.max(0, R * R - Math.pow(s.wh + s.e / 2, 2)));
+  // kenar köprüleri: her iki yolun kenar çizgilerini boşluk boyunca DOLU SİYAH uzat
+  const nA = jxPerp(uA);
+  for (const S of [A, B] as const) {
     for (const sd of [-1, 1]) {
-      const ox = n.x * sd * (s.wh + s.e / 2), oy = n.y * sd * (s.wh + s.e / 2);
-      sub.push({
-        op: 'ln',
-        x1: joint.x + u.x * (tRe - 0.5) + ox, y1: joint.y + u.y * (tRe - 0.5) + oy,
-        x2: joint.x + u.x * (R + e + ROAD_JUNCTION_TOL) + ox, y2: joint.y + u.y * (R + e + ROAD_JUNCTION_TOL) + oy,
-        w: s.e,
+      const ox = nA.x * sd * (S.wh + S.e / 2), oy = nA.y * sd * (S.wh + S.e / 2);
+      ops.push({
+        op: 'lnk',
+        x1: pb.x - uA.x * 2 + ox, y1: pb.y - uA.y * 2 + oy,
+        x2: pb.x + uA.x * (gap + 4) + ox, y2: pb.y + uA.y * (gap + 4) + oy,
+        w: eM,
       });
     }
   }
-  if (straight && A.mid && B.mid) {
-    const u = uA;
-    sub.push({
-      op: 'ln', dash: true,
-      x1: joint.x - u.x * (R + e), y1: joint.y - u.y * (R + e),
-      x2: joint.x + u.x * (R + e), y2: joint.y + u.y * (R + e),
-      w: e,
-    });
-  }
-  return [{ op: 'clip', cx: joint.x, cy: joint.y, r: R + e, ops: sub }];
+  return ops;
 };
 
 /** GÖVDE ÇAKIŞMASI — S'in kenar/orta çizgilerini X'in gövdesi içinde keser;
@@ -299,11 +291,13 @@ const jxOverlapOps = (S: JxSeg, X: JxSeg): JxOp[] => {
       const fl = jxFillet(C, S.u, n1, X.u, n2, f);
       if (!fl) continue;
       const tT = (fl.T1.x - ep.x) * S.u.x + (fl.T1.y - ep.y) * S.u.y;
+      // DÜZELTME: teğet noktası artık köşenin DIŞINDA (korunan kenar tarafında).
+      // Silgi teğet noktasına kadar UZATILIR → yay oradan kenara devreder.
       if (en.first) {
-        if (tT <= ea || tT > b) continue;
+        if (tT >= b - 0.25 || a - tT > 3 * f + 4) continue;
         ea = tT;
       } else {
-        if (tT >= eb || tT < a) continue;
+        if (tT <= a + 0.25 || tT - b > 3 * f + 4) continue;
         eb = tT;
       }
       ops.push({ op: 'arc', x1: fl.T1.x, y1: fl.T1.y, x2: fl.T2.x, y2: fl.T2.y, r: f, ref: C, w: Math.max(S.e, X.e) });
@@ -326,19 +320,23 @@ const computeRoadJunctionOps = (self: any, all: any[]): JxOp[] => {
     if (!isRoadEngineSymbol(other.symbolId) || (other.curvature || 0) !== 0) continue;
     const B = jxSeg(other);
     if (B.len < 8) continue;
-    // 1) port-port birleşme → yarım daire pedi
-    let joined = false;
-    for (let i = 0; i < 2 && !joined; i++) {
-      for (let j = 0; j < 2 && !joined; j++) {
+    // 1) port-port yakınlık → düz devam birleşmesi: yalnız boşluk/ek yeri yaması
+    //    (balgun/daire kaldırıldı — kenarlar artık kesintisiz düz devam eder).
+    //    Açılı port birleşmeleri aşağıdaki overlap motorunda fillet ağızlarıyla çözülür.
+    for (let i = 0; i < 2; i++) {
+      for (let j = 0; j < 2; j++) {
         const pa = i === 0 ? A.p0 : A.p1;
         const pb = j === 0 ? B.p0 : B.p1;
         if (Math.hypot(pb.x - pa.x, pb.y - pa.y) <= ROAD_JUNCTION_TOL) {
-          ops.push(...jxCircleJoinOps(A, B, i as 0 | 1, j as 0 | 1));
-          joined = true;
+          const sgnA = i === 0 ? 1 : -1, sgnB = j === 0 ? 1 : -1;
+          const uAi = { x: A.u.x * sgnA, y: A.u.y * sgnA };
+          const uBi = { x: B.u.x * sgnB, y: B.u.y * sgnB };
+          if ((uAi.x * uBi.x + uAi.y * uBi.y) < -0.95) {
+            ops.push(...jxPortGapOps(A, B, i as 0 | 1, j as 0 | 1));
+          }
         }
       }
     }
-    if (joined) continue;
     // 2) gövde çakışması (X kesişmesi / T ağzı / bindirme) → fillet geçişleri
     ops.push(...jxOverlapOps(A, B));
     ops.push(...jxOverlapOps(B, A));
@@ -358,6 +356,7 @@ const jxOpsToLocal = (ops: JxOp[], obj: any): JxOp[] => {
       case 'fc': case 'sc': { const p = tp(op.cx, op.cy); return { ...op, cx: p.x, cy: p.y }; }
       case 'fr': { const p = tp(op.x, op.y); return { ...op, x: p.x, y: p.y, rot: op.rot - (obj.rotation || 0) }; }
       case 'ln': { const p1 = tp(op.x1, op.y1), p2 = tp(op.x2, op.y2); return { ...op, x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y }; }
+      case 'lnk': { const p1 = tp(op.x1, op.y1), p2 = tp(op.x2, op.y2); return { ...op, x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y }; }
       case 'arc': { const p1 = tp(op.x1, op.y1), p2 = tp(op.x2, op.y2), rf = tp(op.ref.x, op.ref.y); return { ...op, x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, ref: rf }; }
     }
   };
@@ -390,6 +389,12 @@ const jxDrawOpsCtx = (ctx: CanvasRenderingContext2D, ops: JxOp[]) => {
         ctx.lineWidth = op.w;
         ctx.beginPath(); ctx.moveTo(op.x1, op.y1); ctx.lineTo(op.x2, op.y2); ctx.stroke();
         if (op.dash) ctx.setLineDash([]);
+        break;
+      case 'lnk':
+        ctx.lineCap = 'butt';
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = op.w;
+        ctx.beginPath(); ctx.moveTo(op.x1, op.y1); ctx.lineTo(op.x2, op.y2); ctx.stroke();
         break;
       case 'arc': {
         const d = jxArcPath({ x: op.x1, y: op.y1 }, { x: op.x2, y: op.y2 }, op.r, op.ref);
@@ -430,6 +435,8 @@ const jxRenderKonva = (ops: JxOp[]): any[] =>
         ) : (
           <Line key={`jxe-${i}`} points={[op.x1, op.y1, op.x2, op.y2]} stroke="#ffffff" strokeWidth={op.w} lineCap="butt" listening={false} perfectDrawEnabled={false} />
         );
+      case 'lnk':
+        return <Line key={`jxk-${i}`} points={[op.x1, op.y1, op.x2, op.y2]} stroke="#000000" strokeWidth={op.w} lineCap="butt" listening={false} perfectDrawEnabled={false} />;
       case 'arc': {
         const d = jxArcPath({ x: op.x1, y: op.y1 }, { x: op.x2, y: op.y2 }, op.r, op.ref);
         if (!d) return null;
