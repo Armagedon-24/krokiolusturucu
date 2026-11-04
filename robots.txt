@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://kroki-olusturucu.vercel.app/sitemap.xml

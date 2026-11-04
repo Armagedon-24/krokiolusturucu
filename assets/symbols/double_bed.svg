@@ -1,0 +1,11 @@
+<svg width="140" height="200" viewBox="0 0 140 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Bed frame -->
+  <rect x="5" y="5" width="130" height="190" rx="4" stroke="black" stroke-width="2" fill="none"/>
+  <!-- Mattress detail -->
+  <rect x="10" y="10" width="120" height="180" rx="2" stroke="black" stroke-width="1" fill="none"/>
+  <!-- Pillows -->
+  <rect x="15" y="15" width="50" height="35" rx="5" stroke="black" stroke-width="1.5" fill="none"/>
+  <rect x="75" y="15" width="50" height="35" rx="5" stroke="black" stroke-width="1.5" fill="none"/>
+  <!-- Blanket edge -->
+  <path d="M10 70 L130 70" stroke="black" stroke-width="1" stroke-dasharray="4 2"/>
+</svg>

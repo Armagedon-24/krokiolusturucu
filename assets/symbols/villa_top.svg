@@ -1,0 +1,20 @@
+<svg width="400" height="300" viewBox="0 0 400 300" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Outer Walls -->
+  <rect x="10" y="10" width="380" height="280" fill="none" stroke="#000000" stroke-width="4" />
+  
+  <!-- Rooms -->
+  <line x1="200" y1="10" x2="200" y2="290" stroke="#000000" stroke-width="2" />
+  <line x1="10" y1="150" x2="200" y2="150" stroke="#000000" stroke-width="2" />
+  
+  <!-- Doors -->
+  <path d="M 190 290 Q 150 290 150 250" fill="none" stroke="#000000" stroke-width="2" stroke-dasharray="4,2" />
+  <line x1="190" y1="290" x2="190" y2="250" stroke="#000000" stroke-width="2" />
+  
+  <!-- Windows -->
+  <rect x="50" y="8" width="50" height="4" fill="#ffffff" stroke="#000000" stroke-width="1" />
+  <rect x="300" y="8" width="50" height="4" fill="#ffffff" stroke="#000000" stroke-width="1" />
+  
+  <text x="50" y="80" font-family="Arial" font-size="12" fill="#000000">Salon</text>
+  <text x="50" y="220" font-family="Arial" font-size="12" fill="#000000">Mutfak</text>
+  <text x="250" y="150" font-family="Arial" font-size="12" fill="#000000">Yatak Odası</text>
+</svg>

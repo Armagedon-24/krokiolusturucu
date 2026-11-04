@@ -1,0 +1,17 @@
+<svg width="80" height="240" viewBox="0 0 80 240" xmlns="http://www.w3.org/2000/svg">
+  <!-- Fringes Top -->
+  <line x1="5" y1="2" x2="75" y2="2" stroke="#999" stroke-width="4" stroke-dasharray="2 4" />
+  <!-- Fringes Bottom -->
+  <line x1="5" y1="238" x2="75" y2="238" stroke="#999" stroke-width="4" stroke-dasharray="2 4" />
+
+  <!-- Main Body -->
+  <rect x="5" y="4" width="70" height="232" fill="#f8f8f8" stroke="#333" stroke-width="2" />
+  
+  <!-- Outer Border -->
+  <rect x="15" y="14" width="50" height="212" fill="#f0f0f0" stroke="#555" stroke-width="1.5" />
+  
+  <!-- Repeating Diamond Pattern -->
+  <path d="M 40 24 L 55 54 L 40 84 L 25 54 Z" fill="#e0e0e0" stroke="#777" stroke-width="1" />
+  <path d="M 40 84 L 55 114 L 40 144 L 25 114 Z" fill="#e0e0e0" stroke="#777" stroke-width="1" />
+  <path d="M 40 144 L 55 174 L 40 204 L 25 174 Z" fill="#e0e0e0" stroke="#777" stroke-width="1" />
+</svg>

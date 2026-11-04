@@ -1,0 +1,6 @@
+<svg width="40" height="40" viewBox="0 0 40 40" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+  <ellipse cx="20" cy="20" rx="18" ry="18" fill="white" stroke="#000" stroke-width="2" />
+  <ellipse cx="20" cy="20" rx="11" ry="11" fill="none" stroke="#000" stroke-width="1.5" />
+  <line x1="9" y1="9" x2="31" y2="31" stroke="#000" stroke-width="1.2" />
+  <line x1="31" y1="9" x2="9" y2="31" stroke="#000" stroke-width="1.2" />
+</svg>

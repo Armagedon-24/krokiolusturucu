@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="100%" height="100%">
+  <defs>
+    <radialGradient id="smearBlood" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#3b0000"/>
+      <stop offset="50%" stop-color="#990000"/>
+      <stop offset="100%" stop-color="#ff1a1a"/>
+    </radialGradient>
+    <filter id="smearShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="1" stdDeviation="1" flood-color="#3b0000" flood-opacity="0.6"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#smearShadow)">
+    <path d="M60,100 C70,90 120,90 130,100 C140,110 100,120 70,110 C50,110 50,110 60,100 Z" fill="url(#smearBlood)"/>
+    <path d="M50,105 C80,95 110,85 140,105 C110,125 70,120 50,105 Z" fill="url(#smearBlood)" opacity="0.8"/>
+    
+    <path d="M120,95 C140,80 160,85 180,90 C185,91 180,95 170,95 C150,95 140,105 120,105 Z" fill="url(#smearBlood)"/>
+    <path d="M125,100 C150,100 170,110 185,120 C180,120 160,115 130,105 Z" fill="url(#smearBlood)"/>
+    <path d="M130,90 C160,70 170,50 180,40 C175,45 160,75 120,95 Z" fill="url(#smearBlood)"/>
+    
+    <path d="M65,105 C40,110 20,115 10,110 C15,105 35,105 55,100 Z" fill="url(#smearBlood)"/>
+    <path d="M50,100 C30,95 15,90 5,85 C10,88 25,98 55,105 Z" fill="url(#smearBlood)"/>
+    <path d="M70,95 C50,80 30,75 20,70 C30,80 50,90 60,100 Z" fill="url(#smearBlood)"/>
+
+    <path d="M75,110 C70,130 65,140 70,145 C75,140 80,130 85,110 Z" fill="url(#smearBlood)"/>
+    <path d="M95,110 C90,140 85,160 90,165 C95,160 100,140 105,110 Z" fill="url(#smearBlood)"/>
+    <path d="M110,110 C110,130 115,140 110,145 C105,140 105,130 105,110 Z" fill="url(#smearBlood)"/>
+    <path d="M120,105 C125,125 130,135 125,140 C120,135 115,125 115,105 Z" fill="url(#smearBlood)"/>
+
+    <circle cx="15" cy="85" r="2" fill="#ff1a1a"/>
+    <circle cx="25" cy="120" r="1.5" fill="#c10000"/>
+    <circle cx="45" cy="130" r="2" fill="#ff1a1a"/>
+    <circle cx="65" cy="155" r="1.5" fill="#c10000"/>
+    <circle cx="90" cy="175" r="2" fill="#ff1a1a"/>
+    <circle cx="105" cy="155" r="1.5" fill="#c10000"/>
+    <circle cx="130" cy="150" r="2" fill="#ff1a1a"/>
+    <circle cx="145" cy="130" r="1.5" fill="#c10000"/>
+    <circle cx="170" cy="130" r="2" fill="#ff1a1a"/>
+    <circle cx="190" cy="120" r="1.5" fill="#c10000"/>
+    <circle cx="185" cy="90" r="2" fill="#ff1a1a"/>
+    <circle cx="190" cy="40" r="1.5" fill="#c10000"/>
+    <circle cx="170" cy="45" r="2" fill="#ff1a1a"/>
+    <circle cx="150" cy="65" r="1.5" fill="#c10000"/>
+    <circle cx="120" cy="70" r="2" fill="#ff1a1a"/>
+    <circle cx="100" cy="80" r="1.5" fill="#c10000"/>
+    <circle cx="80" cy="75" r="2" fill="#ff1a1a"/>
+    <circle cx="60" cy="80" r="1.5" fill="#c10000"/>
+    <circle cx="40" cy="75" r="2" fill="#ff1a1a"/>
+    <circle cx="30" cy="80" r="1.5" fill="#c10000"/>
+    <circle cx="150" cy="95" r="1" fill="#ff1a1a"/>
+    <circle cx="140" cy="85" r="2.5" fill="#990000"/>
+    <circle cx="75" cy="85" r="2" fill="#990000"/>
+    <circle cx="95" cy="85" r="1.5" fill="#990000"/>
+  </g>
+</svg>

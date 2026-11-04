@@ -1,0 +1,63 @@
+<svg width="180" height="180" viewBox="0 0 180 180" xmlns="http://www.w3.org/2000/svg">
+  <!-- Outer Frame -->
+  <polygon points="2,2 178,2 178,58 58,58 58,178 2,178" fill="#f5f5f5" stroke="#111111" stroke-width="2.5" stroke-linejoin="miter" />
+  <polygon points="6,6 174,6 174,54 54,54 54,174 6,174" fill="none" stroke="#666666" stroke-width="1" />
+  
+  <!-- Backsplash -->
+  <rect x="2" y="2" width="176" height="4" fill="#e0e0e0" stroke="#111111" stroke-width="1.5" />
+  <rect x="2" y="2" width="4" height="176" fill="#e0e0e0" stroke="#111111" stroke-width="1.5" />
+
+  <!-- Sink Area on Horizontal Arm -->
+  <g id="sink" transform="translate(80, 10)">
+    <rect x="0" y="0" width="60" height="42" rx="4" fill="#e8e8e8" stroke="#333333" stroke-width="2" />
+    <!-- Double basin -->
+    <rect x="3" y="6" width="25" height="33" rx="3" fill="none" stroke="#555555" stroke-width="1.5" />
+    <rect x="32" y="6" width="25" height="33" rx="3" fill="none" stroke="#555555" stroke-width="1.5" />
+    
+    <!-- Drains -->
+    <circle cx="15.5" cy="22" r="2.5" fill="#666666" />
+    <circle cx="44.5" cy="22" r="2.5" fill="#666666" />
+    
+    <!-- Faucet Base -->
+    <rect x="22" y="1" width="16" height="4" rx="2" fill="#888888" stroke="#333333" stroke-width="1" />
+    <!-- Faucet Spout -->
+    <path d="M 30 3 L 30 16" stroke="#444444" stroke-width="3" stroke-linecap="round" />
+    <path d="M 30 16 Q 30 18 28 18" stroke="#444444" stroke-width="3" stroke-linecap="round" fill="none" />
+    <!-- Handles -->
+    <circle cx="18" cy="3" r="2" fill="#cccccc" stroke="#333333" stroke-width="1" />
+    <circle cx="42" cy="3" r="2" fill="#cccccc" stroke="#333333" stroke-width="1" />
+  </g>
+
+  <!-- Cooktop Area on Vertical Arm -->
+  <!-- We'll rotate the cooktop 90 degrees or just draw it vertical -->
+  <g id="cooktop" transform="translate(8, 90)">
+    <rect x="0" y="0" width="44" height="50" rx="2" fill="#2a2a2a" stroke="#111111" stroke-width="2" />
+    
+    <!-- Burners -->
+    <circle cx="12" cy="14" r="7" fill="none" stroke="#dddddd" stroke-width="1.5" />
+    <circle cx="30" cy="14" r="5" fill="none" stroke="#dddddd" stroke-width="1.5" />
+    <circle cx="12" cy="36" r="5" fill="none" stroke="#dddddd" stroke-width="1.5" />
+    <circle cx="30" cy="36" r="7" fill="none" stroke="#dddddd" stroke-width="1.5" />
+    
+    <!-- Burner Inner Rings (Subtle Glow) -->
+    <circle cx="12" cy="14" r="3" fill="#ff4400" />
+    <circle cx="30" cy="36" r="3" fill="#ff4400" />
+    
+    <!-- Control Panel -->
+    <line x1="38" y1="0" x2="38" y2="50" stroke="#444444" stroke-width="1" />
+    <circle cx="41" cy="8" r="1.5" fill="#cccccc" />
+    <circle cx="41" cy="18" r="1.5" fill="#cccccc" />
+    <circle cx="41" cy="32" r="1.5" fill="#cccccc" />
+    <circle cx="41" cy="42" r="1.5" fill="#cccccc" />
+  </g>
+
+  <!-- Cabinet dividers -->
+  <line x1="70" y1="58" x2="70" y2="54" stroke="#111111" stroke-width="2" />
+  <line x1="150" y1="58" x2="150" y2="54" stroke="#111111" stroke-width="2" />
+  <line x1="58" y1="80" x2="54" y2="80" stroke="#111111" stroke-width="2" />
+  <line x1="58" y1="150" x2="54" y2="150" stroke="#111111" stroke-width="2" />
+  <!-- Corner divider -->
+  <line x1="2" y1="58" x2="58" y2="58" stroke="#111111" stroke-width="1" />
+  <line x1="58" y1="2" x2="58" y2="58" stroke="#111111" stroke-width="1" />
+
+</svg>

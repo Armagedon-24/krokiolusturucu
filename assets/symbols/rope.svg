@@ -1,0 +1,5 @@
+<svg width="10" height="200" viewBox="0 0 10 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect x="3" y="0" width="4" height="200" fill="#795548"/>
+  <!-- Texture for rope -->
+  <path d="M3 10 L7 20 M3 30 L7 40 M3 50 L7 60 M3 70 L7 80 M3 90 L7 100 M3 110 L7 120 M3 130 L7 140 M3 150 L7 160 M3 170 L7 180 M3 190 L7 200" stroke="#5D4037" stroke-width="1"/>
+</svg>
