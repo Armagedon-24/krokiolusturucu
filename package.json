@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:pages": "tsc -b && vite build --base=/krokiolusturucu/",
     "lint": "eslint .",
     "preview": "vite preview",
     "electron:build": "vite build && node scripts/patch-electron-builder-wine.cjs && electron-builder --win",

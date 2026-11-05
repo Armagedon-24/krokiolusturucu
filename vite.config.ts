@@ -3,7 +3,13 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
+// DEPLOY TABANI: GitHub Pages alt dizinde (/krokiolusturucu/) "npm run build:pages" ile;
+// kök dağıtım (Vercel) varsayılan '/' ile derlenir. withBase() tüketim katmanı runtime
+// yollarını aynı tabana göre çözer (src/utils/assetMigration.ts).
+const BASE = process.env.VITE_BASE || '/';
+
 export default defineConfig({
+  base: BASE,
   plugins: [
     react(),
     VitePWA({
