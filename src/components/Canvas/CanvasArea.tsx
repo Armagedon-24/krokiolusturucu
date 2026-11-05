@@ -80,15 +80,35 @@ const useSmartImage = (src: string | undefined) => {
 // Ayna (scaleX/scaleY === -1) ofseti çağıran taraf uygular; bu fonksiyon node
 // orijinine translate edilmiş bağlamda çizer.
 // ─────────────────────────────────────────────────────────────────────────────
-const drawArrowHeadExport = (ctx: CanvasRenderingContext2D, fromX: number, fromY: number, toX: number, toY: number, headLen: number) => {
+// ═══ AÇIK CHEVRON OK UCU (st-5 tarzı) ═══
+// Kullanıcı isteği: a-4 (Mesafe Oku) ve a-5 (Ok) uçlarındaki İÇİ DOLU üçgen
+// başlar kaldırıldı; her iki sembolün ucu artık st-5 yol yön okundaki gibi
+// İÇİ BOŞ (stroke-only) chevron. Ekran (Konva Line) ve export
+// (drawArrowHeadExport) aynı geometriyi paylaşır; headLen ('arrowHead')
+// resize'da orantılı büyüyüp küçülmeye devam eder.
+const ARROW_CHEVRON_SPREAD = Math.PI / 7;
+const chevronHeadPoints = (fromX: number, fromY: number, toX: number, toY: number, headLen: number, spread: number = ARROW_CHEVRON_SPREAD): number[] => {
   const angle = Math.atan2(toY - fromY, toX - fromX);
-  const spread = Math.PI / 7;
+  return [
+    toX - headLen * Math.cos(angle - spread), toY - headLen * Math.sin(angle - spread),
+    toX, toY,
+    toX - headLen * Math.cos(angle + spread), toY - headLen * Math.sin(angle + spread),
+  ];
+};
+
+const drawArrowHeadExport = (ctx: CanvasRenderingContext2D, fromX: number, fromY: number, toX: number, toY: number, headLen: number, openChevron: boolean = false) => {
+  const p = chevronHeadPoints(fromX, fromY, toX, toY, headLen);
   ctx.beginPath();
-  ctx.moveTo(toX, toY);
-  ctx.lineTo(toX - headLen * Math.cos(angle - spread), toY - headLen * Math.sin(angle - spread));
-  ctx.lineTo(toX - headLen * Math.cos(angle + spread), toY - headLen * Math.sin(angle + spread));
-  ctx.closePath();
-  ctx.fill();
+  ctx.moveTo(p[0], p[1]);
+  ctx.lineTo(p[2], p[3]);
+  ctx.lineTo(p[4], p[5]);
+  if (openChevron) {
+    // st-5 tarzı açık baş: dolgusuz, yuvarlak uçlu iki çizgi
+    ctx.stroke();
+  } else {
+    ctx.closePath();
+    ctx.fill();
+  }
 };
 
 // ═══ OK MOTORU — ORANTILI BAŞ ÖLÇEĞİ ═══
@@ -1077,9 +1097,11 @@ export const drawExportObject = (ctx: CanvasRenderingContext2D, obj: any, img: H
     ctx.lineWidth = isMeasurement ? 5 : (obj.strokeWidth || 5);
     ctx.lineCap = 'round';
     ctx.beginPath(); ctx.moveTo(pts[0], pts[1]); ctx.lineTo(pts[2], pts[3]); ctx.stroke();
+    ctx.lineJoin = 'round';
     const arrowHeadLen = obj.arrowHead || 12; // resize'da orantılı büyüyen/küçülen baş
-    drawArrowHeadExport(ctx, pts[0], pts[1], pts[2], pts[3], arrowHeadLen);
-    if (isMeasurement) drawArrowHeadExport(ctx, pts[2], pts[3], pts[0], pts[1], arrowHeadLen);
+    // st-5 tarzı AÇIK chevron uçlar (içi dolu üçgen değil)
+    drawArrowHeadExport(ctx, pts[0], pts[1], pts[2], pts[3], arrowHeadLen, true);
+    if (isMeasurement) drawArrowHeadExport(ctx, pts[2], pts[3], pts[0], pts[1], arrowHeadLen, true);
     return;
   }
 
@@ -2170,22 +2192,46 @@ const IndividualObject = ({
               
             const isMeasurement = shapeProps.isDistanceArrow || shapeProps.symbolId === 'a-4';
 
+            const headLen = shapeProps.arrowHead || ARROW_HEAD_DEFAULT;
+            const arrowColor = isMeasurement ? '#000000' : (shapeProps.stroke || shapeProps.fill || '#000000');
+            const arrowWidth = isMeasurement ? 5 : (shapeProps.strokeWidth || 5);
             return (
-              <Arrow
-                points={pts}
-                pointerLength={shapeProps.arrowHead || 12}
-                pointerWidth={shapeProps.arrowHead || 12}
-                fill={isMeasurement ? "#000000" : (shapeProps.fill || "#000000")}
-                stroke={isMeasurement ? "#000000" : (shapeProps.stroke || "#000000")}
-                strokeWidth={isMeasurement ? 5 : (shapeProps.strokeWidth || 5)}
-                pointerAtBeginning={isMeasurement}
-                pointerAtEnding={true}
-                lineCap="round"
-                lineJoin="round"
-                opacity={1}
-                perfectDrawEnabled={false}
-                draggable={false}
-              />
+              <Group>
+                {/* Gövde çizgisi */}
+                <Line
+                  points={pts}
+                  stroke={arrowColor}
+                  strokeWidth={arrowWidth}
+                  lineCap="round"
+                  opacity={1}
+                  perfectDrawEnabled={false}
+                  draggable={false}
+                />
+                {/* Uç başı — st-5 tarzı İÇİ BOŞ chevron (dolu üçgen değil);
+                    headLen resize'da orantılı büyüyüp küçülür (OK MOTORU) */}
+                <Line
+                  points={chevronHeadPoints(pts[0], pts[1], pts[2], pts[3], headLen)}
+                  stroke={arrowColor}
+                  strokeWidth={arrowWidth}
+                  lineCap="round"
+                  lineJoin="round"
+                  opacity={1}
+                  perfectDrawEnabled={false}
+                  draggable={false}
+                />
+                {isMeasurement && (
+                  <Line
+                    points={chevronHeadPoints(pts[2], pts[3], pts[0], pts[1], headLen)}
+                    stroke={arrowColor}
+                    strokeWidth={arrowWidth}
+                    lineCap="round"
+                    lineJoin="round"
+                    opacity={1}
+                    perfectDrawEnabled={false}
+                    draggable={false}
+                  />
+                )}
+              </Group>
             );
           })()
         ) : ['arch-6', 'arch-6-v4', 'arch-6l', 'arch-6l-v4', 'arch-6u', 'arch-6u-v4', 'arch-6s', 'arch-6sf', 'arch-6-spiral-f', 'arch-6-spiral-s', 'arch-6-spiral-s-top', 'arch-w-square'].includes(shapeProps.symbolId || '') ? (
@@ -3860,17 +3906,32 @@ const IndividualObject = ({
             />
           </Group>
         ) : shapeProps.symbolId === 'a-4' ? (
-          <Arrow
-            points={[0, shapeProps.height / 2, shapeProps.width, shapeProps.height / 2]}
-            stroke="#000000"
-            fill="#000000"
-            strokeWidth={3}
-            pointerLength={shapeProps.arrowHead || 10}
-            pointerWidth={shapeProps.arrowHead || 10}
-            pointerAtBeginning={true}
-            pointerAtEnding={true}
-            opacity={1}
-          />
+          <Group>
+            <Line
+              points={[0, shapeProps.height / 2, shapeProps.width, shapeProps.height / 2]}
+              stroke="#000000"
+              strokeWidth={3}
+              lineCap="round"
+              opacity={1}
+            />
+            {/* st-5 tarzı İÇİ BOŞ chevron uçlar (dolu üçgen değil) */}
+            <Line
+              points={chevronHeadPoints(0, shapeProps.height / 2, shapeProps.width, shapeProps.height / 2, shapeProps.arrowHead || 10)}
+              stroke="#000000"
+              strokeWidth={3}
+              lineCap="round"
+              lineJoin="round"
+              opacity={1}
+            />
+            <Line
+              points={chevronHeadPoints(shapeProps.width, shapeProps.height / 2, 0, shapeProps.height / 2, shapeProps.arrowHead || 10)}
+              stroke="#000000"
+              strokeWidth={3}
+              lineCap="round"
+              lineJoin="round"
+              opacity={1}
+            />
+          </Group>
         ) : effectiveTileMode !== 'stretch' && image ? (
           // UZATMA MOTORU v4 (ekran) — desen tekrarı: uzatınca desen bozulmaz.
           // composedStrip varsa KAPAK+KESİT kompoziti (uçlar sabit, orta bant tekrar);

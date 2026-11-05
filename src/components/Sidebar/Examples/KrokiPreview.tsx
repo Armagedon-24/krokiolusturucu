@@ -255,11 +255,12 @@ export const KrokiPreview: React.FC<KrokiPreviewProps> = ({ scenario, width = 33
         viewBox={`0 0 ${cw} ${height}`}
       >
         <defs>
-          <marker id="kroki-prev-arr" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto">
-            <path d="M0,0 L5,2.5 L0,5 Z" fill="#000" />
+          {/* st-5 tarzı İÇİ BOŞ chevron uçlar (dolu üçgen marker değil) */}
+          <marker id="kroki-prev-arr" markerWidth="6" markerHeight="6" refX="4.4" refY="3" orient="auto">
+            <path d="M1.4,0.9 L4.6,3 L1.4,5.1" fill="none" stroke="#000" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round" />
           </marker>
-          <marker id="kroki-prev-arr-start" markerWidth="5" markerHeight="5" refX="1" refY="2.5" orient="auto">
-            <path d="M5,0 L0,2.5 L5,5 Z" fill="#000" />
+          <marker id="kroki-prev-arr-start" markerWidth="6" markerHeight="6" refX="1.6" refY="3" orient="auto">
+            <path d="M4.6,0.9 L1.4,3 L4.6,5.1" fill="none" stroke="#000" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round" />
           </marker>
         </defs>
         {arrows.map((o) => {
