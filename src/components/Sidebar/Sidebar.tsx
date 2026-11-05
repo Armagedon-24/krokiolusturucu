@@ -103,6 +103,7 @@ export const Sidebar: React.FC = () => {
     recoverCloudinaryImages,
     refreshSymbols,
     renameSymbol,
+    updateSymbolGroup,
   } = useStore();
 
   useEffect(() => {
@@ -132,6 +133,27 @@ export const Sidebar: React.FC = () => {
     setRenamingId(null);
     if (next && next !== fallbackName) {
       renameSymbol(catId, id, next);
+    }
+  };
+
+  // ALT KATEGORİ (GRUP) DÜZENLEME: ayar (çark) ikonuyla açılan satır içi düzenleme.
+  // Hazır semboller dahil tüm sembollerin alt kategori etiketi buradan değiştirilir;
+  // boş bırakılırsa sembol DİĞER başlığına döner. Admin oturumunda buluta senkronlanır.
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+  const [groupEditValue, setGroupEditValue] = useState('');
+
+  const startGroupEdit = (e: React.MouseEvent, id: string, currentGroup?: string) => {
+    e.stopPropagation();
+    setEditingGroupId(id);
+    setGroupEditValue(currentGroup || '');
+  };
+
+  const commitGroupEdit = (catId: string, id: string, currentGroup?: string) => {
+    if (editingGroupId !== id) return; // Enter sonrası blur çift tetiklenmesin
+    const next = groupEditValue.trim();
+    setEditingGroupId(null);
+    if (next !== (currentGroup || '').trim()) {
+      updateSymbolGroup(catId, id, next);
     }
   };
 
@@ -538,6 +560,15 @@ export const Sidebar: React.FC = () => {
                           </div>
                         )}
                       </div>
+                      {/* Alt kategori düzenleyici önerileri: kategorideki mevcut grup adları */}
+                      <datalist id={`groups-edit-${cat.id}`}>
+                        {(() => {
+                          const existingGroups = new Set<string>();
+                          cat.symbols.forEach((s: any) => { if ((s.group || '').trim()) existingGroups.add(s.group.trim()); });
+                          catUploads.forEach((img: any) => { if ((img.group || '').trim()) existingGroups.add(img.group.trim()); });
+                          return Array.from(existingGroups).map((g) => <option key={g} value={g} />);
+                        })()}
+                      </datalist>
                       <div className="space-y-6">
                         {(() => {
                           const groups: Record<string, any[]> = {};
@@ -644,7 +675,27 @@ export const Sidebar: React.FC = () => {
                                     
                                     {/* Name Area - Larger and Brighter */}
                                     <div className="w-full flex-1 flex items-start justify-center mt-1.5 px-0.5 min-h-[2.2em]">
-                                      {renamingId === item.id ? (
+                                      {editingGroupId === item.id ? (
+                                        <input
+                                          type="text"
+                                          value={groupEditValue}
+                                          onChange={(e) => setGroupEditValue(e.target.value)}
+                                          onClick={(e) => e.stopPropagation()}
+                                          onDoubleClick={(e) => e.stopPropagation()}
+                                          onMouseDown={(e) => e.stopPropagation()}
+                                          draggable={false}
+                                          onKeyDown={(e) => {
+                                            if (e.key === 'Enter') commitGroupEdit(cat.id, item.id, item.group);
+                                            if (e.key === 'Escape') setEditingGroupId(null);
+                                          }}
+                                          onBlur={() => commitGroupEdit(cat.id, item.id, item.group)}
+                                          autoFocus
+                                          list={`groups-edit-${cat.id}`}
+                                          placeholder="Alt kategori (DİĞER için boş)"
+                                          className="w-full text-[10px] font-bold bg-[#111] border border-[#F5C518]/60 text-white rounded px-1 py-0.5 outline-none text-center"
+                                          aria-label="Alt kategori (grup) düzenle"
+                                        />
+                                      ) : renamingId === item.id ? (
                                         <input
                                           type="text"
                                           value={renameValue}
@@ -698,19 +749,24 @@ export const Sidebar: React.FC = () => {
 
                                     {isAdmin && (
                                       <div className="absolute -top-1.5 -right-1.5 flex gap-1 opacity-0 group-hover:opacity-100 transition-all z-20">
-                                        {item.isUpload && (
-                                          <button
-                                            onClick={(e) => {
-                                              e.stopPropagation();
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (item.isUpload) {
+                                              // Yüklenen görseller uploads sekmesindeki tam editörde düzenlenir
                                               setActiveTab('uploads');
                                               setEditingImageId(item.id);
-                                            }}
-                                            className="bg-[#222] text-gray-500 hover:text-[#F5C518] rounded-full border border-white/10 p-1 hover:scale-110 shadow-xl"
-                                            title="Kategoriyi Düzenle"
-                                          >
-                                            <Settings2 size={10} />
-                                          </button>
-                                        )}
+                                            } else {
+                                              // Hazır semboller: satır içi alt kategori düzenleyici
+                                              startGroupEdit(e, item.id, item.group);
+                                            }
+                                          }}
+                                          onDoubleClick={(e) => e.stopPropagation()}
+                                          className="bg-[#222] text-gray-500 hover:text-[#F5C518] rounded-full border border-white/10 p-1 hover:scale-110 shadow-xl"
+                                          title={item.isUpload ? 'Kategoriyi Düzenle' : 'Alt Kategori Düzenle'}
+                                        >
+                                          <Settings2 size={10} />
+                                        </button>
                                         <button
                                           onClick={(e) => startRename(e, item.id, item.name)}
                                           onDoubleClick={(e) => e.stopPropagation()}
