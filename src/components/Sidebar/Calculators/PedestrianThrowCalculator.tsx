@@ -36,7 +36,7 @@ export const PedestrianThrowCalculator: React.FC = () => {
   const [vMax, setVMax] = useState<number>(0);
   const [vMid, setVMid] = useState<number>(0);
 
-  const { addObject, addNotification } = useStore();
+  const { addObject } = useStore();
 
   useEffect(() => {
     if (distance > 0 && mu > 0 && height > 0) {
@@ -119,7 +119,6 @@ export const PedestrianThrowCalculator: React.FC = () => {
       fontFamily: 'Inter',
       fontStyle: 'bold',
     });
-    addNotification({ type: 'success', message: 'Kısa özet tuvale aktarıldı' });
   };
 
   const inputCls = 'w-full bg-[#111] border border-[#333] rounded-xl px-4 py-3 text-sm text-white focus:border-[#F5C518]/50 outline-none transition-all font-mono';

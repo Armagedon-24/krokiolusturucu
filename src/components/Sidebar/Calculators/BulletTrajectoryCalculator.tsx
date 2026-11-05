@@ -47,7 +47,7 @@ export const BulletTrajectoryCalculator: React.FC = () => {
   const [bulletDrop, setBulletDrop] = useState<number>(0);
   const [flightTime, setFlightTime] = useState<number>(0);
 
-  const { addObject, addNotification } = useStore();
+  const { addObject } = useStore();
 
   useEffect(() => {
     const v0 = ammo.v0;
@@ -302,7 +302,6 @@ export const BulletTrajectoryCalculator: React.FC = () => {
       fontFamily: 'Inter',
       fontStyle: 'bold',
     });
-    addNotification({ type: 'success', message: 'Kısa özet tuvale aktarıldı' });
   };
 
   const inputCls = 'w-full bg-[#111] border border-[#333] rounded-xl px-4 py-3 text-sm text-white focus:border-[#F5C518]/50 outline-none transition-all font-mono';

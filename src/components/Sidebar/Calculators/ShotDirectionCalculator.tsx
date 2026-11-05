@@ -46,7 +46,7 @@ export const ShotDirectionCalculator: React.FC = () => {
   const [deflectionAngle, setDeflectionAngle] = useState(0);
   const [trajectoryLength, setTrajectoryLength] = useState(0);
 
-  const { addObject, setShotDirection, addNotification } = useStore();
+  const { addObject, setShotDirection } = useStore();
 
   useEffect(() => {
     const dx = exitX - entryX;
@@ -162,7 +162,6 @@ export const ShotDirectionCalculator: React.FC = () => {
       fontFamily: 'Inter',
       fontStyle: 'bold',
     });
-    addNotification({ type: 'success', message: 'Kısa özet tuvale aktarıldı' });
   };
 
   const handleAnimationOpen = () => {

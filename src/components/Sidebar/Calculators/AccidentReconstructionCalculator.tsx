@@ -69,7 +69,7 @@ export const AccidentReconstructionCalculator: React.FC = () => {
     setAccidentVehicle, setAccidentAnimation,
     accidentAnimation, resetAccidentReconstruction,
     addPedestrian, updatePedestrian, removePedestrian,
-    addObject, showConfirm, addNotification,
+    addObject, showConfirm,
   } = useStore();
 
   const [activeVehicleTab, setActiveVehicleTab] = useState<0 | 1>(0);
@@ -185,7 +185,6 @@ export const AccidentReconstructionCalculator: React.FC = () => {
       fontFamily: 'Inter',
       fontStyle: 'bold',
     });
-    addNotification({ type: 'success', message: 'Kısa özet tuvale aktarıldı' });
   };
 
   return (

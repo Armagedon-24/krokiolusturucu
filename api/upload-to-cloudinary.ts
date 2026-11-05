@@ -1,4 +1,4 @@
-import { VercelRequest, VercelResponse } from '@vercel/node';
+import type { VercelRequest, VercelResponse } from './_vercel-shim';
 import crypto from 'crypto';
 import { verifyAuth } from './_auth.js';
 

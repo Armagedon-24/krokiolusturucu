@@ -26,7 +26,7 @@ export const FrictionTableCalculator: React.FC = () => {
 
   const surface = FRICTION_TABLE.find((s) => s.id === surfaceId)!;
 
-  const { addObject, addNotification } = useStore();
+  const { addObject } = useStore();
 
   const selectSurface = (id: string) => {
     setSurfaceId(id);
@@ -98,7 +98,6 @@ export const FrictionTableCalculator: React.FC = () => {
       fontFamily: 'Inter',
       fontStyle: 'bold',
     });
-    addNotification({ type: 'success', message: 'Kısa özet tuvale aktarıldı' });
   };
 
   const inputCls = 'w-full bg-[#111] border border-[#333] rounded-xl px-4 py-3 text-sm text-white focus:border-[#F5C518]/50 outline-none transition-all font-mono';

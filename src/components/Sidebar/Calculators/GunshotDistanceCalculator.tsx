@@ -25,7 +25,7 @@ export const GunshotDistanceCalculator: React.FC = () => {
   const [estimatedDistance, setEstimatedDistance] = useState<string>('Belirsiz');
   const [classification, setClassification] = useState<string>('Bulgu Seçiniz');
 
-  const { addObject, addNotification } = useStore();
+  const { addObject } = useStore();
 
   useEffect(() => {
     if (weaponType === 'shotgun') {
@@ -126,7 +126,6 @@ export const GunshotDistanceCalculator: React.FC = () => {
       fontFamily: 'Inter',
       fontStyle: 'bold',
     });
-    addNotification({ type: 'success', message: 'Kısa özet tuvale aktarıldı' });
   };
 
   return (

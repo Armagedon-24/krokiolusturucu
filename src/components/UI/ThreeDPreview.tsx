@@ -505,7 +505,7 @@ const ShootingTrajectory3D = ({ obj, allWalls, visualObjects, uploadedImages }: 
 
   // Stable texture sources — never change between renders to preserve hook order
   const GLASS_TEX_SRC = '/assets/symbols/bullet_hole_1.png';
-  const WALL_TEX_SRC_DEFAULT = '/assets/symbols/bullet_hole_2.png';
+  const WALL_TEX_SRC_DEFAULT = '/assets/symbols/bullet_hole_2.webp';
 
   const glassTex = useTexture(GLASS_TEX_SRC) as THREE.Texture;
   // Always load static wall texture - hook must always be called with the same arg
@@ -1301,7 +1301,7 @@ const Symbol3D = ({ obj, wallThickness, realObj, allWalls, visualObjects, upload
     const wallDef = flatSymbols.find((s: any) => s.id === 'tr-bullet-wall');
 
     const pngSrc = sIdLower === 'tr-bullet-wall'
-      ? ((isabetIziImg?.src && typeof isabetIziImg.src === 'string' && isabetIziImg.src.trim() !== '') ? isabetIziImg.src : (wallDef?.src || '/assets/symbols/bullet_hole_2.png'))
+      ? ((isabetIziImg?.src && typeof isabetIziImg.src === 'string' && isabetIziImg.src.trim() !== '') ? isabetIziImg.src : (wallDef?.src || '/assets/symbols/bullet_hole_2.webp'))
       : (glassDef?.src || '/assets/symbols/bullet_hole_1.png');
     return (
       <GlassImpact3D
@@ -4562,7 +4562,7 @@ const CameraPresets = ({ preset }: { preset: string | null }) => {
 };
 
 export const ThreeDPreview: React.FC<ThreeDPreviewProps> = ({ isOpen, onClose }) => {
-  const { objects, updateObject, addNotification } = useStore();
+  const { objects, updateObject } = useStore();
   const [viewMode, setViewMode] = useState<'orbit' | 'walk'>('orbit');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [cameraPreset] = useState<string | null>(null);
@@ -4602,11 +4602,6 @@ export const ThreeDPreview: React.FC<ThreeDPreviewProps> = ({ isOpen, onClose })
           timestamp: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
         }
       ]);
-      addNotification({
-        type: 'success',
-        message: 'Fotoğraf Çekildi',
-        description: 'Olay yeri fotoğrafı başarıyla kaydedildi ve medyalarım albümüne eklendi.'
-      });
     } catch (err) {
       console.error("Screenshot error:", err);
     }
@@ -4648,11 +4643,6 @@ export const ThreeDPreview: React.FC<ThreeDPreviewProps> = ({ isOpen, onClose })
             timestamp: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
           }
         ]);
-        addNotification({
-          type: 'success',
-          message: 'Video Kaydedildi',
-          description: 'Olay yeri gezi videosu başarıyla albüme kaydedildi.'
-        });
       };
 
       mediaRecorder.start();

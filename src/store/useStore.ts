@@ -6,6 +6,18 @@ import { SYMBOL_CATEGORIES } from '../constants/symbols';
 import { createKrokiTemplate, createDiagramTemplate } from '../constants/templates';
 import { buildScenarioObjects, type KrokiScenario } from '../data/krokiScenarios';
 import { cloudinary as cloud, publicIdFromUrl, normKey, mapCloudCategoryToId } from '../lib/cloudinary';
+import { migrateLegacyAssetUrl } from '../utils/assetMigration';
+
+/** Nesne listesindeki eski .png varlık yollarını .webp sürümüne taşır (yerinde). */
+function migrateObjectAssetUrls(objects: unknown): unknown {
+  if (!Array.isArray(objects)) return objects;
+  for (const obj of objects) {
+    if (obj && typeof obj === 'object' && typeof (obj as { src?: unknown }).src === 'string') {
+      (obj as { src: string }).src = migrateLegacyAssetUrl((obj as { src: string }).src);
+    }
+  }
+  return objects;
+}
 
 const TODAY = new Date().toISOString().split('T')[0];
 const DEFAULT_DRAWING_AREA = { x: 17, y: 167, width: 966, height: 1126 } as const;
@@ -718,11 +730,6 @@ export const useStore = create<StoreState>()(
 
         if (isAdmin) {
           get().syncToCloud(true);
-          get().addNotification({
-            type: 'info',
-            message: 'Görsel Silindi',
-            description: 'Görsel kütüphaneden ve bulut deposundan kalıcı olarak kaldırıldı.'
-          });
         }
       },
 
@@ -913,7 +920,7 @@ export const useStore = create<StoreState>()(
         if (!data) return;
         
         set({
-          objects: data.objects || [],
+          objects: migrateObjectAssetUrls(data.objects || []) as CanvasObject[],
           backgroundImage: data.backgroundImage || null,
           backgroundTransform: { x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0 },
           backgroundOpacity: data.backgroundOpacity ?? 1,
@@ -1131,11 +1138,6 @@ export const useStore = create<StoreState>()(
           symbolUsage: state.symbolUsage,
         }));
 
-        get().addNotification({
-          type: 'success',
-          message: 'Örnek Olay Krokisi Yüklendi',
-          description: `"${scenario.title}" tuvale aktarıldı. Tüm nesneleri seçip sürükleyebilir, ölçekleyebilir ve yeni nesneler ekleyebilirsiniz.`,
-        });
       },
 
       removeSymbol: async (catId, symbolId) => {
@@ -1287,11 +1289,6 @@ export const useStore = create<StoreState>()(
           );
           
           if (!silent) {
-            get().addNotification({
-              type: 'success',
-              message: '☁️ Bulut Senkronizasyonu Tamamlandı',
-              description: `Kütüphane ve çalışma durumu başarıyla buluta kaydedildi.`
-            });
           }
           // Bulut artık güncel: yerel yerleşim damgasıyla aynı tazelikte.
           // Bundan sonra çakışmada bulut yerleşimi öncelik kazanır.
@@ -1333,11 +1330,6 @@ export const useStore = create<StoreState>()(
           
           if (!data) {
             if (!silent) {
-              get().addNotification({
-                type: 'info',
-                message: 'Bulut Boş',
-                description: 'Henüz buluta kaydedilmiş bir yapılandırma bulunamadı.'
-              });
             }
             return false;
           }
@@ -1504,11 +1496,6 @@ export const useStore = create<StoreState>()(
           set({ allSymbolsSyncedAt: Date.now() });
 
           if (!silent) {
-            get().addNotification({
-              type: 'success',
-              message: 'Geri Yükleme Başarılı',
-              description: 'Bulut verileri yerel verilerle başarıyla birleştirildi.'
-            });
           }
           
           return true;
@@ -1723,11 +1710,6 @@ export const useStore = create<StoreState>()(
         const { isAdmin, uploadedImages } = get();
         if (!isAdmin) return;
 
-        get().addNotification({ 
-          type: 'info', 
-          message: 'Bulut Taraması', 
-          description: 'Cloudinary üzerindeki tüm fiziksel görseller taranıyor (84+)...' 
-        });
 
         try {
           const response = await fetch('/api/list-cloudinary', {
@@ -1808,17 +1790,7 @@ export const useStore = create<StoreState>()(
           if (recoveredCount > 0) {
             set({ uploadedImages: newImages });
             get().syncToCloud(true);
-            get().addNotification({
-              type: 'success',
-              message: 'Tarama Tamamlandı',
-              description: `${recoveredCount} adet eksik görsel bulut deposundan kurtarılarak kütüphaneye eklendi.`
-            });
           } else {
-            get().addNotification({
-              type: 'info',
-              message: 'Tarama Sonucu',
-              description: 'Tüm bulut görselleri zaten kütüphanenizde mevcut.'
-            });
           }
         } catch (error: unknown) {
           console.error('Recovery Error:', error);
@@ -1857,11 +1829,6 @@ export const useStore = create<StoreState>()(
                 }
               });
 
-              get().addNotification({
-                type: 'success',
-                message: 'Bulut Temizlendi',
-                description: 'Bulut üzerindeki tüm veriler sıfırlandı ve kütüphane varsayılan ayarlara döndürüldü.'
-              });
             } catch (error: unknown) {
               console.error('Cloud Clear Error:', error);
               get().addNotification({
@@ -1994,11 +1961,6 @@ export const useStore = create<StoreState>()(
           console.error('Scene deletion sync failed:', error);
         }
 
-        get().addNotification({
-          type: 'success',
-          message: 'Belge Silindi',
-          description: 'Çizim/kroki arşivden başarıyla silindi.'
-        });
       },
 
       updateSceneName: (id, name) => {
@@ -2319,6 +2281,10 @@ export const useStore = create<StoreState>()(
           // Template frames are regenerated dynamically by applyTemplate/switchScene.
           const activeScene = (state.scenes || []).find((s: any) => s.id === state.activeSceneId) || state.scenes?.[0];
           if (activeScene && Array.isArray(activeScene.objects)) {
+            // PNG→WebP varlık migrasyonu: eski kayıtlı sahnelerdeki .png yolları taşınır
+            for (const scene of [...(state.scenes || []), ...(state.archiveScenes || [])]) {
+              if (scene && Array.isArray(scene.objects)) migrateObjectAssetUrls(scene.objects);
+            }
             // Filter out pure template objects — keep user objects and corporate-logo
             const userObjects = activeScene.objects.filter(
               (obj: any) => !obj.isTemplate || obj.id === 'corporate-logo' || obj.id?.startsWith('logo-')

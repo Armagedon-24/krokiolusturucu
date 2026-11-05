@@ -21,7 +21,7 @@ export const SightDistanceCalculator: React.FC = () => {
   const [available, setAvailable] = useState<number>(0); // ölçülen mevcut görüş mesafesi (0 = yok)
   const [mu, setMu] = useState<number>(0.7); // SSD için
 
-  const { addObject, addNotification } = useStore();
+  const { addObject } = useStore();
 
   const calc = useMemo(() => {
     const m = MANEUVERS.find((x) => x.id === maneuver)!;
@@ -105,7 +105,6 @@ export const SightDistanceCalculator: React.FC = () => {
       fontFamily: 'Inter',
       fontStyle: 'bold',
     });
-    addNotification({ type: 'success', message: 'Kısa özet tuvale aktarıldı' });
   };
   const inputCls = 'w-full bg-[#111] border border-[#333] rounded-xl px-4 py-3 text-sm text-white focus:border-[#F5C518]/50 outline-none transition-all font-mono';
 

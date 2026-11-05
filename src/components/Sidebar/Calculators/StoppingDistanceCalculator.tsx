@@ -29,7 +29,7 @@ export const StoppingDistanceCalculator: React.FC = () => {
   const [grade, setGrade] = useState<number>(0); // % — + yokuş yukarı
   const [obstacle, setObstacle] = useState<number>(0); // opsiyonel: engel/çarpışma noktası uzaklığı
 
-  const { addObject, addNotification } = useStore();
+  const { addObject } = useStore();
 
   const calc = useMemo(() => {
     const v = speed;
@@ -113,7 +113,6 @@ export const StoppingDistanceCalculator: React.FC = () => {
       fontFamily: 'Inter',
       fontStyle: 'bold',
     });
-    addNotification({ type: 'success', message: 'Kısa özet tuvale aktarıldı' });
   };
 
   const inputCls = 'w-full bg-[#111] border border-[#333] rounded-xl px-4 py-3 text-sm text-white focus:border-[#F5C518]/50 outline-none transition-all font-mono';

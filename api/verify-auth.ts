@@ -1,4 +1,4 @@
-import { VercelRequest, VercelResponse } from '@vercel/node';
+import type { VercelRequest, VercelResponse } from './_vercel-shim';
 import { getAuthToken, secretsMatch, isRateLimited, clientIp } from './_auth.js';
 
 /**

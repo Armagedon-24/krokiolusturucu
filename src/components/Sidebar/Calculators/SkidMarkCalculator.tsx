@@ -32,7 +32,7 @@ export const SkidMarkCalculator: React.FC = () => {
   const [speedMax, setSpeedMax] = useState<number>(0);
   const [gradeSpeed, setGradeSpeed] = useState<{ up: number; down: number }>({ up: 0, down: 0 });
   
-  const { addObject, addNotification } = useStore();
+  const { addObject } = useStore();
 
   useEffect(() => {
     setEfficiency(vehicleType.efficiency);
@@ -132,7 +132,6 @@ export const SkidMarkCalculator: React.FC = () => {
       fontFamily: 'Inter',
       fontStyle: 'bold',
     });
-    addNotification({ type: 'success', message: 'Kısa özet tuvale aktarıldı' });
   };
 
   return (

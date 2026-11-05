@@ -121,11 +121,6 @@ export const Sidebar: React.FC = () => {
       if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
       copiedTimerRef.current = setTimeout(() => setCopiedId(null), 1400);
       if (ok) {
-        addNotification({
-          type: 'success',
-          message: 'ID Kopyalandı',
-          description: `"${id}" panoya kopyalandı.`
-        });
       }
     });
   };
@@ -148,11 +143,6 @@ export const Sidebar: React.FC = () => {
           src: compressedSrc,
           name: displayName,
           category: 'uncategorized',
-        });
-        addNotification({
-          type: 'success',
-          message: 'Görsel Yüklendi',
-          description: `"${file.name}" başarıyla sıkıştırılıp sisteme eklendi.`
         });
       } catch (err) {
         console.error('Image optimization error:', err);
@@ -182,11 +172,6 @@ export const Sidebar: React.FC = () => {
           src: compressedSrc,
           name: displayName,
           category: categoryId,
-        });
-        addNotification({
-          type: 'success',
-          message: 'Görsel Yüklendi',
-          description: `"${file.name}" başarıyla sıkıştırılıp sisteme eklendi.`
         });
       } catch (err) {
         console.error('Category upload error:', err);
@@ -285,11 +270,6 @@ export const Sidebar: React.FC = () => {
     setAllSymbols(newAllSymbols);
     useStore.getState().syncToCloud(true);
     
-    addNotification({
-      type: 'info',
-      message: 'Sembol Düzenlendi',
-      description: 'Sıralama başarıyla güncellendi.'
-    });
   };
 
   const filteredSymbols = useMemo(() => {

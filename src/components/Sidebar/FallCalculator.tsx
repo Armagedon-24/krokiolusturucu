@@ -17,7 +17,7 @@ export const FallCalculator: React.FC = () => {
   const [impactEnergy, setImpactEnergy] = useState<number>(0);
   
   const [isAnimationOpen, setIsAnimationOpen] = useState<boolean>(false);
-  const { addObject, setFallAnimation, fallAnimation, addNotification } = useStore();
+  const { addObject, setFallAnimation, fallAnimation } = useStore();
 
   const presets = [
     { label: 'Adım Atma', value: 0.8, description: 'Yavaşça kenardan adım atma' },
@@ -104,7 +104,6 @@ export const FallCalculator: React.FC = () => {
       fontFamily: 'Inter',
       fontStyle: 'bold',
     });
-    addNotification({ type: 'success', message: 'Kısa özet tuvale aktarıldı' });
   };
 
   return (

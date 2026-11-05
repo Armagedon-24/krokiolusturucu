@@ -21,7 +21,7 @@ interface CloudAsset {
 export const CloudGalleryModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const {
     uploadedImages, allSymbols, adminSettings, adminPassword,
-    addUploadedImage, addNotification
+    addUploadedImage
   } = useStore();
 
   const [assets, setAssets] = useState<CloudAsset[] | null>(null);
@@ -154,11 +154,6 @@ export const CloudGalleryModal: React.FC<{ onClose: () => void }> = ({ onClose }
       setSelected(prev => { const n = new Set(prev); n.delete(a.id); return n; });
     }
     setImporting(false);
-    addNotification({
-      type: 'success',
-      message: 'Buluttan Yükleme Tamamlandı',
-      description: `${added} görsel kütüphaneye eklendi${skipped > 0 ? `, ${skipped} mükerrer atlandı` : ''}.`
-    });
     if (added === 0 && skipped === 0) onClose();
   };
 

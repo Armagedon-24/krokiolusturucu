@@ -44,7 +44,7 @@ export const CollisionSpeedCalculator: React.FC = () => {
   const [preSpeed2Min, setPreSpeed2Min] = useState<number>(0);
   const [preSpeed2Max, setPreSpeed2Max] = useState<number>(0);
 
-  const { addObject, addNotification } = useStore();
+  const { addObject } = useStore();
 
   useEffect(() => {
     // 1. Calculate post-impact speeds using skid formula: v' = 15.94 * sqrt(mu * d)
@@ -158,7 +158,6 @@ export const CollisionSpeedCalculator: React.FC = () => {
       fontFamily: 'Inter',
       fontStyle: 'bold',
     });
-    addNotification({ type: 'success', message: 'Kısa özet tuvale aktarıldı' });
   };
 
   return (

@@ -66,11 +66,6 @@ export const Topbar: React.FC = () => {
       try {
         const compressedSrc = await compressAndResizeImage(file, 800, 800, 0.45);
         setBackgroundImage(compressedSrc);
-        addNotification({
-          type: 'success',
-          message: 'Arka Plan Yüklendi',
-          description: 'Seçilen görsel performans için optimize edilerek arka plana yerleştirildi.'
-        });
       } catch (err) {
         console.error('Background image error:', err);
       }
@@ -132,7 +127,6 @@ export const Topbar: React.FC = () => {
             <button onClick={() => {
                 const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
                 if (isLocal) {
-                  addNotification({ type: 'info', message: 'Geliştirme Modu', description: 'Bulut yükleme yalnızca canlı (deploy) ortamda çalışır.' });
                   return;
                 }
                 syncToCloud();
@@ -214,7 +208,7 @@ export const Topbar: React.FC = () => {
 
         {isAdmin && (
           <button 
-            onClick={() => { setIsAdmin(false); addNotification({ type: 'info', message: 'Çıkış Yapıldı', description: 'Yönetici panelinden güvenli bir şekilde çıkış yapıldı.' }); }}
+            onClick={() => { setIsAdmin(false);  }}
             className="p-1.5 text-orange-400 hover:bg-orange-400/10 rounded-md transition-colors border border-orange-400/30"
             title="Yönetici Çıkışı"
             aria-label="Yönetici Çıkışı Yap"
@@ -238,11 +232,6 @@ export const Topbar: React.FC = () => {
           onConfirm={(data) => {
             setBackgroundImage(data.staticMapUrl);
             setBackgroundOpacity(0.7);
-            addNotification({
-              type: 'success',
-              message: 'Uydu Haritası Güncellendi',
-              description: `Yeni konum (${data.address}) başarıyla sisteme işlendi ve uydu görüntüsü arka plana alındı.`
-            });
             setIsMapModalOpen(false);
           }}
         />

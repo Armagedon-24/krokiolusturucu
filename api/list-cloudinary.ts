@@ -1,4 +1,4 @@
-import { VercelRequest, VercelResponse } from '@vercel/node';
+import type { VercelRequest, VercelResponse } from './_vercel-shim';
 import { verifyAuth } from './_auth.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

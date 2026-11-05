@@ -47,11 +47,6 @@ export const EvidencePhotoModal: React.FC<EvidencePhotoModalProps> = ({
         }
       }
       onUpdatePhotos(newPhotoUrls);
-      addNotification({
-        type: 'success',
-        message: 'Fotoğraf Eklendi',
-        description: 'Bulgu fotoğrafları optimize edilerek eklendi.'
-      });
     } catch (error) {
       console.error('Photo upload failed:', error);
       addNotification({

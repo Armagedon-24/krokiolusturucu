@@ -42,7 +42,7 @@ const FONT_REG = 'LiberationSans-Regular.ttf';
 const FONT_BOLD = 'LiberationSans-Bold.ttf';
 const LOGO_URL = `${import.meta.env.BASE_URL}assets/kurum_logo.png`;
 /** Sayfa arkasına basılan içi boş (kontur) ve renksiz filigran. */
-const LOGO_WM_URL = `${import.meta.env.BASE_URL}assets/kurum_logo_filigran_kontur.png`;
+const LOGO_WM_URL = `${import.meta.env.BASE_URL}assets/kurum_logo_filigran_kontur.webp`;
 
 /** Belge başlığı — üst bant, devam sayfaları ve altbilgide ortak. */
 const DOC_TITLE = 'KAZA ANALİZ VE REKONSTRÜKSİYON ANALİZİ';

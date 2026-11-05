@@ -74,7 +74,7 @@ export const ExampleCaseIndex: React.FC = () => {
   const [activeGroupId, setActiveGroupId] = useState(KROKI_CASE_GROUPS[0].id);
   const [activeId, setActiveId] = useState(EXAMPLE_TOPICS[0].id);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const { addObject, addNotification, objects, showConfirm, loadKrokiScenario } = useStore();
+  const { addObject, objects, showConfirm, loadKrokiScenario } = useStore();
 
   const topic = EXAMPLE_TOPICS.find((t) => t.id === activeId) ?? EXAMPLE_TOPICS[0];
   const group = KROKI_CASE_GROUPS.find((g) => g.id === activeGroupId) ?? KROKI_CASE_GROUPS[0];
@@ -93,7 +93,6 @@ export const ExampleCaseIndex: React.FC = () => {
       fontFamily: 'Inter',
       fontStyle: 'bold',
     });
-    addNotification({ type: 'success', message: 'Kısa özet tuvale aktarıldı' });
   };
 
   const handleKrokiTransfer = (sc: KrokiScenario) => {

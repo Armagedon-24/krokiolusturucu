@@ -16,7 +16,7 @@ export const BloodstainCalculator: React.FC = () => {
   const [heightMin, setHeightMin] = useState<number>(0);
   const [heightMax, setHeightMax] = useState<number>(0);
   
-  const { addObject, addNotification } = useStore();
+  const { addObject } = useStore();
 
   useEffect(() => {
     if (width > 0 && length > 0 && width <= length) {
@@ -111,7 +111,6 @@ export const BloodstainCalculator: React.FC = () => {
       fontFamily: 'Inter',
       fontStyle: 'bold',
     });
-    addNotification({ type: 'success', message: 'Kısa özet tuvale aktarıldı' });
   };
 
   return (

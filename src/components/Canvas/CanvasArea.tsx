@@ -25,6 +25,7 @@ import { PedestrianLaunchCanvas } from './PedestrianLaunchCanvas';
 import { PageControlBar } from './PageControlBar';
 import type { CanvasObject } from '../../types';
 import { drawTiledImage, tilePatternParams, SYMBOL_TILE_MODES, getTextureInfo, resolveConcreteTileMode, drawStripCaps, composeStripCanvas } from '../../utils/tiledRender';
+import { migrateLegacyAssetUrl } from '../../utils/assetMigration';
 
 const RemoveWhiteFilter = (imageData: any) => {
   const data = imageData.data;
@@ -52,8 +53,23 @@ const useSmartImage = (src: string | undefined) => {
   // static-maps, Esri World_Imagery) Access-Control-Allow-Origin: * gönderir.
   // ACAO göndermeyen nadir bir kaynakta yükleme 'failed' olursa CORS'suz yeniden
   // denenir — görsel görünür kalır ama kanvas lekelenebilir (eski davranış).
-  const [corsImage, corsStatus] = useImage(src || '', 'anonymous');
-  const [plainImage] = useImage(corsStatus === 'failed' ? (src || '') : '');
+  // PNG→WebP varlık optimizasyonu sonrası eski kayıtlı projelerdeki .png yolları
+  // için: /assets/*.png yüklenemezse bir kez .webp karşılığı denenir.
+  const [webpRetrySrc, setWebpRetrySrc] = useState<string | null>(null);
+  const migrated = migrateLegacyAssetUrl(src);
+  const effective = webpRetrySrc || migrated || '';
+  const [corsImage, corsStatus] = useImage(effective, 'anonymous');
+  const [plainImage] = useImage(corsStatus === 'failed' ? effective : '');
+  useEffect(() => {
+    if (
+      corsStatus === 'failed' &&
+      !webpRetrySrc &&
+      migrated &&
+      /^\/assets\/.+\.png$/i.test(migrated)
+    ) {
+      setWebpRetrySrc(migrated.replace(/\.png$/i, '.webp'));
+    }
+  }, [corsStatus, migrated, webpRetrySrc]);
   return corsImage || plainImage;
 };
 
@@ -4125,11 +4141,6 @@ export const CanvasArea: React.FC = () => {
             y: (logo?.y || 0) + (boxH - finalH) / 2
           });
           
-          addNotification({
-            type: 'success',
-            message: 'Logo Yerleştirildi',
-            description: 'Logo sıkıştırılıp alanın içerisine oranları korunarak tam sığacak şekilde yerleştirildi.'
-          });
         };
         img.onerror = () => {
           addNotification({
@@ -4284,11 +4295,6 @@ export const CanvasArea: React.FC = () => {
         });
       });
 
-      addNotification({
-        type: 'success',
-        message: 'Açık Alan Nirengi Ölçümü Tamamlandı',
-        description: `"${obj.findingNo || 'Bulgu'}" ile en yakın iki sabit nokta (${nearestPoints.map(p => p.findingNo).join(', ')}) arası mesafeler eklendi.`
-      });
       return;
     }
 
@@ -4441,11 +4447,6 @@ export const CanvasArea: React.FC = () => {
       });
     }
 
-    addNotification({
-      type: 'success',
-      message: 'Nirengi Ölçüleri Oluşturuldu',
-      description: 'En yakın mimari hatlara olan X ve Y mesafeleri tam temas ile otomatik olarak eklendi.'
-    });
   };
 
   const handleDrawMeasurement = (f1: any, f2: any) => {
@@ -4517,11 +4518,6 @@ export const CanvasArea: React.FC = () => {
     });
     
     setIsDistanceMatrixOpen(false);
-    addNotification({
-      type: 'success',
-      message: 'Mesafe Ölçüsü Eklendi',
-      description: `${f1.findingNo} ve ${f2.findingNo} nolu bulgular arası mesafe siyah ok ile tuvale eklendi.`
-    });
   };
 
 
@@ -4568,11 +4564,6 @@ export const CanvasArea: React.FC = () => {
         }
       ];
 
-      addNotification({
-        type: 'info',
-        message: 'PDF Hazırlanıyor',
-        description: `${scenesToExport.length} sayfa sırayla işleniyor, lütfen bekleyin...`
-      });
 
       // Deselect objects to hide transformers
       setSelectedId(null);
@@ -4893,11 +4884,6 @@ export const CanvasArea: React.FC = () => {
         }
 
         setGridVisible(true);
-        addNotification({
-          type: 'success',
-          message: 'PDF Kaydedildi ve Açıldı',
-          description: `"${baseName}.pdf" İndirilenler klasörüne kaydedildi ve yeni sekmede görüntülendi.`
-        });
       } catch (error: any) {
         console.error('PDF Export Error:', error);
         
@@ -5000,7 +4986,6 @@ export const CanvasArea: React.FC = () => {
         const writable = await handle.createWritable();
         await writable.write(blob);
         await writable.close();
-        addNotification({ type: 'success', message: 'Animasyon Kaydedildi', description: 'Düşme animasyonu video olarak kaydedildi.' });
       } catch {
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
@@ -5981,7 +5966,7 @@ export const CanvasArea: React.FC = () => {
             type: 'symbol',
             symbolId: 'tr-bullet-wall',
             categoryId: 'traces',
-            src: wallDef?.src || '/assets/symbols/bullet_hole_2.png',
+            src: wallDef?.src || '/assets/symbols/bullet_hole_2.webp',
             id: uuidv4(),
             parentId: trajId,
             x: pHitX - 12.5,
@@ -6009,7 +5994,7 @@ export const CanvasArea: React.FC = () => {
             type: 'symbol',
             symbolId: 'tr-bullet-wall',
             categoryId: 'traces',
-            src: wallDef?.src || '/assets/symbols/bullet_hole_2.png',
+            src: wallDef?.src || '/assets/symbols/bullet_hole_2.webp',
             id: uuidv4(),
             parentId: trajId,
             x: pHitX - 12.5,
@@ -6030,11 +6015,6 @@ export const CanvasArea: React.FC = () => {
     if (newObjects.length > 0) {
       newObjects.forEach(obj => addObject(obj));
       
-      addNotification({
-        type: 'success',
-        message: 'İsabet İzleri Eklendi',
-        description: 'Atış yönü çizgisine göre duvar, cam ve manken üzerinde otomatik isabet izleri/yaraları oluşturuldu.'
-      });
     }
   };
 
@@ -6049,11 +6029,6 @@ export const CanvasArea: React.FC = () => {
       const compressedSrc = await compressAndResizeImage(file, 600, 600, 0.45);
       updateObject(selectedId, { photo: compressedSrc });
       saveHistory();
-      addNotification({
-        type: 'success',
-        message: 'Fotoğraf Eklendi',
-        description: 'Fotoğraf sıkıştırılarak noktaya başarıyla bağlandı.'
-      });
     } catch (err) {
       console.error('Camera photo optimization error:', err);
     }
@@ -7008,11 +6983,6 @@ export const CanvasArea: React.FC = () => {
                 findingNo: no,
                 findingDesc: desc
               });
-              addNotification({
-                type: 'success',
-                message: 'Bulgu Güncellendi',
-                description: `Bulgu No. ${no}: ${findingModalState.symbol.name} bilgileri güncellendi.`
-              });
             } else {
               addObject({
                 ...findingModalState.symbol,
@@ -7026,11 +6996,6 @@ export const CanvasArea: React.FC = () => {
                 findingDesc: desc,
                 symbolId: findingModalState.symbol.id,
                 categoryId: 'evidence'
-              });
-              addNotification({
-                type: 'success',
-                message: 'Bulgu Eklendi',
-                description: `Bulgu No. ${no}: ${findingModalState.symbol.name} tuvale eklendi.`
               });
             }
           }

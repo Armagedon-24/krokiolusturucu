@@ -9,6 +9,13 @@
     <link rel="shortcut icon" href="/logo.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover" />
+    <!--
+      CSP: GitHub Pages özel başlık desteklemediği için meta etiketiyle zorlanır.
+      Vercel dağıtımında ek olarak vercel.json başlıkları uygulanır.
+      script-src 'self': tüm betikler harici dosya (inline script yok).
+    -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' blob:; font-src 'self' data:; connect-src 'self' https:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="description" content="Polis Kriminal Laboratuvarı - Olay Yeri Kroki Oluşturma Sistemi" />

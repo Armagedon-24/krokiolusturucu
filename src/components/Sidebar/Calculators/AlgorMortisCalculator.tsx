@@ -21,7 +21,7 @@ export const AlgorMortisCalculator: React.FC = () => {
   const [hoursMin, setHoursMin] = useState<number>(0);
   const [hoursMax, setHoursMax] = useState<number>(0);
   
-  const { addObject, addNotification } = useStore();
+  const { addObject } = useStore();
 
   useEffect(() => {
     const baseCoolingRate = 1.5;
@@ -109,7 +109,6 @@ export const AlgorMortisCalculator: React.FC = () => {
       fontFamily: 'Inter',
       fontStyle: 'bold',
     });
-    addNotification({ type: 'success', message: 'Kısa özet tuvale aktarıldı' });
   };
 
   return (

@@ -60,11 +60,6 @@ export const PageControlBar: React.FC<PageControlBarProps> = ({ variant = 'full'
     const pageNum = scenes.length;
     const name = `Ek ${pageNum}: ${type === 'kroki' ? 'Kroki' : 'Diyagram'}`;
     addNewPage(name, type);
-    addNotification({
-      type: 'success',
-      message: 'Sayfa Eklendi',
-      description: `"${name}" başarıyla oluşturuldu ve çizim ekranına alındı.`
-    });
     setIsTypeModalOpen(false);
   };
 
@@ -77,11 +72,6 @@ export const PageControlBar: React.FC<PageControlBarProps> = ({ variant = 'full'
   const handleSaveRename = (id: string) => {
     if (editValue.trim()) {
       updateSceneName(id, editValue.trim());
-      addNotification({
-        type: 'success',
-        message: 'Sayfa Yeniden Adlandırıldı',
-        description: `Sayfa ismi "${editValue.trim()}" olarak güncellendi.`
-      });
     }
     setEditingId(null);
   };
@@ -102,11 +92,6 @@ export const PageControlBar: React.FC<PageControlBarProps> = ({ variant = 'full'
       message: `"${name}" isimli sayfa ve üzerindeki tüm çizimler kalıcı olarak silinecektir. Bu işlem geri alınamaz. Devam etmek istiyor musunuz?`,
       onConfirm: () => {
         removeScene(id);
-        addNotification({
-          type: 'info',
-          message: 'Sayfa Silindi',
-          description: `"${name}" isimli sayfa sistemden kaldırıldı.`
-        });
       }
     });
   };

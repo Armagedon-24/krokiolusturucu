@@ -8,6 +8,9 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      // CSP uyumu: kayıt betiği satır içi DEĞİL, harici dosya olarak eklenir
+      // (index.html'deki script-src 'self' kuralı satır içi betiği engeller).
+      injectRegister: 'script-defer',
       includeAssets: ['favicon.png', 'logo.png', 'icons.svg', 'icon-512.png'],
       manifest: {
         name: 'Kroki Oluşturucu - Olay Yeri Dokümantasyon',

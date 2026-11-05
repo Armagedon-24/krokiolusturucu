@@ -30,7 +30,7 @@ export const YawMarkCalculator: React.FC = () => {
   const [speedMin, setSpeedMin] = useState<number>(0);
   const [speedMax, setSpeedMax] = useState<number>(0);
 
-  const { addObject, addNotification } = useStore();
+  const { addObject } = useStore();
 
   const calcR = useMemo(
     () => (radiusMode === 'direct' ? radius : midOrd > 0 ? radiusFromChord(chord, midOrd) : 0),
@@ -133,7 +133,6 @@ export const YawMarkCalculator: React.FC = () => {
       fontFamily: 'Inter',
       fontStyle: 'bold',
     });
-    addNotification({ type: 'success', message: 'Kısa özet tuvale aktarıldı' });
   };
 
   const inputCls = 'w-full bg-[#111] border border-[#333] rounded-xl px-4 py-3 text-sm text-white focus:border-[#F5C518]/50 outline-none transition-all font-mono';

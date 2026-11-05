@@ -27,7 +27,7 @@ export const PedestrianLaunchCalculator: React.FC = () => {
   const [landingSpeed, setLandingSpeed] = useState(0);
   const [maxHeight, setMaxHeight] = useState(0);
 
-  const { addObject, setPedestrianLaunch, pedestrianLaunch, addNotification } = useStore();
+  const { addObject, setPedestrianLaunch, pedestrianLaunch } = useStore();
 
   useEffect(() => {
     const hCm = (pedestrianHeight * 0.55) / 100;
@@ -135,7 +135,6 @@ export const PedestrianLaunchCalculator: React.FC = () => {
       fontFamily: 'Inter',
       fontStyle: 'bold',
     });
-    addNotification({ type: 'success', message: 'Kısa özet tuvale aktarıldı' });
   };
 
   const launchData: PedestrianLaunchData = {

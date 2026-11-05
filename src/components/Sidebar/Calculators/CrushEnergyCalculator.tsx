@@ -27,7 +27,7 @@ export const CrushEnergyCalculator: React.FC = () => {
 
   const preset = STIFFNESS_PRESETS.find((p) => p.id === presetId)!;
 
-  const { addObject, addNotification } = useStore();
+  const { addObject } = useStore();
 
   useEffect(() => {
     const p = STIFFNESS_PRESETS.find((x) => x.id === presetId);
@@ -123,7 +123,6 @@ export const CrushEnergyCalculator: React.FC = () => {
       fontFamily: 'Inter',
       fontStyle: 'bold',
     });
-    addNotification({ type: 'success', message: 'Kısa özet tuvale aktarıldı' });
   };
 
   const inputCls = 'w-full bg-[#111] border border-[#333] rounded-xl px-4 py-3 text-sm text-white focus:border-[#F5C518]/50 outline-none transition-all font-mono';

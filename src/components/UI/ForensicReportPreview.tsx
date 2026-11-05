@@ -28,7 +28,7 @@ const SECTIONS: Array<{ no: number; key: keyof ForensicReport; title: string }> 
 const PaperView: React.FC<{ report: ForensicReport }> = ({ report }) => {
   const m = reportMeta();
   const logoSrc = `${import.meta.env.BASE_URL}assets/kurum_logo.png`;
-  const wmSrc = `${import.meta.env.BASE_URL}assets/kurum_logo_filigran_kontur.png`;
+  const wmSrc = `${import.meta.env.BASE_URL}assets/kurum_logo_filigran_kontur.webp`;
   return (
     <div className="relative bg-white text-[#26282E] px-5 py-4 overflow-hidden">
       {/* Sayfa arkası içi boş (kontur) gri filigran — kartı kaplar */}

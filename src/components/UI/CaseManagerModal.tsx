@@ -93,12 +93,6 @@ export const CaseManagerModal: React.FC<CaseManagerModalProps> = ({ isOpen, onCl
         activeSceneId: newSceneId
       });
       
-      useStore.getState().addNotification({
-        type: 'success',
-        message: 'Yeni Dosya Kaydedildi',
-        description: `"${sceneName}" başarıyla kaydedildi ve olaya bağlandı.`
-      });
-
       // 2. Trigger PDF Export using direct synchronous trigger
       setTimeout(() => {
         useStore.getState().triggerExportPDF();
