@@ -1,191 +1,223 @@
 /**
- * VARLIK OPTİMİZASYONU v4 — sembol görselleri: akıllı boyut + format seçimi
+ * Varlık optimizasyonu: public/ altındaki PNG ve SVG sembolleri görsel kaliteyi
+ * koruyarak küçültür. Idempotenttir; çalıştırmak: `npm run assets:optimize`
  *
- * Politika (görsel kalite KORUNUR):
- *  1. Daha önce WebP'ye dönüşmüş dosyaların PNG ikizleri silinir.
- *  2. 512px'i aşan semboller Lanczos3 ile 512px'e indirilir (tuval ~150px,
- *     PDF export pixelRatio 2 ≈ 400px → 512px baskıda dahi güvenli marj).
- *  3. Adaylar: pngquant palet PNG (--quality=70-95 kapısı: hedefe ulaşamazsa
- *     yazmaz) ve WebP q92. WebP için piksel hatası ALPHA-MASKELİ ölçülür
- *     (görünmez yarı-şeffaf pikseller hesaba katılmaz): ağırlıklı ortalama
- *     Δ ≤ 2.0/255 ve p99 Δ ≤ 30/255 geçmek zorundadır.
- *  4. Geçen en küçük aday, yalnızca orijinalden küçükse yazılır.
- *  5. Manifest → yeniden koşuya güvenli (idempotent).
+ * Strateji (kalite öncelikli):
+ *  - PNG (public/assets/symbols): en uzun kenarı > 800 px ise 800 px'e indirilir
+ *    (Lanczos3; tuvalde en büyük yerleşim ~400 px, PDF dışa aktarma pixelRatio 2 →
+ *    ihtiyaç en fazla 800 px). Sıkıştırmada iki aday üretilir:
+ *      (1) Görsel-kayıpsız palet (libimagequant, quality 92 + dithering)
+ *      (2) Gerçek kayıpsız (compressionLevel 9 + adaptiveFiltering)
+ *    Palet adayı piksel-denetiminden geçerse (ortalama hata < 2/255 ve p99 < 48)
+ *    seçilir; aksi halde kayıpsız sürüm kullanılır. Hiçbir dosya büyüyorsa yazılmaz.
+ *  - PNG (symbols dışı: logo/ikon/filigran): yalnızca kayıpsız sıkıştırma, boyut değişmez.
+ *  - SVG: svgo ile metaveri/Onay-Edilebilir şişkinlik temizliği (viewBox korunur).
  *
- * Kullanım: npm run assets:optimize
+ * WEBP MODU (`node scripts/optimize-assets.mjs --webp`):
+ *  Fotoğraf dokulu büyük semboller (krater, ateş, kan vb.) .webp olarak tutulur
+ *  (kaynak yollar src/constants/symbols.ts içinde .webp işaretlidir). Bu mod:
+ *  - public/assets altındaki .webp dosyalarını aynı görünür-hata eşikleriyle
+ *    yeniden kodlar (q82, smartSubsample): yalnızca küçülüyorsa VE piksel denetimi
+ *    geçiyorsa üzerine yazar (idempotent).
+ *  - Kaynak png'leri DOKUNMAZ; png↔webp uzantı değişimi yapmaz.
  */
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { promises as fs } from 'fs';
+import path from 'path';
 import sharp from 'sharp';
-import pngquantPath from 'pngquant-bin';
+import { optimize as svgoOptimize } from 'svgo';
 
-const ROOT = path.resolve(process.cwd(), 'public/assets');
-const SKIP_DIRS = new Set(['fonts']);
-const MAX_DIM = 512;
-const MIN_BYTES = 10 * 1024;
-const MEAN_MAX = 2.0;
-const P99_MAX = 30;
-const CACHE_DIR = path.resolve(process.cwd(), 'node_modules/.cache');
-const MANIFEST = path.join(CACHE_DIR, 'assets-optimizer.json');
-const CHANGED_EXT = path.join(CACHE_DIR, 'assets-changed-ext.json');
+const ROOT = process.cwd();
+const TARGETS = [
+  path.join(ROOT, 'public', 'assets'),
+  path.join(ROOT, 'public', 'images'),
+];
+const ROOT_FILES = [
+  path.join(ROOT, 'public', 'logo.png'),
+  path.join(ROOT, 'public', 'favicon.png'),
+  path.join(ROOT, 'public', 'icon-512.png'),
+];
+const MAX_DIM_SYMBOL = 800;      // semboller için en uzun kenar sınırı
+const PALETTE_QUALITY = 95;      // libimagequant kalite (0-100)
+const MEAN_ERR_MAX = 2.0;        // GÖRÜNÜR ortalama kanal hatası eşiği (/255)
+const P99_ERR_MAX = 24;          // GÖRÜNÜR %99 persentil kanal hatası eşiği
+const WEBP_QUALITY = 82;         // webp yeniden kodlama kalitesi (0-100)
+const WEBP_MODE = process.argv.includes('--webp');
 
-/** Alpha-maskeli algısal piksel farkı (görünmez pikseller sayılmaz) */
-async function maskedErr(refBuf, candBuf) {
-  const r = await sharp(refBuf).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-  const c = await sharp(candBuf).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-  const n = Math.min(r.data.length, c.data.length);
-  const s = [];
-  let sum = 0, cnt = 0;
-  for (let i = 0; i < n; i += 4) {
-    if (Math.min(r.data[i + 3], c.data[i + 3]) < 16) continue;
-    const d = Math.abs(r.data[i] - c.data[i]) * 0.3
-      + Math.abs(r.data[i + 1] - c.data[i + 1]) * 0.5
-      + Math.abs(r.data[i + 2] - c.data[i + 2]) * 0.2;
-    const da = Math.abs(r.data[i + 3] - c.data[i + 3]) * 0.4;
-    const v = Math.max(d, da);
-    sum += v; s.push(v); cnt++;
+const walk = async (dir) => {
+  const out = [];
+  for (const e of await fs.readdir(dir, { withFileTypes: true })) {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) out.push(...await walk(p));
+    else out.push(p);
   }
-  if (!cnt) return { mean: 0, p99: 0 };
-  s.sort((x, y) => x - y);
-  return { mean: sum / cnt, p99: s[Math.floor(s.length * 0.99)] };
+  return out;
+};
+
+/** İki tampon arasındaki GÖRÜNÜR kanal hatası istatistikleri.
+ *  Şeffaf piksellerin altındaki RGB değerleri tarayıcıda görünmez; karşılaştırma
+ *  her iki görüntü de beyaz zemine birleştirilerek yapılır — aksi halde palet
+ *  dönüşümü, görünmez çöp RGB nedeniyle haksızca reddedilir. */
+async function visibleRaw(buf) {
+  return sharp(buf).flatten({ background: '#ffffff' }).raw().toBuffer();
 }
 
-async function walk(dir, acc = []) {
-  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (e.isDirectory()) {
-      if (SKIP_DIRS.has(e.name)) continue;
-      await walk(path.join(dir, e.name), acc);
-    } else if (/\.png$/i.test(e.name)) acc.push(path.join(dir, e.name));
+function pixelStats(a, b) {
+  if (a.length !== b.length) return { ok: false };
+  let sum = 0, p99 = 0;
+  const n = a.length;
+  const hist = new Uint32Array(256);
+  for (let i = 0; i < n; i++) {
+    const d = Math.abs(a[i] - b[i]);
+    sum += d;
+    hist[d]++;
   }
-  return acc;
+  let acc = 0;
+  const limit = n * 0.99;
+  for (let d = 0; d < 256; d++) {
+    acc += hist[d];
+    if (acc >= limit) { p99 = d; break; }
+  }
+  return { ok: true, mean: sum / n, p99 };
 }
 
-fs.mkdirSync(CACHE_DIR, { recursive: true });
-const manifest = fs.existsSync(MANIFEST) ? JSON.parse(fs.readFileSync(MANIFEST, 'utf8')) : {};
-const changedExt = fs.existsSync(CHANGED_EXT) ? JSON.parse(fs.readFileSync(CHANGED_EXT, 'utf8')) : [];
+async function optimizePng(file, { allowResize }) {
+  const before = (await fs.stat(file)).size;
+  const img = sharp(file, { limitInputPixels: 268402689 });
+  const meta = await img.metadata();
 
-// ADIM 1: WebP ikizi olan PNG'leri sil
-const allPng = await walk(ROOT);
-let removedTwins = 0;
-for (const f of allPng) {
-  const wp = f.replace(/\.png$/i, '.webp');
-  if (fs.existsSync(wp)) {
-    fs.unlinkSync(f);
-    const rel = path.relative(ROOT, f);
-    if (!manifest[rel]) { manifest[rel] = { to: 'webp(önceki)' }; changedExt.push(rel); }
-    removedTwins++;
+  let pipeline = sharp(file);
+  let w = meta.width, h = meta.height;
+  if (allowResize && Math.max(w, h) > MAX_DIM_SYMBOL) {
+    const scale = MAX_DIM_SYMBOL / Math.max(w, h);
+    w = Math.round(w * scale); h = Math.round(h * scale);
+    pipeline = pipeline.resize(MAX_DIM_SYMBOL, MAX_DIM_SYMBOL, {
+      fit: 'inside', withoutEnlargement: true, kernel: 'lanczos3',
+    });
   }
+
+  const baseBuf = await pipeline.clone().toBuffer(); // referans (yeniden boyutlanmış) hâl
+  const baseRaw = await visibleRaw(baseBuf);
+  const baseMeta = await sharp(baseBuf).metadata();
+
+  const [paletteBuf, losslessBuf] = await Promise.all([
+    sharp(baseBuf).png({ palette: true, quality: PALETTE_QUALITY, effort: 10, compressionLevel: 9, dither: 1.0 }).toBuffer(),
+    sharp(baseBuf).png({ compressionLevel: 9, adaptiveFiltering: true }).toBuffer(),
+  ]);
+
+  let chosen = losslessBuf, mode = 'lossless';
+  if (paletteBuf.length < losslessBuf.length) {
+    const palRaw = await visibleRaw(paletteBuf);
+    const st = pixelStats(baseRaw, palRaw);
+    if (st.ok && st.mean <= MEAN_ERR_MAX && st.p99 <= P99_ERR_MAX) {
+      chosen = paletteBuf; mode = `palette(q${PALETTE_QUALITY}, mean=${st.mean.toFixed(2)}, p99=${st.p99})`;
+    } else if (st.ok) {
+      mode = `lossless(palette reddedildi: mean=${st.mean.toFixed(2)}, p99=${st.p99})`;
+    }
+  }
+
+  if (chosen.length < before) {
+    await fs.writeFile(file, chosen);
+    return { file, before, after: chosen.length, mode, resized: `${meta.width}x${meta.height}->${w}x${h}` };
+  }
+  return { file, before, after: before, mode: 'atlandı (küçülmedi)', resized: '-' };
 }
 
-// ADIM 2: kalan PNG'leri işle
-const files = await walk(ROOT);
-const tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), 'assetopt-'));
-let processed = 0, failed = 0, bytesBefore = 0, bytesAfter = 0;
+/** WEBP yeniden kodlama: yalnızca küçülme VE görünür-hata eşiği birlikte sağlanırsa yazar. */
+async function reoptimizeWebp(file) {
+  const before = (await fs.stat(file)).size;
+  const baseRaw = await visibleRaw(file);
+  const cand = await sharp(file, { limitInputPixels: 268402689 })
+    .webp({ quality: WEBP_QUALITY, effort: 6, smartSubsample: true })
+    .toBuffer();
+  if (cand.length >= before) return { file, before, after: before, mode: 'atlandı (küçülmedi)' };
+  const candRaw = await visibleRaw(cand);
+  const st = pixelStats(baseRaw, candRaw);
+  if (!st.ok || st.mean > MEAN_ERR_MAX || st.p99 > P99_ERR_MAX) {
+    return { file, before, after: before, mode: `atlandı (kalite: mean=${st.ok ? st.mean.toFixed(2) : '-'}, p99=${st.ok ? st.p99 : '-'})` };
+  }
+  await fs.writeFile(file, cand);
+  return { file, before, after: cand.length, mode: `webp(q${WEBP_QUALITY}, mean=${st.mean.toFixed(2)}, p99=${st.p99})` };
+}
 
-for (const f of files) {
-  const rel = path.relative(ROOT, f);
-  const size = fs.statSync(f).size;
-  bytesBefore += size;
-  bytesAfter += size;
-  if (manifest[rel]) continue;
-  if (size < MIN_BYTES) { manifest[rel] = { skip: 'küçük' }; continue; }
-
+async function optimizeSvg(file) {
+  const before = (await fs.stat(file)).size;
+  const src = await fs.readFile(file, 'utf8');
+  let result;
   try {
-    const meta = await sharp(f).metadata();
-    if (meta.palette && Math.max(meta.width, meta.height) <= MAX_DIM) {
-      manifest[rel] = { skip: 'paletli-optimal' };
-      continue;
-    }
-    const needResize = Math.max(meta.width, meta.height) > MAX_DIM;
+    result = svgoOptimize(src, {
+      path: file,
+      js2svg: { pretty: false, indent: 0 },
+      floatPrecision: 2,
+      plugins: [
+        {
+          name: 'preset-default',
+          params: {
+            overrides: {
+              // SVGO v4'te viewBox varsayılan olarak korunur; kimlikler bazı SVG'lerde
+              // CSS/href referansları için gerekli olabilir.
+              cleanupIds: { preservePrefixes: ['gradient', 'pattern', 'clip'] },
+            },
+          },
+        },
+      ],
+    });
+  } catch {
+    return { file, before, after: before, mode: 'atlandı (ayrıştırılamadı)' };
+  }
+  const out = result.data;
+  if (out.length < src.length && out.includes('<svg')) {
+    await fs.writeFile(file, out);
+    return { file, before, after: Buffer.byteLength(out), mode: 'svgo' };
+  }
+  return { file, before, after: before, mode: 'atlandı (küçülmedi)' };
+}
 
-    // çalışma dosyası: gerekirse 512'ye indirilmiş kayıpsız PNG
-    let workBuf = fs.readFileSync(f);
-    if (needResize) {
-      workBuf = await sharp(f).resize(MAX_DIM, MAX_DIM, { fit: 'inside', kernel: 'lanczos3' }).png().toBuffer();
-    }
-    const workPath = path.join(tmpBase, 'work.png');
-    fs.writeFileSync(workPath, workBuf);
+async function main() {
+  const files = [];
+  for (const t of TARGETS) {
+    try { files.push(...await walk(t)); } catch { /* klasör yok */ }
+  }
+  files.push(...ROOT_FILES);
 
-    const cands = [];
+  const pngs = files.filter((f) => f.toLowerCase().endsWith('.png'));
+  const svgs = files.filter((f) => f.toLowerCase().endsWith('.svg'));
+  const webps = files.filter((f) => f.toLowerCase().endsWith('.webp'));
 
-    // Aday A: pngquant (kalite kapılı)
-    try {
-      const outQ = path.join(tmpBase, 'q.png');
-      execFileSync(pngquantPath, ['--quality=70-95', '--speed', '3', '--force', '--output', outQ, workPath], { stdio: 'ignore' });
-      if (fs.existsSync(outQ)) {
-        const buf = fs.readFileSync(outQ);
-        cands.push({ name: 'pngquant', buf, pass: true }); // kendi kalite kapısı var
+  let totalBefore = 0, totalAfter = 0, changed = 0;
+  const rows = [];
+
+  if (WEBP_MODE) {
+    for (const f of webps) {
+      const r = await reoptimizeWebp(f);
+      rows.push(r); totalBefore += r.before; totalAfter += r.after;
+      if (r.after < r.before) changed++;
+      if (r.before - r.after > 10_000) {
+        console.log(`WEBP -${((r.before - r.after) / 1024).toFixed(0).padStart(5)}KB  ${path.relative(ROOT, r.file)}  [${r.mode}]`);
       }
-    } catch { /* pngquant yazamadı: kalite hedefi tutmadı */ }
-
-    // Aday B: WebP q92 (maskeli hata kapısıyla)
-    try {
-      const buf = await sharp(workPath).webp({ quality: 92, alphaQuality: 100, smartSubsample: true, effort: 4 }).toBuffer();
-      const st = await maskedErr(workBuf, buf);
-      cands.push({ name: 'webp', buf, pass: st.mean <= MEAN_MAX && st.p99 <= P99_MAX, err: st });
-    } catch { /* webp başarısız */ }
-
-    const passing = cands.filter((c) => c.pass && c.buf.length < size).sort((a, b) => a.buf.length - b.buf.length);
-    const chosen = passing[0];
-    if (!chosen) { manifest[rel] = { skip: 'kazanç yok' }; continue; }
-
-    const toWebp = chosen.name === 'webp';
-    const outPath = toWebp ? f.replace(/\.png$/i, '.webp') : f;
-    fs.writeFileSync(outPath, chosen.buf);
-    if (toWebp) fs.unlinkSync(f);
-
-    bytesAfter = bytesAfter - size + chosen.buf.length;
-    if (toWebp) changedExt.push(rel);
-    manifest[rel] = { to: chosen.name, before: size, after: chosen.buf.length, ...(chosen.err ? { mean: +chosen.err.mean.toFixed(2), p99: +chosen.err.p99.toFixed(1) } : {}) };
-    processed++;
-  } catch (err) {
-    failed++;
-    console.error(`HATA ${rel}: ${err.message}`);
+    }
+    console.log('──────────────────────────────────────────────');
+    console.log(`WEBP modu: ${webps.length} dosya | küçülen: ${changed}`);
+    console.log(`Toplam: ${(totalBefore / 1048576).toFixed(2)} MB → ${(totalAfter / 1048576).toFixed(2)} MB (-%${totalBefore ? (100 - (totalAfter / totalBefore) * 100).toFixed(1) : '0.0'})`);
+    return;
   }
+
+  for (const f of pngs) {
+    const r = await optimizePng(f, { allowResize: f.includes(`${path.sep}symbols${path.sep}`) });
+    rows.push(r); totalBefore += r.before; totalAfter += r.after;
+    if (r.after < r.before) changed++;
+    if (r.before - r.after > 40_000) {
+      console.log(`PNG  -${((r.before - r.after) / 1024).toFixed(0).padStart(5)}KB  ${path.relative(ROOT, r.file)}  [${r.mode}]`);
+    }
+  }
+  for (const f of svgs) {
+    const r = await optimizeSvg(f);
+    rows.push(r); totalBefore += r.before; totalAfter += r.after;
+    if (r.after < r.before) changed++;
+  }
+
+  console.log('──────────────────────────────────────────────');
+  console.log(`Dosya: ${pngs.length} PNG + ${svgs.length} SVG | küçülen: ${changed}`);
+  console.log(`Toplam: ${(totalBefore / 1048576).toFixed(2)} MB → ${(totalAfter / 1048576).toFixed(2)} MB (-%${(100 - (totalAfter / totalBefore) * 100).toFixed(1)})`);
 }
 
-// ADIM 3: 512px'i aşan WebP'leri yeniden boyutlandır (maskeli hata kapısıyla)
-let webpResized = 0;
-async function walkWebp(dir, acc = []) {
-  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (e.isDirectory()) {
-      if (SKIP_DIRS.has(e.name)) continue;
-      await walkWebp(path.join(dir, e.name), acc);
-    } else if (/\.webp$/i.test(e.name)) acc.push(path.join(dir, e.name));
-  }
-  return acc;
-}
-const webpFiles = await walkWebp(ROOT);
-for (const f of webpFiles) {
-  const rel = path.relative(ROOT, f);
-  const mkey = rel + '::webp-resize';
-  if (manifest[mkey]) continue;
-  try {
-    const size = fs.statSync(f).size;
-    const meta = await sharp(f).metadata();
-    if (Math.max(meta.width, meta.height) <= MAX_DIM) { manifest[mkey] = { skip: 'boyut uygun' }; continue; }
-    const ref = await sharp(f).resize(MAX_DIM, MAX_DIM, { fit: 'inside', kernel: 'lanczos3' }).png().toBuffer();
-    const buf = await sharp(ref).webp({ quality: 92, alphaQuality: 100, smartSubsample: true, effort: 4 }).toBuffer();
-    if (buf.length >= size) { manifest[mkey] = { skip: 'kazanç yok' }; continue; }
-    const st = await maskedErr(ref, buf);
-    if (st.mean > MEAN_MAX || st.p99 > P99_MAX) { manifest[mkey] = { skip: 'hata kapısı', mean: +st.mean.toFixed(2), p99: +st.p99.toFixed(1) }; continue; }
-    fs.writeFileSync(f, buf);
-    manifest[mkey] = { to: 'webp-512', before: size, after: buf.length };
-    bytesAfter += buf.length - size;
-    webpResized++;
-  } catch (err) {
-    console.error(`HATA(webp) ${rel}: ${err.message}`);
-  }
-}
-
-fs.rmSync(tmpBase, { recursive: true, force: true });
-fs.writeFileSync(MANIFEST, JSON.stringify(manifest, null, 1));
-fs.writeFileSync(CHANGED_EXT, JSON.stringify([...new Set(changedExt)], null, 1));
-
-console.log(`WebP ikizi silinen PNG: ${removedTwins}`);
-console.log(`Kalan PNG: ${files.length} | yeniden kodlanan: ${processed} | hata: ${failed}`);
-console.log(`PNG toplamı: ${(bytesBefore / 1048576).toFixed(1)}MB → ${(bytesAfter / 1048576).toFixed(1)}MB (-${bytesBefore ? (100 - (bytesAfter / bytesBefore) * 100).toFixed(0) : 0}%)`);
-console.log(`512pxe indirilen webp: ${webpResized}`);
-console.log(`Uzantı değişen (webp) toplam: ${new Set(changedExt).size}`);
+main().catch((e) => { console.error(e); process.exit(1); });
