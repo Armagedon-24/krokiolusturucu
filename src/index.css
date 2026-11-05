@@ -122,8 +122,10 @@ img {
   filter: url(#remove-white-svg);
 }
 
+/* Sembol kütüphanesi: tüm semboller BEYAZ siluet olarak görünür;
+   tuvale bırakılınca kendi (natürel grafit) rengine döner. */
 .sidebar-symbol-filter {
-  filter: url(#remove-white-svg) brightness(0) saturate(100%) invert(84%) sepia(21%) saturate(3836%) hue-rotate(352deg) brightness(101%) contrast(93%);
+  filter: url(#remove-white-svg) brightness(0) saturate(100%) invert(100%);
 }
 
 /* Karakalem/gerçekçi PNG varlıklar: sarı tint YOK, beyaz kağıt zeminde doğal çizim */

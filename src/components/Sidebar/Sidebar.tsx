@@ -49,10 +49,10 @@ const cleanSymbolName = (raw: string): string =>
     .replace(/\d+$/, '')
     .trim();
 
-/** Düz SVG data-URI ikonlar sarı tint alır; karakalem/foto PNG varlıklar beyaz kağıt üzerinde doğal gösterilir.
- *  brightness(0) tint'i detaylı çizimleri (karakalem, gerçekçi PNG) düz lekeye çevirdiği için bu ikili ayırım şart.
- *  İstisna: panelWhite:true olan semboller (st-cadde/st-sokak) kendi beyaz SVG görünümüyle
- *  fotoğraf kartında (sidebar-symbol-photo) gösterilir — sarı tint uygulanmaz. */
+/** Sembol kütüphanesindeki tüm semboller BEYAZ siluet olarak gösterilir (sidebar-symbol-filter);
+ *  tuvale aktarılınca kendi natürel rengine döner (kanvasta filtre uygulanmaz).
+ *  panelWhite:true olan semboller (st-cadde/st-sokak) kendi beyaz SVG görünümüyle
+ *  fotoğraf kartında (sidebar-symbol-photo) gösterilir. */
 const isFlatSvgIcon = (src: unknown): boolean => String(src || '').startsWith('data:image/svg');
 
 /** Metni panoya kopyalar — güvenli olmayan bağlamlar için execCommand yedeğiyle.
