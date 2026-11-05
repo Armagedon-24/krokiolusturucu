@@ -11,6 +11,7 @@ import {
 } from '@react-three/drei';
 import { X, Rotate3D, Footprints, RotateCw, ArrowDown, Camera, Video, Square, FolderOpen, Images, Download, Trash2 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
+import { withBase } from '../../utils/assetMigration';
 import * as THREE from 'three';
 // @ts-ignore
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter';
@@ -507,9 +508,9 @@ const ShootingTrajectory3D = ({ obj, allWalls, visualObjects, uploadedImages }: 
   const GLASS_TEX_SRC = '/assets/symbols/bullet_hole_1.png';
   const WALL_TEX_SRC_DEFAULT = '/assets/symbols/bullet_hole_2.webp';
 
-  const glassTex = useTexture(GLASS_TEX_SRC) as THREE.Texture;
+  const glassTex = useTexture(withBase(GLASS_TEX_SRC)) as THREE.Texture;
   // Always load static wall texture - hook must always be called with the same arg
-  const wallTex = useTexture(WALL_TEX_SRC_DEFAULT) as THREE.Texture;
+  const wallTex = useTexture(withBase(WALL_TEX_SRC_DEFAULT)) as THREE.Texture;
   const woundInTex = useTexture(WOUND_IN_SVG) as THREE.Texture;
   const woundOutTex = useTexture(WOUND_OUT_SVG) as THREE.Texture;
 
@@ -1290,7 +1291,7 @@ const Symbol3D = ({ obj, wallThickness, realObj, allWalls, visualObjects, upload
     textureSrcRaw = isabetIziImg.src;
   }
 
-  const textureSrc = textureSrcRaw.startsWith('data:image/svg+xml') ? textureSrcRaw.replace(/#/g, '%23') : textureSrcRaw;
+  const textureSrc = textureSrcRaw.startsWith('data:image/svg+xml') ? textureSrcRaw.replace(/#/g, '%23') : withBase(textureSrcRaw);
   const autoHeight = getStandardHeight(effSymbolId);
 
   // 6. Volumetric Rendering
@@ -1301,8 +1302,8 @@ const Symbol3D = ({ obj, wallThickness, realObj, allWalls, visualObjects, upload
     const wallDef = flatSymbols.find((s: any) => s.id === 'tr-bullet-wall');
 
     const pngSrc = sIdLower === 'tr-bullet-wall'
-      ? ((isabetIziImg?.src && typeof isabetIziImg.src === 'string' && isabetIziImg.src.trim() !== '') ? isabetIziImg.src : (wallDef?.src || '/assets/symbols/bullet_hole_2.webp'))
-      : (glassDef?.src || '/assets/symbols/bullet_hole_1.png');
+      ? ((isabetIziImg?.src && typeof isabetIziImg.src === 'string' && isabetIziImg.src.trim() !== '') ? isabetIziImg.src : (wallDef?.src || withBase('/assets/symbols/bullet_hole_2.webp')))
+      : (glassDef?.src || withBase('/assets/symbols/bullet_hole_1.png'));
     return (
       <GlassImpact3D
         textureSrc={pngSrc}

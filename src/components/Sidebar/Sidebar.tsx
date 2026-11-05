@@ -33,6 +33,7 @@ const SectionFallback: React.FC = () => (
 );
 import { processUploadedSymbolImage } from '../../utils/canvasUtils';
 import { getOptimizedCloudinaryUrl } from '../../lib/cloudinary';
+import { withBase } from '../../utils/assetMigration';
 
 /** Sembol adını sade görünüm için temizler (uzantı, görünüm ekleri, kimlik parçaları) */
 const cleanSymbolName = (raw: string): string =>
@@ -600,7 +601,7 @@ export const Sidebar: React.FC = () => {
                                     >
                                       <div className="absolute inset-0 bg-white/5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                                       <img
-                                        src={getOptimizedCloudinaryUrl(item.thumbnail || item.src, 80, 80)}
+                                        src={getOptimizedCloudinaryUrl(withBase(item.thumbnail || item.src), 80, 80)}
                                         alt={item.name}
                                         loading="lazy"
                                         width={48}
@@ -763,7 +764,7 @@ export const Sidebar: React.FC = () => {
                             onDragEnd={handleDragEnd}
                             className="w-12 h-12 bg-white/10 rounded border border-[#333] flex-shrink-0 cursor-move overflow-hidden group/thumb"
                           >
-                            <img src={getOptimizedCloudinaryUrl(img.src, 80, 80)} alt={img.name} loading="lazy" width={48} height={48} className={`w-full h-full object-contain group-hover/thumb:scale-110 transition-transform ${isFlatSvgIcon(img.src) ? 'sidebar-symbol-filter' : 'sidebar-symbol-photo'}`} />
+                            <img src={getOptimizedCloudinaryUrl(withBase(img.src), 80, 80)} alt={img.name} loading="lazy" width={48} height={48} className={`w-full h-full object-contain group-hover/thumb:scale-110 transition-transform ${isFlatSvgIcon(img.src) ? 'sidebar-symbol-filter' : 'sidebar-symbol-photo'}`} />
                           </div>
                           <div className="flex-1 min-w-0 space-y-1">
                             {editingImageId === img.id ? (

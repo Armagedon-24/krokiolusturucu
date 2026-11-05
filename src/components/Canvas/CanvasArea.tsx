@@ -25,7 +25,7 @@ import { PedestrianLaunchCanvas } from './PedestrianLaunchCanvas';
 import { PageControlBar } from './PageControlBar';
 import type { CanvasObject } from '../../types';
 import { drawTiledImage, tilePatternParams, SYMBOL_TILE_MODES, getTextureInfo, resolveConcreteTileMode, drawStripCaps, composeStripCanvas } from '../../utils/tiledRender';
-import { migrateLegacyAssetUrl } from '../../utils/assetMigration';
+import { migrateLegacyAssetUrl, withBase } from '../../utils/assetMigration';
 
 const RemoveWhiteFilter = (imageData: any) => {
   const data = imageData.data;
@@ -57,7 +57,7 @@ const useSmartImage = (src: string | undefined) => {
   // için: /assets/*.png yüklenemezse bir kez .webp karşılığı denenir.
   const [webpRetrySrc, setWebpRetrySrc] = useState<string | null>(null);
   const migrated = migrateLegacyAssetUrl(src);
-  const effective = webpRetrySrc || migrated || '';
+  const effective = withBase(webpRetrySrc || migrated || '');
   const [corsImage, corsStatus] = useImage(effective, 'anonymous');
   const [plainImage] = useImage(corsStatus === 'failed' ? effective : '');
   useEffect(() => {

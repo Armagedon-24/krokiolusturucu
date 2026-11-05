@@ -110,3 +110,13 @@ export function migrateLegacyAssetUrl(url: unknown): string {
   const candidate = url.slice(0, dot) + '.webp';
   return LEGACY_PNG_TO_WEBP.has(candidate) ? candidate : url;
 }
+
+/** Genel kaynak yolu: deploy köküne göre tam yol üretir.
+ *  '/assets/...' → '/krokiolusturucu/assets/...' (GitHub Pages) veya '/assets/...' (kök dağıtım).
+ *  Veri (/assets/...) her zaman öneklenmemiş saklanır; yalnızca tüketim anında öneklendir. */
+export function withBase(url: unknown): string {
+  if (typeof url !== 'string' || !url || url.startsWith('data:') || url.startsWith('blob:')) return (typeof url === 'string' ? url : '') as string;
+  if (/^(https?:)?\/\//i.test(url) || !url.startsWith('/')) return url;
+  const base = import.meta.env.BASE_URL || '/';
+  return base.replace(/\/$/, '') + url;
+}

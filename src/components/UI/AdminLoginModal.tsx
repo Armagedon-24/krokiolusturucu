@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, KeyRound, Loader2 } from 'lucide-react';
+import { withBase } from '../../utils/assetMigration';
 
 interface AdminLoginModalProps {
   isOpen: boolean;
@@ -52,7 +53,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({ isOpen, onClos
         <div className="flex items-center justify-between p-4 border-b border-[#2a2a2a] bg-[#242424]">
           <div className="flex items-center gap-2">
             <div className="w-20 h-20 flex items-center justify-center">
-              <img src="/logo.png" className="w-full h-full object-contain" alt="Logo" />
+              <img src={withBase('/logo.png')} className="w-full h-full object-contain" alt="Logo" />
             </div>
             <h2 className="text-sm font-bold text-white uppercase tracking-wider">ADMİN GİRİŞİ</h2>
           </div>
