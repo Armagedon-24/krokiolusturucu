@@ -9,6 +9,13 @@
     <link rel="shortcut icon" href="/krokiolusturucu/logo.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover" />
+    <!--
+      CSP: GitHub Pages özel başlık desteklemediği için meta etiketiyle zorlanır.
+      Vercel dağıtımında ek olarak vercel.json başlıkları uygulanır.
+      script-src 'self': tüm betikler harici dosya (inline script yok).
+    -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' blob:; font-src 'self' data:; connect-src 'self' https:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="description" content="Polis Kriminal Laboratuvarı - Olay Yeri Kroki Oluşturma Sistemi" />
@@ -17,34 +24,21 @@
     <meta property="og:description" content="Polis Kriminal Laboratuvarı - Olay Yeri Kroki Oluşturma Sistemi" />
     <meta property="og:image" content="/krokiolusturucu/logo.png" />
     <title>Kroki Oluşturucu - Olay Yeri Dokümantasyon</title>
-    <script type="module" crossorigin src="/krokiolusturucu/assets/index-j2LP2Py8.js"></script>
-    <link rel="modulepreload" crossorigin href="/krokiolusturucu/assets/rolldown-runtime-Bnw7wDfq.js">
-    <link rel="modulepreload" crossorigin href="/krokiolusturucu/assets/vendor-Br2x1O5H.js">
-    <link rel="modulepreload" crossorigin href="/krokiolusturucu/assets/vendor-export-lstGUtj7.js">
-    <link rel="modulepreload" crossorigin href="/krokiolusturucu/assets/vendor-map-Cx1B3Yxu.js">
-    <link rel="modulepreload" crossorigin href="/krokiolusturucu/assets/vendor-konva--ro9DP3P.js">
-    <link rel="modulepreload" crossorigin href="/krokiolusturucu/assets/vendor-ui-vxQx8ytl.js">
-    <link rel="modulepreload" crossorigin href="/krokiolusturucu/assets/vendor-react-DALGDLwI.js">
-    <link rel="modulepreload" crossorigin href="/krokiolusturucu/assets/vendor-state-Cce_MDCT.js">
+    <script type="module" crossorigin src="/krokiolusturucu/assets/index-QsLVgRQs.js"></script>
+    <link rel="modulepreload" crossorigin href="/krokiolusturucu/assets/rolldown-runtime-CRqgUL4m.js">
+    <link rel="modulepreload" crossorigin href="/krokiolusturucu/assets/vendor-CnhoIndA.js">
+    <link rel="modulepreload" crossorigin href="/krokiolusturucu/assets/vendor-map-DI0Sm0Ua.js">
+    <link rel="modulepreload" crossorigin href="/krokiolusturucu/assets/vendor-react-BR8xbGQ4.js">
+    <link rel="modulepreload" crossorigin href="/krokiolusturucu/assets/vendor-ui-DFrPF-3W.js">
+    <link rel="modulepreload" crossorigin href="/krokiolusturucu/assets/vendor-state-C07ugCsq.js">
+    <link rel="modulepreload" crossorigin href="/krokiolusturucu/assets/vendor-export-HB5ECSNa.js">
+    <link rel="modulepreload" crossorigin href="/krokiolusturucu/assets/vendor-konva-1f0hFeFj.js">
     <link rel="stylesheet" crossorigin href="/krokiolusturucu/assets/vendor-map-DtQ6Dmri.css">
-    <link rel="stylesheet" crossorigin href="/krokiolusturucu/assets/index-CfzKs3tv.css">
-  <link rel="manifest" href="/krokiolusturucu/manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="/krokiolusturucu/registerSW.js"></script></head>
+    <link rel="stylesheet" crossorigin href="/krokiolusturucu/assets/index-BYTWHj5k.css">
+  <link rel="manifest" href="/krokiolusturucu/manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="/krokiolusturucu/registerSW.js" defer></script></head>
   <body>
     <div id="root"></div>
-    <script>
-      // Anti-Copy and Anti-Inspect Security Script
-      document.addEventListener('contextmenu', event => event.preventDefault());
-      document.onkeydown = function(e) {
-        if(e.keyCode == 123) return false;
-        if(e.ctrlKey && e.shiftKey && e.keyCode == 'I'.charCodeAt(0)) return false;
-        if(e.ctrlKey && e.shiftKey && e.keyCode == 'C'.charCodeAt(0)) return false;
-        if(e.ctrlKey && e.shiftKey && e.keyCode == 'J'.charCodeAt(0)) return false;
-        if(e.ctrlKey && e.keyCode == 'U'.charCodeAt(0)) return false;
-      };
-      
-      // Prevent drag and drop of files if needed
-      window.addEventListener("dragover",function(e){ e.preventDefault(); },false);
-      window.addEventListener("drop",function(e){ e.preventDefault(); },false);
-    </script>
+    <!-- Anti-Copy / Anti-Inspect koruması CSP uyumluluğu için harici dosyaya taşındı (CSP: script-src 'self') -->
+    <script src="/krokiolusturucu/app-guard.js" defer></script>
   </body>
 </html>

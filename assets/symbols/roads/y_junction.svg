@@ -1,18 +1,1 @@
-<svg width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <!-- Yol gövdeleri (beyaz, kalın) — sol dal, sağ dal, gövde -->
-  <line x1="100" y1="200" x2="100" y2="100" stroke="#ffffff" stroke-width="70" stroke-linecap="butt" />
-  <line x1="100" y1="100" x2="0" y2="0" stroke="#ffffff" stroke-width="70" stroke-linecap="round" />
-  <line x1="100" y1="100" x2="200" y2="0" stroke="#ffffff" stroke-width="70" stroke-linecap="round" />
-  <circle cx="100" cy="100" r="35" fill="#ffffff" />
-  <!-- Kesikli siyah orta çizgiler -->
-  <line x1="100" y1="200" x2="100" y2="100" stroke="black" stroke-width="3" stroke-dasharray="15 15" />
-  <line x1="100" y1="100" x2="0" y2="0" stroke="black" stroke-width="3" stroke-dasharray="15 15" />
-  <line x1="100" y1="100" x2="200" y2="0" stroke="black" stroke-width="3" stroke-dasharray="15 15" />
-  <!-- SİYAH yol kenarları — fillet birleşimli (ekrandaki motorla aynı geometri) -->
-  <line x1="65" y1="200" x2="65" y2="114.5" stroke="black" stroke-width="3" />
-  <line x1="135" y1="200" x2="135" y2="114.5" stroke="black" stroke-width="3" />
-  <line x1="-24.75" y1="24.75" x2="65" y2="114.5" stroke="black" stroke-width="3" />
-  <line x1="224.75" y1="24.75" x2="135" y2="114.5" stroke="black" stroke-width="3" />
-  <line x1="24.75" y1="-24.75" x2="100" y2="50.5" stroke="black" stroke-width="3" />
-  <line x1="175.25" y1="-24.75" x2="100" y2="50.5" stroke="black" stroke-width="3" />
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" fill="none" viewBox="0 0 200 200"><path stroke="#fff" stroke-width="70" d="M100 200V100"/><path stroke="#fff" stroke-linecap="round" stroke-width="70" d="M100 100 0 0M100 100 200 0"/><circle cx="100" cy="100" r="35" fill="#fff"/><path stroke="#000" stroke-dasharray="15 15" stroke-width="3" d="M100 200V100M100 100 0 0M100 100 200 0"/><path stroke="#000" stroke-width="3" d="M65 200v-85.5M135 200v-85.5M-24.75 24.75 65 114.5M224.75 24.75 135 114.5M24.75-24.75 100 50.5M175.25-24.75 100 50.5"/></svg>

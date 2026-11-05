@@ -1,17 +1,1 @@
-<svg width="80" height="240" viewBox="0 0 80 240" xmlns="http://www.w3.org/2000/svg">
-  <!-- Fringes Top -->
-  <line x1="5" y1="2" x2="75" y2="2" stroke="#999" stroke-width="4" stroke-dasharray="2 4" />
-  <!-- Fringes Bottom -->
-  <line x1="5" y1="238" x2="75" y2="238" stroke="#999" stroke-width="4" stroke-dasharray="2 4" />
-
-  <!-- Main Body -->
-  <rect x="5" y="4" width="70" height="232" fill="#f8f8f8" stroke="#333" stroke-width="2" />
-  
-  <!-- Outer Border -->
-  <rect x="15" y="14" width="50" height="212" fill="#f0f0f0" stroke="#555" stroke-width="1.5" />
-  
-  <!-- Repeating Diamond Pattern -->
-  <path d="M 40 24 L 55 54 L 40 84 L 25 54 Z" fill="#e0e0e0" stroke="#777" stroke-width="1" />
-  <path d="M 40 84 L 55 114 L 40 144 L 25 114 Z" fill="#e0e0e0" stroke="#777" stroke-width="1" />
-  <path d="M 40 144 L 55 174 L 40 204 L 25 174 Z" fill="#e0e0e0" stroke="#777" stroke-width="1" />
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="80" height="240" viewBox="0 0 80 240"><path stroke="#999" stroke-dasharray="2 4" stroke-width="4" d="M5 2h70M5 238h70"/><path fill="#f8f8f8" stroke="#333" stroke-width="2" d="M5 4h70v232H5z"/><path fill="#f0f0f0" stroke="#555" stroke-width="1.5" d="M15 14h50v212H15z"/><path fill="#e0e0e0" stroke="#777" d="m40 24 15 30-15 30-15-30ZM40 84l15 30-15 30-15-30ZM40 144l15 30-15 30-15-30Z"/></svg>
