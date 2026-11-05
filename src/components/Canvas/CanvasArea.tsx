@@ -1166,6 +1166,18 @@ export const drawExportObject = (ctx: CanvasRenderingContext2D, obj: any, img: H
     return;
   }
 
+  // 4e-2) KARE DUVAR (arch-w-square) — ekrandakiyle aynı (merdiven motoru grubunda
+  //       strokeScaleEnabled={false} ile çizilir): kenar KALINLIĞI SABİT 10 birim.
+  //       Dal yoktu → export SVG'yi drawImage ile esnetiyordu; SVG'nin iç stroke'u
+  //       nesneyle oranlı büyüdüğünden bina PDF'te tuvaldekinin kat kat kalın
+  //       çıkıyordu (kullanıcı raporu: PDF'te bina duvarları kalın).
+  if (symbolId === 'arch-w-square') {
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 10;
+    ctx.strokeRect(0, 0, w, h);
+    return;
+  }
+
   // 4f) MİMARİ EK SEMBOLLER MOTORU — ekranla birebir aynı prosedürel çizim.
   if (EXTRA_ARCH_IDS.includes(symbolId) && drawExtraArch(ctx, symbolId, w, h)) {
     return;
@@ -1364,12 +1376,43 @@ export const drawExportObject = (ctx: CanvasRenderingContext2D, obj: any, img: H
     return;
   }
   if (obj.type === 'text' || obj.type === 'template-text') {
-    ctx.font = `${obj.fontStyle || 'normal'} ${obj.fontSize || 12}px ${obj.fontFamily || 'Arial'}`;
+    const fontSize = obj.fontSize || 12;
+    ctx.font = `${obj.fontStyle || 'normal'} ${fontSize}px ${obj.fontFamily || 'Arial'}`;
     ctx.fillStyle = obj.fill || '#000';
     ctx.textAlign = (obj.align as CanvasTextAlign) || 'left';
-    const lines = String(obj.text || '').split('\n');
     const textX = obj.align === 'right' ? w : (obj.align === 'center' ? w / 2 : 0);
-    lines.forEach((line: string, idx: number) => ctx.fillText(line, textX, (obj.fontSize || 12) * (idx + 1)));
+    // EKRANLA AYNI SARIM: ekranda Konva Text wrap="word" + width ile kelime bazında
+    // satır kaydırılır; export düz fillText çizdiği için uzun metinler PDF'te TEK
+    // satır olarak taşıyordu (örn. bina adı duvarın dışına taşıyordu). Aynı kural:
+    // kutu genişliğine göre kelime sarımı + tek kelime sığmazsa karakter kırılımı.
+    const boxW = obj.width && obj.width > 0 ? obj.width : 0;
+    const paragraphs = String(obj.text || '').split('\n');
+    const lines: string[] = [];
+    for (const para of paragraphs) {
+      if (boxW <= 0) { lines.push(para); continue; }
+      let cur = '';
+      for (const word of para.split(' ')) {
+        const cand = cur ? `${cur} ${word}` : word;
+        if (ctx.measureText(cand).width <= boxW || !cur) {
+          if (!cur && ctx.measureText(word).width > boxW) {
+            // Tek kelime bile satıra sığmıyor → karakter bazında kır (Konva davranışı)
+            let chunk = '';
+            for (const ch of word) {
+              if (chunk && ctx.measureText(chunk + ch).width > boxW) { lines.push(chunk); chunk = ch; }
+              else chunk += ch;
+            }
+            cur = chunk;
+          } else {
+            cur = cand;
+          }
+        } else {
+          lines.push(cur);
+          cur = word;
+        }
+      }
+      lines.push(cur);
+    }
+    lines.forEach((line: string, idx: number) => ctx.fillText(line, textX, fontSize * (idx + 1)));
     ctx.textAlign = 'left';
     return;
   }

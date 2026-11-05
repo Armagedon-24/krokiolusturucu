@@ -49,7 +49,9 @@ const cleanSymbolName = (raw: string): string =>
     .trim();
 
 /** Düz SVG data-URI ikonlar sarı tint alır; karakalem/foto PNG varlıklar beyaz kağıt üzerinde doğal gösterilir.
- *  brightness(0) tint'i detaylı çizimleri (karakalem, gerçekçi PNG) düz lekeye çevirdiği için bu ikili ayırım şart. */
+ *  brightness(0) tint'i detaylı çizimleri (karakalem, gerçekçi PNG) düz lekeye çevirdiği için bu ikili ayırım şart.
+ *  İstisna: panelWhite:true olan semboller (st-cadde/st-sokak) kendi beyaz SVG görünümüyle
+ *  fotoğraf kartında (sidebar-symbol-photo) gösterilir — sarı tint uygulanmaz. */
 const isFlatSvgIcon = (src: unknown): boolean => String(src || '').startsWith('data:image/svg');
 
 /** Metni panoya kopyalar — güvenli olmayan bağlamlar için execCommand yedeğiyle.
@@ -613,7 +615,7 @@ export const Sidebar: React.FC = () => {
                                           // mezarlığa gönderiyordu). Yalnızca kırık görsel durumu gösterilir.
                                           (e.target as HTMLImageElement).style.visibility = 'hidden';
                                         }}
-                                        className={`max-w-[95%] max-h-[95%] object-contain transition-transform duration-300 group-hover:scale-110 relative z-10 pointer-events-none ${isFlatSvgIcon(item.thumbnail || item.src) ? 'sidebar-symbol-filter' : 'sidebar-symbol-photo'}`}
+                                        className={`max-w-[95%] max-h-[95%] object-contain transition-transform duration-300 group-hover:scale-110 relative z-10 pointer-events-none ${isFlatSvgIcon(item.thumbnail || item.src) && !item.panelWhite ? 'sidebar-symbol-filter' : 'sidebar-symbol-photo'}`}
                                       />
                                     </div>
                                     
