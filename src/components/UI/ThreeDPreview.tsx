@@ -4745,7 +4745,9 @@ const AutoFitCamera = ({ contentRef }: { contentRef: React.RefObject<THREE.Group
     // KUŞBAKIŞI: modelin tamamını üstten-arkadan (≈55° yükselme) çerçeveye al.
     // Eski konum (y=150) duvar üstü yükseklikte kaldığı için oda dış cephesinden
     // görünüyor, içerideki mobilya/delil yerleşimi okunmuyordu.
-    const dist = (hExtent / (2 * Math.tan((camera.fov * Math.PI) / 360))) * 1.15;
+    // Tek bina gibi DİKEY sahnelerde yatay genişlik yetmez; yükseklik de mesafeye katılır.
+    const fitExtent = Math.max(hExtent, size.y * 2);
+    const dist = (fitExtent / (2 * Math.tan((camera.fov * Math.PI) / 360))) * 1.15;
     camera.position.set(center.x, dist * 0.85, center.z + dist * 0.62);
     ctrls.target.set(center.x, 0, center.z);
     ctrls.update();
