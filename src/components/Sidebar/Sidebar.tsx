@@ -14,6 +14,7 @@ import {
   CloudDownload,
   Copy,
   Check,
+  Pencil,
 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { v4 as uuidv4 } from 'uuid';
@@ -100,7 +101,8 @@ export const Sidebar: React.FC = () => {
     addNotification,
     isAdmin,
     recoverCloudinaryImages,
-    refreshSymbols
+    refreshSymbols,
+    renameSymbol,
   } = useStore();
 
   useEffect(() => {
@@ -112,6 +114,27 @@ export const Sidebar: React.FC = () => {
   const [showAllUploads, setShowAllUploads] = useState(false);
   const [cloudGalleryOpen, setCloudGalleryOpen] = useState(false);
   const [hoveredSymbol, setHoveredSymbol] = useState<{ id: string, name: string, description?: string, rect: DOMRect } | null>(null);
+  // SEMBOL ADI DÜZENLEME: semboller sekmesinde kalem ikonuyla açılan satır içi düzenleme.
+  // Hazır semboller ve yüklenen görseller dahil tüm sembollerin adı buradan değiştirilir;
+  // yeni ad anında bulut yapılandırmasına senkronlanır (renameSymbol).
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+
+  const startRename = (e: React.MouseEvent, id: string, currentName: string) => {
+    e.stopPropagation();
+    setRenamingId(id);
+    setRenameValue(currentName || '');
+  };
+
+  const commitRename = (catId: string, id: string, fallbackName: string) => {
+    if (renamingId !== id) return; // Enter sonrası blur çift tetiklenmesin
+    const next = renameValue.trim();
+    setRenamingId(null);
+    if (next && next !== fallbackName) {
+      renameSymbol(catId, id, next);
+    }
+  };
+
   // ADMİN: tıklayınca panoya kopyalanan sembol ID'si (geri bildirim rozeti için)
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -621,17 +644,36 @@ export const Sidebar: React.FC = () => {
                                     
                                     {/* Name Area - Larger and Brighter */}
                                     <div className="w-full flex-1 flex items-start justify-center mt-1.5 px-0.5 min-h-[2.2em]">
-                                      <span className="text-[11px] font-black text-gray-100 text-center leading-[1.15] transition-colors group-hover:text-white block w-full break-words drop-shadow-sm">
-                                        {item.name
-                                          .split('?')[0] // Önce query parametrelerini at
-                                          .split('.')[0] // Sonra uzantıyı at
-                                          .replace(/üstten\s+görünüm/gi, '(Üstten)')
-                                          .replace(/sağdan\s+görünüm/gi, '(Sağdan)')
-                                          .replace(/soldan\s+görünüm/gi, '(Soldan)')
-                                          .replace(/\s[a-z0-9]{5,8}$/, '') // Rastgele ekleri temizle
-                                          .replace(/[-_]/g, ' ') 
-                                          .trim()}
-                                      </span>
+                                      {renamingId === item.id ? (
+                                        <input
+                                          type="text"
+                                          value={renameValue}
+                                          onChange={(e) => setRenameValue(e.target.value)}
+                                          onClick={(e) => e.stopPropagation()}
+                                          onDoubleClick={(e) => e.stopPropagation()}
+                                          onMouseDown={(e) => e.stopPropagation()}
+                                          onKeyDown={(e) => {
+                                            if (e.key === 'Enter') commitRename(cat.id, item.id, item.name);
+                                            if (e.key === 'Escape') setRenamingId(null);
+                                          }}
+                                          onBlur={() => commitRename(cat.id, item.id, item.name)}
+                                          autoFocus
+                                          className="w-full text-[10px] font-bold bg-[#111] border border-[#F5C518]/60 text-white rounded px-1 py-0.5 outline-none text-center"
+                                          aria-label="Sembol adını düzenle"
+                                        />
+                                      ) : (
+                                        <span className="text-[11px] font-black text-gray-100 text-center leading-[1.15] transition-colors group-hover:text-white block w-full break-words drop-shadow-sm">
+                                          {item.name
+                                            .split('?')[0] // Önce query parametrelerini at
+                                            .split('.')[0] // Sonra uzantıyı at
+                                            .replace(/üstten\s+görünüm/gi, '(Üstten)')
+                                            .replace(/sağdan\s+görünüm/gi, '(Sağdan)')
+                                            .replace(/soldan\s+görünüm/gi, '(Soldan)')
+                                            .replace(/\s[a-z0-9]{5,8}$/, '') // Rastgele ekleri temizle
+                                            .replace(/[-_]/g, ' ') 
+                                            .trim()}
+                                        </span>
+                                      )}
                                     </div>
 
                                     {/* ADMİN: Sembol ID rozeti — sol üst köşede kalıcı görünür, tıkla → panoya kopyala */}
@@ -669,6 +711,14 @@ export const Sidebar: React.FC = () => {
                                             <Settings2 size={10} />
                                           </button>
                                         )}
+                                        <button
+                                          onClick={(e) => startRename(e, item.id, item.name)}
+                                          onDoubleClick={(e) => e.stopPropagation()}
+                                          className="bg-[#222] text-gray-500 hover:text-[#F5C518] rounded-full border border-white/10 p-1 hover:scale-110 shadow-xl"
+                                          title="İsmi Değiştir (buluta da kaydedilir)"
+                                        >
+                                          <Pencil size={10} />
+                                        </button>
                                         <button
                                           onClick={(e) => {
                                             e.stopPropagation();

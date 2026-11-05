@@ -1,6 +1,64 @@
 import type { VercelRequest, VercelResponse } from './_vercel-shim';
 import { verifyAuth } from './_auth.js';
 
+/**
+ * Cloudinary URL'sinden sürüm/uzantı bağımsız public_id türetir.
+ * Dönüşüm zinciri (f_auto,q_auto,w_80 gibi) ve sürüm segmenti (/v123/) atlanır —
+ * böylece optimize görüntü URL'leri ile ham secure_url aynı public_id'ye düşer
+ * (istemci tarafındaki publicIdFromUrl ile aynı amaç, dönüşüm toleranslı hali).
+ */
+const pidFromUrl = (url?: string): string | null => {
+  if (!url || typeof url !== 'string' || !url.includes('res.cloudinary.com')) return null;
+  const idx = url.indexOf('/upload/');
+  if (idx === -1) return null;
+  const rest = url.substring(idx + 8).split('?')[0];
+  const parts = rest.split('/').filter(Boolean);
+  // Dönüşüm segmentlerini at: virgül zincirli (f_auto,q_auto) veya bilinen bayrak önekli (w_80, c_fill...)
+  while (
+    parts.length > 1 &&
+    (parts[0].includes(',') || /^(f_|q_|w_|h_|c_|fl_|d_|r_|o_|e_|b_|a_|g_)[a-z0-9_.-]*$/i.test(parts[0]))
+  ) {
+    parts.shift();
+  }
+  if (parts.length > 0 && /^v\d+$/.test(parts[0])) parts.shift();
+  if (parts.length === 0) return null;
+  return parts.join('/').replace(/\.[a-zA-Z0-9]+$/, '') || null;
+};
+
+/**
+ * Bulut yapılandırmasından (kroki_config_v2) public_id -> admin ismi haritası çıkarır.
+ * Admin semboller panelinde bir sembole ne isim verdiyse bulut galerisinde ve
+ * eksik taramasında DA o isim görünür (dosya adı değil, paneldeki isim).
+ * Yapılandırma okunamazsa boş harita döner — mevcut davranış korunur.
+ */
+const buildLibraryNameMap = async (cloudName: string): Promise<Map<string, string>> => {
+  const map = new Map<string, string>();
+  const urls = [
+    `https://res.cloudinary.com/${cloudName}/raw/upload/kroki_config_v2`,
+    `https://res.cloudinary.com/${cloudName}/raw/upload/kroki_config_v2.json`,
+  ];
+  for (const u of urls) {
+    try {
+      const res = await fetch(u);
+      if (!res.ok) continue;
+      const cfg = await res.json();
+      const add = (src?: string, name?: string) => {
+        const pid = pidFromUrl(src);
+        const n = typeof name === 'string' ? name.trim() : '';
+        if (pid && n) map.set(pid, n);
+      };
+      (cfg?.uploadedImages || []).forEach((img: { src?: string; name?: string }) => add(img?.src, img?.name));
+      (cfg?.allSymbols || []).forEach((cat: { symbols?: { src?: string; name?: string }[] }) =>
+        (cat?.symbols || []).forEach((s: { src?: string; name?: string }) => add(s?.src, s?.name))
+      );
+      if (map.size > 0) break; // ilk okunan yapılandırma yeterli
+    } catch {
+      continue;
+    }
+  }
+  return map;
+};
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -77,6 +135,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         category: folderName || 'uncategorized'
       };
     });
+
+    // ADMİN İSİMLERİ BİRLEŞTİR: semboller panelinde verilen isim, bulut kaydının da ismi olur.
+    // Eşleştirme public_id üzerinden yapılır; yapılandırma okunamazsa dosya adlarıyla devam edilir.
+    try {
+      const nameByPid = await buildLibraryNameMap(CLOUD_NAME);
+      if (nameByPid.size > 0) {
+        assets.forEach((a: { id: string; name: string }) => {
+          const libName = nameByPid.get(a.id);
+          if (libName) a.name = libName;
+        });
+      }
+    } catch (mergeErr) {
+      console.error('Bulut isim birleştirme başarısız (dosya adlarıyla devam):', mergeErr);
+    }
 
     return res.status(200).json({ assets });
   } catch (error: unknown) {

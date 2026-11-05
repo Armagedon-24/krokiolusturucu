@@ -59,6 +59,10 @@ interface StoreState extends CanvasState {
   /** Örnek olay kroki senaryosunu tuvale yükler: Olay Yeri Krokisi şablonu + senaryo nesneleri. */
   loadKrokiScenario: (scenario: KrokiScenario) => void;
   removeSymbol: (catId: string, symbolId: string) => void;
+  /** Sembol/görsel adını günceller: allSymbols kaydı + (eşleşirse) uploadedImages kaydı
+   *  birlikte güncellenir ve değişiklik bulut yapılandırmasına senkronlanır.
+   *  Böylece panelde verilen isim, bulut galerisinde ve diğer cihazlarda da geçerli olur. */
+  renameSymbol: (catId: string, symbolId: string, newName: string) => void;
   setAllSymbols: (allSymbols: readonly { readonly id: string, readonly name: string, readonly symbols: readonly Symbol[] }[]) => void;
   /** Kalıcı sembol yerleşim haritası (kategori ID -> sıralı sembol ID listesi) + tazelik damgası.
    *  Adminin taşıdığı kategori düzeni sayfa yenilense ve bulut erişilemese dahi korunur. */
@@ -1207,6 +1211,34 @@ export const useStore = create<StoreState>()(
         // Yerleşim damgası: admin kategori düzenini değiştirdi (taşıma/sıralama).
         // Bulut senkronu başarısız olsa bile bu düzen localStorage'da kalıcı olur.
         set({ allSymbols, _placementsSavedAt: Date.now() });
+        if (get().isAdmin) {
+          get().syncToCloud(true);
+        }
+      },
+
+      renameSymbol: (catId, symbolId, newName) => {
+        const name = (newName || '').trim();
+        if (!name) return;
+
+        const category = get().allSymbols.find(c => c.id === catId);
+        const current = category?.symbols.find((s) => s.id === symbolId);
+        if (current && current.name === name) return; // değişiklik yok
+
+        set((state) => ({
+          // Kütüphane kaydı (hazır semboller + buluttan birleşenler)
+          allSymbols: state.allSymbols.map((cat) =>
+            cat.id === catId
+              ? { ...cat, symbols: cat.symbols.map((s) => (s.id === symbolId ? { ...s, name } : s)) }
+              : cat
+          ),
+          // Aynı id yüklenen görselse (semboller sekmesi onu uploadedImages'tan basar) orayı da güncelle
+          uploadedImages: state.uploadedImages.map((img) =>
+            img.id === symbolId ? { ...img, name } : img
+          ),
+        }));
+
+        // DÜZENLENENİ BULUTA GÜNCELLE: isim, bulut yapılandırmasına (kroki_config_v2)
+        // yazılır; bulut galerisi ve diğer cihazlar bu ismi görür.
         if (get().isAdmin) {
           get().syncToCloud(true);
         }
