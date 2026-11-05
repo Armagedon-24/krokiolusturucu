@@ -161,8 +161,6 @@ export default defineConfig({
           if (id.includes('/zustand/')) return 'vendor-state';
           // UI utilities
           if (id.includes('/lucide-react/') || id.includes('/clsx/') || id.includes('/class-variance-authority/')) return 'vendor-ui';
-          // Cloudinary / media
-          if (id.includes('/cloudinary') || id.includes('/axios/')) return 'vendor-media';
           // Catch-all
           return 'vendor';
         }

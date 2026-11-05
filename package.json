@@ -20,7 +20,6 @@
     "@react-three/fiber": "^9.6.1",
     "@types/leaflet": "^1.9.21",
     "@types/three": "^0.184.0",
-    "cloudinary": "^2.10.0",
     "jspdf": "^4.2.1",
     "konva": "^10.2.5",
     "leaflet": "^1.9.4",
