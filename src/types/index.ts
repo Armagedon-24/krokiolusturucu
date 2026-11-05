@@ -47,6 +47,8 @@ export interface CanvasObject {
   curvatureX?: number;
   findingNo?: string;
   findingDesc?: string;
+  /** Nesne çizimden gizli mi? (Katman/delil gizleme) */
+  hidden?: boolean;
   shadowColor?: string;
   shadowBlur?: number;
   shadowOpacity?: number;

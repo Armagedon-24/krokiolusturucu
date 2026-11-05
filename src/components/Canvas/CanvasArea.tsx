@@ -1045,6 +1045,10 @@ export const drawExportObject = (ctx: CanvasRenderingContext2D, obj: any, img: H
       .filter((o: any) => o.findingNo)
       .sort((a: any, b: any) => String(a.findingNo || '').localeCompare(String(b.findingNo || ''), undefined, { numeric: true }));
 
+    // Ekrandaki davranışın aynısı: hiç bulgu yoksa liste tuvalde gizlenir;
+    // PDF'te de boş kutu çizilmez (boş kutu kullanıcının bıraktığı izlenimi bozar).
+    if (!findings.length) return;
+
     const textWidth = w - 16;
     const charWidth = 4.5;
     const prefixWidth = 54;
@@ -4189,7 +4193,31 @@ export const CanvasArea: React.FC = () => {
     isAdmin,
     updateProjectInfo,
     scaleCalibration,
+    scenes,
   } = useStore();
+
+  // BULGU LİSTESİ SAYFALAR ARASI TOPLAMA: liste, tüm sayfalardaki bulguları
+  // toplayan ana tablodur (kullanıcı akışı: bulgular detay sayfalarında,
+  // ana liste özet sayfasında). Aktif sayfada zaten var olan bulgu tekrar
+  // eklenmez; böylece ekranda ve PDF'te liste her zaman dolu görünür.
+  const crossPageFindings = React.useMemo(() => {
+    const ownIds = new Set(objects.filter((o) => o.findingNo).map((o) => o.id));
+    const extra: CanvasObject[] = [];
+    (scenes || []).forEach((s) => (s.objects || []).forEach((o) => {
+      if (o?.findingNo && !ownIds.has(o.id)) {
+        ownIds.add(o.id);
+        extra.push(o);
+      }
+    }));
+    return extra;
+  }, [objects, scenes]);
+  // IndividualObject'in bulgu listesi dalı bu diziyi okur (görünürlük + satırlar).
+  // Diğer dallar (yol/duvar snapping) symbolId filtreli olduğundan yabancı
+  // bulgular davranışı etkilemez.
+  const allFindingsSource = React.useMemo(
+    () => [...objects, ...crossPageFindings] as CanvasObject[],
+    [objects, crossPageFindings]
+  );
 
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [hoveredPos, setHoveredPos] = useState<{ x: number, y: number } | null>(null);
@@ -4700,8 +4728,20 @@ export const CanvasArea: React.FC = () => {
         });
 
         // Helper: draw a single scene to an off-screen canvas and return dataURL
+        // BULGU LİSTESİ: her sayfadaki liste TÜM sayfalardaki bulguları gösterir
+        // (ekrandaki davranışın aynısı). foreignFindings yalnızca liste kaynağı
+        // olarak kullanılır; sayfaya çizim sırası/z-index değişmez.
+        const allFindingsMap = new Map<string, CanvasObject>();
+        scenesToExport.forEach((s: { objects?: CanvasObject[] }) => (s.objects || []).forEach((o) => {
+          if (o?.findingNo && !allFindingsMap.has(o.id)) allFindingsMap.set(o.id, o);
+        }));
         const renderSceneToDataURL = async (scene: any, bgColorVal: string): Promise<string | null> => {
-          const sceneObjects: any[] = scene.objects || [];
+          const sceneObjects: CanvasObject[] = scene.objects || [];
+          const listSourceObjects = (() => {
+            const own = new Set(sceneObjects.map((o) => o.id));
+            const foreign = [...allFindingsMap.values()].filter((f) => !own.has(f.id));
+            return foreign.length ? [...sceneObjects, ...foreign] : sceneObjects;
+          })();
           const W = canvasOrientation === 'landscape' ? 1400 : 1000;
           const H = canvasOrientation === 'landscape' ? 1000 : 1400;
           const PIXEL_RATIO = 2;
@@ -4784,7 +4824,7 @@ export const CanvasArea: React.FC = () => {
             }
 
             const img = obj.src ? (imgMap.get(obj.src) || null) : null;
-            drawExportObject(ctx, obj, img, sceneObjects);
+            drawExportObject(ctx, obj, img, listSourceObjects);
 
             ctx.restore();
           }
@@ -5118,6 +5158,18 @@ export const CanvasArea: React.FC = () => {
         const currentObjects = state.objects || [];
         const currentBg = state.backgroundImage;
 
+        // BULGU LİSTESİ SAYFALAR ARASI TOPLAMA: önizleme de PDF ile aynı kuralı izler —
+        // listede tüm sayfalardaki bulgular görünür.
+        const previewFindingIds = new Set(currentObjects.filter((o) => o.findingNo).map((o) => o.id));
+        const previewForeignFindings: CanvasObject[] = [];
+        (state.scenes || []).forEach((s) => (s.objects || []).forEach((o) => {
+          if (o?.findingNo && !previewFindingIds.has(o.id)) {
+            previewFindingIds.add(o.id);
+            previewForeignFindings.push(o);
+          }
+        }));
+        const previewListSource = previewForeignFindings.length ? [...currentObjects, ...previewForeignFindings] : currentObjects;
+
         // Helper: load image to HTMLImageElement
         const loadImg = (src: string): Promise<HTMLImageElement | null> => new Promise(resolve => {
           if (!src) return resolve(null);
@@ -5201,7 +5253,7 @@ export const CanvasArea: React.FC = () => {
           }
 
           const img = obj.src ? (imgMap.get(obj.src) || null) : null;
-          drawExportObject(ctx, obj, img, currentObjects);
+          drawExportObject(ctx, obj, img, previewListSource);
           ctx.restore();
         }
 
@@ -6357,7 +6409,7 @@ export const CanvasArea: React.FC = () => {
                       onSelect={() => setSelectedId(obj.id)}
                       drawingArea={drawingArea}
                       isAdmin={isAdmin}
-                      allObjects={objects}
+                      allObjects={allFindingsSource}
                       onDragMove={(e: any) => {
                         setHoveredId(null);
                         handleDragMove(e);

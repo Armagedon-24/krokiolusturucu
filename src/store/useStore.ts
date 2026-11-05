@@ -1084,11 +1084,33 @@ export const useStore = create<StoreState>()(
           const userDrawnObjects = existingObjects.filter(
             (obj) => !obj.isTemplate || obj.id === 'corporate-logo' || obj.id?.startsWith('logo-')
           );
-          
+
           const userHasLogo = userDrawnObjects.some(u => u.id === 'corporate-logo');
-          const newTemplateObjects = result.objects.filter(
+          let newTemplateObjects = result.objects.filter(
             t => !userHasLogo || (t.id !== 'corporate-logo' && t.id !== 'corporate-logo-box')
           );
+
+          // BULGU LİSTESİ KONUMU KORUNUR: liste tuvalde sürüklenip yerleştirilebilir.
+          // Şablon yeniden üretilirken (sayfa değişimi, bilgi güncellemesi, PDF çıktısı
+          // sonrası switchScene) kullanıcının bıraktığı konum/boyut aynen korunur;
+          // aksi halde liste her seferinde varsayılan köşeye geri atlar.
+          const existingList = existingObjects.find(o => o.type === 'finding-list');
+          if (existingList) {
+            newTemplateObjects = newTemplateObjects.map(t =>
+              t.type === 'finding-list'
+                ? {
+                    ...t,
+                    x: existingList.x,
+                    y: existingList.y,
+                    width: existingList.width,
+                    height: existingList.height,
+                    rotation: existingList.rotation ?? 0,
+                    scaleX: existingList.scaleX ?? 1,
+                    scaleY: existingList.scaleY ?? 1,
+                  }
+                : t
+            );
+          }
 
           return {
             objects: [...newTemplateObjects, ...userDrawnObjects],

@@ -186,8 +186,7 @@ export const Topbar: React.FC = () => {
           <Info size={14} />
           <span>HAKKINDA</span>
         </button>
-        <button onClick={() => window.print()} className="px-4 py-1.5 bg-[#15803d] text-white rounded-md hover:bg-[#166534] transition-all text-xs font-black tracking-wide" aria-label="Yazdır"><span>YAZDIR</span></button>
-        
+
         <button 
           onClick={() => {
             showConfirm({
