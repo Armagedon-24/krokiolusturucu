@@ -57,6 +57,47 @@ const getEffectiveSize = (obj: any) => {
   return { width: w, height: h };
 };
 
+/**
+ * 2D KAĞIT / ŞABLON NESNELERİ 3B'YE TAŞINMAZ.
+ * Kağıt zemini, form tabloları, çizgi ölçüleri, metinler, bulgu listesi tablosu ve
+ * ölçü/açıklama okları yalnızca 2D kroki dökümanına ait ekran öğeleridir; 3B sahnede
+ * dev kutular/barlar olarak çizilmeleri sahneyi bozuyordu. Ayrıca gizli (hidden)
+ * nesneler de 3B'de gösterilmez.
+ */
+const NON_3D_OBJECT_TYPES = ['text', 'rect', 'line', 'finding-list'];
+const NON_3D_SYMBOL_IDS = [
+  'a-4', 'a-5',                    // ölçü / yön okları (2D ölçüm şeması)
+  'ev-callout',                    // açıklama balonu
+  'ev-arrow-desc',                 // açıklama oku (çerçeveli)
+  'ev-arrow-desc-ellipse',
+  'ev-arrowhead',
+  'ev-north-arrow',                // kuzey oku (kağıt işareti)
+  'ev-camera-link',
+];
+interface Non3DCheckable { hidden?: boolean; type?: string; symbolId?: string }
+const isNon3DObject = (o?: Non3DCheckable | null): boolean => {
+  if (!o) return true;
+  if (o.hidden) return true;
+  if (NON_3D_OBJECT_TYPES.includes(o.type || '')) return true;
+  const s = (o.symbolId || '').toLowerCase();
+  if (!s) return true; // symbolId taşımayan her nesne kağıt/form öğesidir
+  return NON_3D_SYMBOL_IDS.some((n) => s === n || s.startsWith(n));
+};
+
+/**
+ * ZEMİN DECAL'LERİ — iz, delil ve işaret sembolleri 3B'de kutu olarak değil,
+ * zeminde neredeyse düz bir levha olarak çizilmelidir (2D konumla birebir okunur).
+ */
+const FLAT_DECAL_PREFIXES = [
+  'tr-', 'ei-', 'ex-',
+  'ev-circle', 'ev-square', 'ev-rect', 'ev-lshape', 'ev-crack', 'ev-rope',
+  'ev-ruler', 'ev-scale', 'ev-abfo', 'ev-angle', 'ev-bpa', 'ev-shoe', 'ev-tool',
+];
+const isFlatDecalId = (sId: string): boolean =>
+  FLAT_DECAL_PREFIXES.some((p) => sId.startsWith(p));
+/** Zemin decal kalınlığı (cm) — 3B'de ince bir tabaka gibi durur */
+const FLAT_DECAL_HEIGHT_CM = 2.5;
+
 const Wall = ({ x, y, width, rotation, h = 250, yOffset = 0, wallColor, wallThickness }: any) => {
   const thickness = wallThickness || (10 * SCALE);
   const rad = -rotation * (Math.PI / 180);
@@ -321,7 +362,7 @@ class CanvasErrorBoundary extends React.Component<{ children: React.ReactNode; o
   }
 }
 
-const Player = ({ isWalkMode }: { isWalkMode: boolean }) => {
+const Player = ({ isWalkMode, contentRef }: { isWalkMode: boolean; contentRef?: React.RefObject<THREE.Group | null> }) => {
   const { camera } = useThree();
   const moveState = useRef({ forward: false, backward: false, left: false, right: false });
 
@@ -346,15 +387,30 @@ const Player = ({ isWalkMode }: { isWalkMode: boolean }) => {
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
     
-    // Set starting position at eye level of 175cm at center of room looking forward
-    camera.position.set(0, 175 * SCALE, 150 * SCALE);
-    camera.lookAt(0, 175 * SCALE, 0);
+    // Başlangıç noktası: sahnenin GERÇEK içerik kutusundan türetilir. Sabit (0, z)
+    // noktası oda dışına düşebiliyor ve açılışta duvar yüzü gösteriyordu.
+    let sx = 0, sz = 150 * SCALE, tx = 0, tz = 0;
+    const g = contentRef?.current;
+    if (g) {
+      const box = new THREE.Box3().setFromObject(g);
+      if (isFinite(box.min.x)) {
+        const c = new THREE.Vector3(); box.getCenter(c);
+        const s = new THREE.Vector3(); box.getSize(s);
+        sx = c.x;
+        sz = c.z + Math.min(s.z * 0.28, 80);
+        tx = c.x;
+        tz = c.z - s.z * 0.5;
+      }
+    }
+    // Set starting position at eye level of 175cm looking forward
+    camera.position.set(sx, 175 * SCALE, sz);
+    camera.lookAt(tx, 175 * SCALE, tz);
 
     return () => {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
     };
-  }, [isWalkMode, camera]);
+  }, [isWalkMode, camera, contentRef]);
 
   useFrame((_, delta) => {
     if (!isWalkMode) return;
@@ -1244,6 +1300,61 @@ if (allWalls) checkIntersections(allWalls, false);
   );
 };
 
+/** Numaratör (ev-circle / ev-square) yüzey dokusu: sarı zemin + bulgu numarası.
+ *  2D tuvalde numara Konva ile üstte çizilir; 3B'de aynı görünüm canvas dokusuyla üretilir. */
+const useMarkerTexture = (no?: string, square?: boolean) => {
+  return React.useMemo(() => {
+    const c = document.createElement('canvas');
+    c.width = c.height = 128;
+    const ctx = c.getContext('2d');
+    if (!ctx) return null;
+    ctx.clearRect(0, 0, 128, 128);
+    ctx.fillStyle = '#F5C518';
+    ctx.strokeStyle = '#1a1a1a';
+    ctx.lineWidth = 7;
+    if (square) {
+      ctx.fillRect(10, 10, 108, 108);
+      ctx.strokeRect(10, 10, 108, 108);
+    } else {
+      ctx.beginPath();
+      ctx.arc(64, 64, 56, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#111111';
+    ctx.font = 'bold 68px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(no || '•', 64, 70);
+    const tex = new THREE.CanvasTexture(c);
+    tex.anisotropy = 4;
+    return tex;
+  }, [no, square]);
+};
+
+const FindingMarker3D = ({ no, width, height, rad, square }: { no?: string; width: number; height: number; rad: number; square?: boolean }) => {
+  const tex = useMarkerTexture(no, square);
+  const r = Math.max(2, Math.min(width, height) / 2);
+  const discH = 1.2 * SCALE;
+  return (
+    <group position={[0, discH / 2, 0]} rotation={[0, rad, 0]}>
+      <mesh castShadow receiveShadow>
+        {square
+          ? <boxGeometry args={[width, discH, height]} />
+          : <cylinderGeometry args={[r, r, discH, 32]} />}
+        <meshStandardMaterial color="#F5C518" roughness={0.5} metalness={0.05} />
+      </mesh>
+      {/* Üst yüz — numaralı kapak */}
+      <mesh position={[0, discH / 2 + 0.05, 0]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={5}>
+        {square
+          ? <planeGeometry args={[width * 0.96, height * 0.96]} />
+          : <circleGeometry args={[r * 0.96, 32]} />}
+        <meshBasicMaterial map={tex || undefined} transparent={false} />
+      </mesh>
+    </group>
+  );
+};
+
 const _stdHeightCache = new Map<string, number>();
 const getStandardHeight = (symbolId: string): number => {
   const s = symbolId?.toLowerCase() || '';
@@ -1292,8 +1403,10 @@ const Symbol3D = ({ obj, wallThickness, realObj, allWalls, visualObjects, upload
   const isImpactMark = sIdLower === 'tr-bullet-glass' || sIdLower === 'tr-bullet-wall';
   
   // Custom volumetric mappings (furniture, etc.)
-  // isBed: f-1, f-2 — but NOT f-12/f-13 (wardrobes)
-  const isBed = (sIdLower === 'f-1' || sIdLower === 'f-2' || (sIdLower.startsWith('f-1') && !sIdLower.startsWith('f-12') && !sIdLower.startsWith('f-13'))) || sIdLower.includes('yatak') || sIdLower.includes('bed') || nameLower.includes('yatak');
+  // isBed: f-1, f-2 ve varyantları (f-1x, f-2x) — ama f-10/f-11 (halı/yolluk/paspas) ve
+  // f-12/f-13 (gardırop) HARIÇ. "f-10".startsWith("f-1") tuzağına karşı rakam sınırı:
+  // /^f-1(\D|$)/ yalnızca f-1, f-1-... eşleşir; f-10..f-19 eşleşmez.
+  const isBed = (sIdLower === 'f-1' || sIdLower === 'f-2' || (/^f-1(\D|$)/.test(sIdLower) && !sIdLower.startsWith('f-12') && !sIdLower.startsWith('f-13'))) || sIdLower.includes('yatak') || sIdLower.includes('bed') || nameLower.includes('yatak');
   const isSofa = sIdLower.startsWith('f-5') || sIdLower.startsWith('f-8') || sIdLower.includes('koltuk') || sIdLower.includes('sofa') || nameLower.includes('koltuk');
   const isTable = sIdLower.includes('masa') || sIdLower.includes('sehpa') || sIdLower.includes('table');
   const isChair = sIdLower.includes('sandalye') || sIdLower.includes('chair');
@@ -1435,7 +1548,24 @@ const Symbol3D = ({ obj, wallThickness, realObj, allWalls, visualObjects, upload
     return <Building3D x={posX} y={posZ} width={finalW} height={finalH} rad={rad} floors={floors} textureSrc={textureSrc} />;
   }
 
-  return <SymbolWithTexture x={posX} y={posZ} width={finalW} height={finalH} rad={rad} fill={fill} textureSrc={textureSrc} zHeight={(actualObj.zHeight || autoHeight) * SCALE} isVertical={actualObj.isVertical} isWound={isWound} zOffset={yOff} />;
+  // Numaratörler (bulgu işaretleyicileri): numaralı, zeminde ince disk/kafe olarak çizilir
+  if (sIdLower === 'ev-circle' || sIdLower === 'ev-square') {
+    return (
+      <FindingMarker3D
+        no={String(actualObj.findingNo || '')}
+        width={finalW}
+        height={finalH}
+        rad={rad}
+        square={sIdLower === 'ev-square'}
+      />
+    );
+  }
+
+  // İz / delil / işaret sembolleri zeminde ince decal olarak çizilir (2D konumla birebir)
+  const flatDecal = isFlatDecalId(effSymbolId);
+  const bodyHeightCm = flatDecal ? FLAT_DECAL_HEIGHT_CM : (actualObj.zHeight || autoHeight);
+
+  return <SymbolWithTexture x={posX} y={posZ} width={finalW} height={finalH} rad={rad} fill={fill} textureSrc={textureSrc} zHeight={bodyHeightCm * SCALE} isVertical={actualObj.isVertical} isWound={isWound} zOffset={yOff} />;
 };
 
 const Sofa3D = ({ width, height, rad, x, y, zOffset }: any) => {
@@ -2470,7 +2600,7 @@ const SymbolWithTexture = ({ x, y, width, height, rad, fill, textureSrc, zHeight
   const wUnits = width;
   const dUnits = height;
 
-  const bodyColor = fill || "#ffffff";
+  const bodyColor = !fill || fill === 'transparent' || fill === 'none' ? "#ffffff" : fill;
   const groupY = (isVertical ? (hUnits / 2) : 0) + (zOffset || 0);
   const meshRotX = isVertical ? 0 : -Math.PI / 2;
 
@@ -4190,7 +4320,10 @@ const Scene = ({ objects, viewMode, selectedId, setSelectedId, onCaptureRef }: a
     const centerX = stageWidth / 2;
     const centerY = stageHeight / 2;
 
-    const objectsWithCenters = objects.map((o: any) => {
+    // 2B kağıt/form/ölçü nesneleri ve gizli nesneler 3B sahneye alınmaz
+    const renderable = (objects || []).filter((o: Non3DCheckable) => !isNon3DObject(o));
+
+    const objectsWithCenters = renderable.map((o: any) => {
       const sId = o.symbolId?.toLowerCase() || '';
       const isTraj = sId.includes('shooting') || sId.includes('atış') || sId.includes('ateş');
       const { width: w, height: h } = getEffectiveSize(o);
@@ -4240,12 +4373,21 @@ const Scene = ({ objects, viewMode, selectedId, setSelectedId, onCaptureRef }: a
           x: w.x + px * Math.cos(r) - py * Math.sin(r),
           y: w.y + px * Math.sin(r) + py * Math.cos(r)
         });
-        processedWalls.push({ ...w, id: `${w.id}-t`, cx: rotate(wW/2, 0).x, cy: rotate(wW/2, 0).y, width: wW + 10, height: 10, rotation: w.rotation, symbolId: 'arch-w1-fake' });
-        processedWalls.push({ ...w, id: `${w.id}-b`, cx: rotate(wW/2, wH).x, cy: rotate(wW/2, wH).y, width: wW + 10, height: 10, rotation: w.rotation, symbolId: 'arch-w1-fake' });
-        processedWalls.push({ ...w, id: `${w.id}-l`, cx: rotate(0, wH/2).x, cy: rotate(0, wH/2).y, width: wH + 10, height: 10, rotation: w.rotation + 90, symbolId: 'arch-w1-fake' });
-        processedWalls.push({ ...w, id: `${w.id}-r`, cx: rotate(wW, wH/2).x, cy: rotate(wW, wH/2).y, width: wH + 10, height: 10, rotation: w.rotation + 90, symbolId: 'arch-w1-fake' });
+        processedWalls.push({ ...w, id: `${w.id}-t`, cx: rotate(wW/2, 0).x, cy: rotate(wW/2, 0).y, width: wW + 10, height: 10, wallLen: wW + 10, rotation: w.rotation, symbolId: 'arch-w1-fake' });
+        processedWalls.push({ ...w, id: `${w.id}-b`, cx: rotate(wW/2, wH).x, cy: rotate(wW/2, wH).y, width: wW + 10, height: 10, wallLen: wW + 10, rotation: w.rotation, symbolId: 'arch-w1-fake' });
+        processedWalls.push({ ...w, id: `${w.id}-l`, cx: rotate(0, wH/2).x, cy: rotate(0, wH/2).y, width: wH + 10, height: 10, wallLen: wH + 10, rotation: w.rotation + 90, symbolId: 'arch-w1-fake' });
+        processedWalls.push({ ...w, id: `${w.id}-r`, cx: rotate(wW, wH/2).x, cy: rotate(wW, wH/2).y, width: wH + 10, height: 10, wallLen: wH + 10, rotation: w.rotation + 90, symbolId: 'arch-w1-fake' });
       } else {
-        processedWalls.push({ ...w });
+        // DİKEY DUVAR DÜZELTMESİ: 2B'de dikey duvarlar (arch-w1vi vb.) genişlik=8px,
+        // yükseklik=duvar boyu olarak saklanır. 3B'de kutunun X boyutu "duvar boyu",
+        // kalınlık ise ayrı tutulmalıdır. Etkin yükseklik > etkin genişlik ise duvar
+        // dikeydir: boyu yükseklikten alınır ve 3B ekseni için +90° döndürülür.
+        const { width: ww, height: wh } = getEffectiveSize(w);
+        if (wh > ww) {
+          processedWalls.push({ ...w, width: wh, height: ww, wallLen: wh, rotation: (w.rotation || 0) + 90 });
+        } else {
+          processedWalls.push({ ...w, wallLen: ww });
+        }
       }
     });
 
@@ -4254,10 +4396,9 @@ const Scene = ({ objects, viewMode, selectedId, setSelectedId, onCaptureRef }: a
       let minLY = 250;
       processedWalls.forEach((wall: any) => {
         const local = toLocal(op, wall, scale);
-        const { width: wWidthRaw } = getEffectiveSize(wall);
+        const wWidth = (wall.wallLen ?? getEffectiveSize(wall).width) * scale;
         const rotDiff = Math.abs(((wall.rotation || 0) - (op.rotation || 0)) % 180);
         const rotationMatch = rotDiff < 20 || rotDiff > 160;
-        const wWidth = wWidthRaw * scale;
         if (rotationMatch && Math.abs(local.x) < (wWidth/2 + 20) && Math.abs(local.y) < minLY) {
           minLY = Math.abs(local.y);
           bestWallId = wall.id;
@@ -4268,10 +4409,9 @@ const Scene = ({ objects, viewMode, selectedId, setSelectedId, onCaptureRef }: a
 
     const finalWalls: any[] = [];
     processedWalls.forEach((wall: any) => {
-      const { width: wallWidthRaw } = getEffectiveSize(wall);
       const wX = (wall.cx - centerX) * scale;
       const wY = (wall.cy - centerY) * scale;
-      const wWidth = wallWidthRaw * scale;
+      const wWidth = (wall.wallLen ?? getEffectiveSize(wall).width) * scale;
       const wHeight = thickness; 
       const wRad = (wall.rotation || 0) * (Math.PI / 180);
       const wallOpenings = openingsWithWalls.filter((op: any) => op.bestWallId === wall.id)
@@ -4279,7 +4419,10 @@ const Scene = ({ objects, viewMode, selectedId, setSelectedId, onCaptureRef }: a
           const local = toLocal(op, wall, scale);
           const { width: opWidthRaw } = getEffectiveSize(op);
           const isD = isDoor(op);
-          return { ...op, localX: local.x, localY: local.y, effectiveWidth: (isD ? 80 : opWidthRaw) * scale };
+          // Kapı boşluğu 2B'deki gerçek kanat genişliğidir (eski davranıştaki 80px
+          // zorlaması, kanattan geniş boşluklar açıyordu). Aşırı küçük değerlere karşı
+          // 50px alt sınır koruması korunur.
+          return { ...op, localX: local.x, localY: local.y, effectiveWidth: (isD ? Math.max(50, opWidthRaw) : opWidthRaw) * scale };
         })
         .sort((a: any, b: any) => a.localX - b.localX);
 
@@ -4451,8 +4594,7 @@ const Scene = ({ objects, viewMode, selectedId, setSelectedId, onCaptureRef }: a
         let minDist = 125;
         for (const wall of processedWalls) {
           const local = toLocal(obj, wall, scale);
-          const { width: wWidthRaw } = getEffectiveSize(wall);
-          const wW = wWidthRaw * scale;
+          const wW = (wall.wallLen ?? getEffectiveSize(wall).width) * scale;
           const rotDiff = Math.abs(((wall.rotation || 0) - (obj.rotation || 0)) % 180);
           if (local.x > -wW/2 - 10 && local.x < wW/2 + 10 && Math.abs(local.y) < minDist && (rotDiff < 20 || rotDiff > 160)) {
             minDist = Math.abs(local.y);
@@ -4471,7 +4613,9 @@ const Scene = ({ objects, viewMode, selectedId, setSelectedId, onCaptureRef }: a
       
       return { 
         ...obj, x: fX, y: fY, rotation: fRot,
-        width: (isD ? 80 : effW) * scale, height: (isD ? 60 : effH) * scale,
+        // 2B efektif boyutlar aynen korunur (eski "kapı=80px" zorlaması kaldırıldı —
+        // kanat, duvardaki boşluktan geniş olup komşu duvar segmentlerinin üstüne biniyordu)
+        width: effW * scale, height: effH * scale,
         zHeight: (obj.zHeight !== undefined) ? obj.zHeight : defaultZH, 
         yOffset: obj.yOffset || 0
       };
@@ -4486,11 +4630,15 @@ const Scene = ({ objects, viewMode, selectedId, setSelectedId, onCaptureRef }: a
     <>
       <SceneCaptureController onCaptureRef={onCaptureRef} />
       <PerspectiveCamera makeDefault position={[0, 400, 400]} fov={50} />
-      <AutoFitCamera contentRef={contentGroupRef} />
       {viewMode === 'orbit' ? (
-        <OrbitControls makeDefault minPolarAngle={0} maxPolarAngle={Math.PI / 2.1} minDistance={30} maxDistance={2000} />
+        <>
+          <OrbitControls makeDefault minPolarAngle={0} maxPolarAngle={Math.PI / 2.1} minDistance={30} maxDistance={2000} />
+          {/* Kuşbakışı otomatik çerçeveleme yalnızca orbit modunda çalışır; gezinti
+              modunda kendi başlangıç noktasını (Player) kurar, çakışmaz. */}
+          <AutoFitCamera contentRef={contentGroupRef} />
+        </>
       ) : (
-        <Player isWalkMode={true} />
+        <Player isWalkMode={true} contentRef={contentGroupRef} />
       )}
       {/* Yerel gökyüzü/zemin dolgu ışığı — eski <Environment preset="city"> CDN bağımlılığının yerine */}
       <hemisphereLight intensity={0.65} color="#e3edf7" groundColor="#8f9296" />
@@ -4587,16 +4735,19 @@ const AutoFitCamera = ({ contentRef }: { contentRef: React.RefObject<THREE.Group
       retryCount.current++;
       if (retryCount.current > 10) {
         // Small scene - close view
-        camera.position.set(center.x, 200, center.z + 300);
-        ctrls.target.set(center.x, 80, center.z);
+        camera.position.set(center.x, 260, center.z + 220);
+        ctrls.target.set(center.x, 0, center.z);
         ctrls.update();
         hasFitted.current = true;
       }
       return;
     }
-    const dist = hExtent / (2 * Math.tan((camera.fov * Math.PI) / 360)) * 0.9;
-    camera.position.set(center.x, 150, center.z + dist);
-    ctrls.target.set(center.x, 100, center.z);
+    // KUŞBAKIŞI: modelin tamamını üstten-arkadan (≈55° yükselme) çerçeveye al.
+    // Eski konum (y=150) duvar üstü yükseklikte kaldığı için oda dış cephesinden
+    // görünüyor, içerideki mobilya/delil yerleşimi okunmuyordu.
+    const dist = (hExtent / (2 * Math.tan((camera.fov * Math.PI) / 360))) * 1.15;
+    camera.position.set(center.x, dist * 0.85, center.z + dist * 0.62);
+    ctrls.target.set(center.x, 0, center.z);
     ctrls.update();
     hasFitted.current = true;
   });
