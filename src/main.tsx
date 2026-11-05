@@ -4,6 +4,12 @@ import './offline-fonts.css' // Yerel Inter/Roboto (Google Fonts yerine — offl
 import './index.css'
 import 'leaflet/dist/leaflet.css'
 import App from './App.tsx'
+import { useStore } from './store/useStore'
+
+// Geliştirme modunda store'a konsol erişimi (hata teşhisi için). Üretim derlemesinde hiçbir etkisi yok.
+if (import.meta.env.DEV) {
+  (window as any).__store = useStore;
+}
 
 /** Masaüstü (Electron) sürümünde service worker gereksizdir — dosyalar yereldir. */
 const isElectron = /Electron/i.test(navigator.userAgent);

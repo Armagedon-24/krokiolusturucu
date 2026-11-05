@@ -4,11 +4,13 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { 
   OrbitControls, 
   PerspectiveCamera, 
-  Environment, 
   useTexture, 
   TransformControls,
   PointerLockControls
 } from '@react-three/drei';
+// NOT: drei <Environment preset=...> kaldırıldı — dış CDN'den (raw.githack.com) HDR indirmeye
+// çalışıyordu. İstek başarısız olduğunda hata sınırı olmadığı için TÜM UYGULAMA çöküyordu
+// (boş siyah ekran). Artık sahne tamamen yerel ışıklarla aydınlatılıyor; çevrimdışı da çalışır.
 import { X, Rotate3D, Footprints, RotateCw, ArrowDown, Camera, Video, Square, FolderOpen, Images, Download, Trash2 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { withBase } from '../../utils/assetMigration';
@@ -247,6 +249,73 @@ class SafeComponent extends React.Component<{ children: React.ReactNode; fallbac
   render() {
     if (this.state.hasError) {
       return this.props.fallback || null;
+    }
+    // Her sembol kendi Suspense sınırına sarılır: bir sembolün dokusu yüklenirken
+    // (useTexture suspend) yalnızca O sembol gizlenir, tüm sahne kararmaz.
+    return <Suspense fallback={null}>{this.props.children}</Suspense>;
+  }
+}
+
+/**
+ * SAHNE KALKANI: Canvas İÇİNDEKİ herhangi bir hata (ör. bozuk doku, beklenmeyen geometri)
+ * burada yakalanır ve hata dışarı sızdırılarak uygulamanın tamamı çökertilmez.
+ * R3F ayrı bir React kökü kullandığı için hata sınırı Canvas DIŞINDA olsa bile
+ * iç kökten gelen hata tüm ağacı düşürebilir — bu nedenle sınır içeridedir.
+ */
+class SceneErrorShield extends React.Component<{ children: React.ReactNode; onError?: (err: Error) => void }, { hasError: boolean }> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error: Error) {
+    console.error('3D sahne hatası yakalandı (uygulama korunudu):', error);
+    this.props.onError?.(error);
+  }
+  render() {
+    if (this.state.hasError) return null;
+    return <Suspense fallback={null}>{this.props.children}</Suspense>;
+  }
+}
+
+/**
+ * TUVAL HATA SINIRI: <Canvas>'ın kendisinde (dış kök) oluşan hatalar için son savunma hattı.
+ * Uygulama yerine kullanıcıya anlaşılır bir hata kartı gösterir — BOŞ EKRAN ASLA GÖRÜNMEZ.
+ */
+class CanvasErrorBoundary extends React.Component<{ children: React.ReactNode; onRetry: () => void }, { error: Error | null }> {
+  constructor(props: any) {
+    super(props);
+    this.state = { error: null };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+  componentDidCatch(error: Error) {
+    console.error('3D tuval hatası yakalandı:', error);
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="absolute inset-0 flex items-center justify-center bg-[#0a0a0a] z-10">
+          <div className="max-w-md bg-[#1a1a1a] border border-red-500/30 rounded-2xl p-8 text-center space-y-4 shadow-2xl">
+            <div className="text-4xl">⚠️</div>
+            <h3 className="text-white font-black text-sm uppercase tracking-widest">3D Görünüm Yüklenemedi</h3>
+            <p className="text-gray-400 text-xs leading-relaxed">
+              Sahne oluşturulurken beklenmeyen bir hata oluştu. Tekrar deneyebilirsiniz;
+              sorun sürerse çiziminizi kaydedip sayfayı yenileyin.
+            </p>
+            <p className="text-red-400/60 text-[10px] font-mono break-words max-h-16 overflow-hidden">{this.state.error.message}</p>
+            <button
+              onClick={() => this.setState({ error: null })}
+              className="px-5 py-2 bg-[#3a7ca5] hover:bg-[#4a8cb5] text-white rounded-lg text-xs font-black tracking-wider transition-colors"
+            >
+              TEKRAR DENE
+            </button>
+          </div>
+        </div>
+      );
     }
     return this.props.children;
   }
@@ -4423,7 +4492,8 @@ const Scene = ({ objects, viewMode, selectedId, setSelectedId, onCaptureRef }: a
       ) : (
         <Player isWalkMode={true} />
       )}
-      <Environment preset="city" />
+      {/* Yerel gökyüzü/zemin dolgu ışığı — eski <Environment preset="city"> CDN bağımlılığının yerine */}
+      <hemisphereLight intensity={0.65} color="#e3edf7" groundColor="#8f9296" />
       <ambientLight intensity={0.5} />
       <directionalLight position={[100, 200, 100]} intensity={1} castShadow />
       
@@ -4578,11 +4648,23 @@ export const ThreeDPreview: React.FC<ThreeDPreviewProps> = ({ isOpen, onClose })
   const videoChunksRef = useRef<Blob[]>([]);
   const recordingTimerRef = useRef<any>(null);
 
+  // Sahne içi beklenmeyen hatalarda kullanıcıya görünür kart göstermek için (boş ekran yerine)
+  const [sceneError, setSceneError] = useState<string | null>(null);
+  const [sceneRetry, setSceneRetry] = useState(0);
+
   useEffect(() => {
     return () => {
       if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
     };
   }, []);
+
+  // Önizleme her açıldığında hata durumunu sıfırla
+  useEffect(() => {
+    if (isOpen) {
+      setSceneError(null);
+      setSceneRetry(0);
+    }
+  }, [isOpen]);
 
   const formatTime = (totalSec: number) => {
     const mins = Math.floor(totalSec / 60);
@@ -4733,12 +4815,25 @@ export const ThreeDPreview: React.FC<ThreeDPreviewProps> = ({ isOpen, onClose })
         </div>
       </div>
       <div className="flex-1 relative">
-        <Canvas shadows gl={{ preserveDrawingBuffer: true }} camera={{ position: [0, 400, 400], fov: 50 }}>
-          <Suspense fallback={null}>
-            <Scene objects={objects} viewMode={viewMode} selectedId={selectedId} setSelectedId={setSelectedId} onCaptureRef={captureRef} />
-            <CameraPresets preset={cameraPreset} />
-          </Suspense>
-        </Canvas>
+        <CanvasErrorBoundary onRetry={() => { setSceneError(null); setSceneRetry(r => r + 1); }}>
+          <Canvas shadows gl={{ preserveDrawingBuffer: true }} camera={{ position: [0, 400, 400], fov: 50 }}>
+            <SceneErrorShield onError={(err) => setSceneError(err.message || 'Bilinmeyen hata')} key={sceneRetry}>
+              <Scene objects={objects} viewMode={viewMode} selectedId={selectedId} setSelectedId={setSelectedId} onCaptureRef={captureRef} />
+              <CameraPresets preset={cameraPreset} />
+            </SceneErrorShield>
+          </Canvas>
+        </CanvasErrorBoundary>
+
+        {sceneError && (
+          <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-[100000] max-w-md bg-[#1a1a1a]/95 backdrop-blur-md border border-amber-500/40 rounded-xl px-5 py-4 shadow-2xl space-y-2">
+            <p className="text-amber-300 text-xs font-black uppercase tracking-wider">⚠️ Sahnenin bir bölümü gösterilemiyor</p>
+            <p className="text-gray-400 text-[11px] leading-relaxed">Çiziminizin geri kalanı güvenli. Kapatıp yeniden açmayı deneyin.</p>
+            <div className="flex gap-2 pt-1">
+              <button onClick={() => setSceneRetry(r => r + 1)} className="px-3 py-1.5 bg-[#3a7ca5] hover:bg-[#4a8cb5] text-white rounded-md text-[10px] font-black tracking-wider transition-colors">YENİDEN DENE</button>
+              <button onClick={() => setSceneError(null)} className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-gray-300 rounded-md text-[10px] font-bold transition-colors">KAPAT</button>
+            </div>
+          </div>
+        )}
         
         {viewMode === 'walk' && (
           <div className="absolute bottom-28 left-1/2 -translate-x-1/2 pointer-events-none">
