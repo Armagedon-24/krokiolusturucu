@@ -638,7 +638,7 @@ export const Sidebar: React.FC = () => {
                                           // mezarlığa gönderiyordu). Yalnızca kırık görsel durumu gösterilir.
                                           (e.target as HTMLImageElement).style.visibility = 'hidden';
                                         }}
-                                        className={`max-w-[95%] max-h-[95%] object-contain transition-transform duration-300 group-hover:scale-110 relative z-10 pointer-events-none ${isFlatSvgIcon(item.thumbnail || item.src) && !item.panelWhite ? 'sidebar-symbol-filter' : 'sidebar-symbol-photo'}`}
+                                        className={`max-w-[95%] max-h-[95%] object-contain transition-transform duration-300 group-hover:scale-110 relative z-10 pointer-events-none ${!item.panelWhite ? 'sidebar-symbol-filter' : 'sidebar-symbol-photo'}`}
                                       />
                                     </div>
                                     
