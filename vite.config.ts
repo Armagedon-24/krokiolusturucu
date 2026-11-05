@@ -23,11 +23,39 @@ export default defineConfig({
         ]
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+        // HIZ: Uygulama kabuğu (js/css/html) precache edilir; 700+ sembol görseli ve
+        // font klasörleri DIŞARIDA bırakılır — bunlar istek geldikçe CacheFirst ile
+        // çalışma-anı önbelleğine alınır (aşağıda). Not: Vite bundle çıktısı da
+        // dist/assets/ altına yazıldığı için yalnızca symbols/ ve fonts/ dizinleri
+        // hariç tutulur; aksi halde uygulama kodu precache'den düşer.
+        globPatterns: ['**/*.{js,css,html,ico}'],
+        globIgnores: ['**/assets/symbols/**', '**/assets/fonts/**'],
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         skipWaiting: true,
-        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+        runtimeCaching: [
+          {
+            // Sembol PNG/SVG + fontlar: bir kez indirilen dosya kalıcı önbellekte
+            urlPattern: ({ request, url }) => url.pathname.startsWith('/assets/') && (request.destination === 'image' || request.destination === 'font' || request.destination === ''),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'kroki-assets',
+              expiration: { maxEntries: 900, maxAgeSeconds: 60 * 60 * 24 * 180 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
+            // Bulut (Cloudinary) sembol/görsel/thumb URL'leri
+            urlPattern: /^https:\/\/res\.cloudinary\.com\/.*/i,
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'kroki-cloudinary',
+              expiration: { maxEntries: 300, maxAgeSeconds: 60 * 60 * 24 * 14 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+        ],
       },
       devOptions: { enabled: false },
     }),

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, lazy, Suspense } from 'react';
 import {
   Package,
   ImageIcon,
@@ -18,11 +18,21 @@ import {
 import { useStore } from '../../store/useStore';
 import { v4 as uuidv4 } from 'uuid';
 import { Lock, Calculator } from 'lucide-react';
-import { CalculatorIndex } from './Calculators/CalculatorIndex';
-import { ExampleCaseIndex } from './Examples/ExampleCaseIndex';
+// HIZ: Hesaplayıcılar, örnek olaylar ve bulut galerisi yalnızca ilgili sekme/açılışta
+// dinamik yüklenir — açılış paketi küçük kalır.
+const CalculatorIndex = lazy(() => import('./Calculators/CalculatorIndex').then(m => ({ default: m.CalculatorIndex })));
+const ExampleCaseIndex = lazy(() => import('./Examples/ExampleCaseIndex').then(m => ({ default: m.ExampleCaseIndex })));
+const CloudGalleryModal = lazy(() => import('./CloudGalleryModal').then(m => ({ default: m.CloudGalleryModal })));
+
+/** Lazy bölütler yüklenene kadar gösterilen iskelet. */
+const SectionFallback: React.FC = () => (
+  <div className="flex items-center justify-center p-8 gap-3 text-gray-500">
+    <span className="w-4 h-4 border-2 border-[#F5C518]/70 border-t-transparent rounded-full animate-spin" />
+    <span className="text-[10px] font-bold uppercase tracking-widest">Yükleniyor...</span>
+  </div>
+);
 import { processUploadedSymbolImage } from '../../utils/canvasUtils';
 import { getOptimizedCloudinaryUrl } from '../../lib/cloudinary';
-import { CloudGalleryModal } from './CloudGalleryModal';
 
 /** Sembol adını sade görünüm için temizler (uzantı, görünüm ekleri, kimlik parçaları) */
 const cleanSymbolName = (raw: string): string =>
@@ -594,12 +604,6 @@ export const Sidebar: React.FC = () => {
                                         height: finalHeight,
                                         distanceColor: '#000000',
                                       });
-                                      
-                                      addNotification({
-                                        type: 'info',
-                                        message: 'Sembol Eklendi',
-                                        description: `"${item.name || 'Sembol'}" çift tıklanarak tuvale yerleştirildi.`
-                                      });
                                     }}
                                     className={`group relative aspect-square bg-[#111] border rounded-xl flex flex-col items-center p-2 cursor-pointer hover:scale-102 active:scale-98 transition-all duration-300 ${
                                       item.isUpload 
@@ -895,10 +899,10 @@ export const Sidebar: React.FC = () => {
           )}
 
           {activeTab === 'animations' && (
-            <ExampleCaseIndex />
+            <Suspense fallback={<SectionFallback />}><ExampleCaseIndex /></Suspense>
           )}
           {activeTab === 'calculators' && (
-            <CalculatorIndex />
+            <Suspense fallback={<SectionFallback />}><CalculatorIndex /></Suspense>
           )}
         </div>
 
@@ -917,7 +921,7 @@ export const Sidebar: React.FC = () => {
 
       {/* Bulut Galerisi — Cloudinary'deki görselleri kütüphaneye yükleme */}
       {cloudGalleryOpen && (
-        <CloudGalleryModal onClose={() => setCloudGalleryOpen(false)} />
+        <Suspense fallback={<SectionFallback />}><CloudGalleryModal onClose={() => setCloudGalleryOpen(false)} /></Suspense>
       )}
     </aside>
   );

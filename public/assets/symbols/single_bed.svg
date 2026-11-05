@@ -1,10 +1,1 @@
-<svg width="90" height="190" viewBox="0 0 90 190" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <!-- Bed frame -->
-  <rect x="5" y="5" width="80" height="180" rx="4" stroke="black" stroke-width="2" fill="none"/>
-  <!-- Mattress detail -->
-  <rect x="10" y="10" width="70" height="170" rx="2" stroke="black" stroke-width="1" fill="none"/>
-  <!-- Pillow -->
-  <rect x="20" y="15" width="50" height="30" rx="5" stroke="black" stroke-width="1.5" fill="none"/>
-  <!-- Blanket edge -->
-  <path d="M10 60 L80 60" stroke="black" stroke-width="1" stroke-dasharray="4 2"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="90" height="190" fill="none" viewBox="0 0 90 190"><rect width="80" height="180" x="5" y="5" stroke="#000" stroke-width="2" rx="4"/><rect width="70" height="170" x="10" y="10" stroke="#000" rx="2"/><rect width="50" height="30" x="20" y="15" stroke="#000" stroke-width="1.5" rx="5"/><path stroke="#000" stroke-dasharray="4 2" d="M10 60h70"/></svg>

@@ -9,7 +9,8 @@
  * (public/assets/fonts/). jsPDF standart Helvetica'sı Türkçe desteklemez.
  */
 
-import { jsPDF, GState } from 'jspdf';
+// HIZ: jsPDF yalnızca rapor PDF'i üretilirken dinamik yüklenir (tip tanımı hariç).
+import type { jsPDF } from 'jspdf';
 import type { ForensicReport } from './forensicReport';
 import { reportMeta } from './forensicReport';
 
@@ -127,7 +128,9 @@ export interface ForensicPdfResult {
 
 /** Rapor nesnesinden kurumsal PDF üretip Blob olarak döndürür. */
 export async function buildForensicPdf(report: ForensicReport): Promise<ForensicPdfResult> {
-  const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
+  // Dinamik import: jsPDF + GState çalışma anı kullanımı yalnızca burada
+  const { jsPDF: JsPDFCtor, GState } = await import('jspdf');
+  const doc = new JsPDFCtor({ unit: 'mm', format: 'a4', compress: true });
   await ensureFonts(doc);
   const logoB64 = await loadLogoB64();
   const wmB64 = await loadWatermarkB64();

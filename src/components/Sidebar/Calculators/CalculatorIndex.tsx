@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, lazy, Suspense } from 'react';
 import { 
   Zap, 
   Droplets, 
@@ -19,24 +19,25 @@ import {
   Activity,
   Crosshair,
 } from 'lucide-react';
-import { SkidMarkCalculator } from './SkidMarkCalculator';
-import { BloodstainCalculator } from './BloodstainCalculator';
-import { BulletTrajectoryCalculator } from './BulletTrajectoryCalculator';
-import { ShadowCalculator } from './ShadowCalculator';
-import { AlgorMortisCalculator } from './AlgorMortisCalculator';
-import { CollisionSpeedCalculator } from './CollisionSpeedCalculator';
-import { GunshotDistanceCalculator } from './GunshotDistanceCalculator';
-import { YawMarkCalculator } from './YawMarkCalculator';
-import { PedestrianThrowCalculator } from './PedestrianThrowCalculator';
-import { StoppingDistanceCalculator } from './StoppingDistanceCalculator';
-import { CrushEnergyCalculator } from './CrushEnergyCalculator';
-import { MotorcycleSlideCalculator } from './MotorcycleSlideCalculator';
-import { SightDistanceCalculator } from './SightDistanceCalculator';
-import { FrictionTableCalculator } from './FrictionTableCalculator';
-import { AccidentReconstructionCalculator } from './AccidentReconstructionCalculator';
-import { FallCalculator } from '../FallCalculator';
-import { PedestrianLaunchCalculator } from './PedestrianLaunchCalculator';
-import { ShotDirectionCalculator } from './ShotDirectionCalculator';
+// HIZ: 18 hesaplayıcının tamamı yalnızca seçildiğinde dinamik yüklenir.
+const SkidMarkCalculator = lazy(() => import('./SkidMarkCalculator').then(m => ({ default: m.SkidMarkCalculator })));
+const BloodstainCalculator = lazy(() => import('./BloodstainCalculator').then(m => ({ default: m.BloodstainCalculator })));
+const BulletTrajectoryCalculator = lazy(() => import('./BulletTrajectoryCalculator').then(m => ({ default: m.BulletTrajectoryCalculator })));
+const ShadowCalculator = lazy(() => import('./ShadowCalculator').then(m => ({ default: m.ShadowCalculator })));
+const AlgorMortisCalculator = lazy(() => import('./AlgorMortisCalculator').then(m => ({ default: m.AlgorMortisCalculator })));
+const CollisionSpeedCalculator = lazy(() => import('./CollisionSpeedCalculator').then(m => ({ default: m.CollisionSpeedCalculator })));
+const GunshotDistanceCalculator = lazy(() => import('./GunshotDistanceCalculator').then(m => ({ default: m.GunshotDistanceCalculator })));
+const YawMarkCalculator = lazy(() => import('./YawMarkCalculator').then(m => ({ default: m.YawMarkCalculator })));
+const PedestrianThrowCalculator = lazy(() => import('./PedestrianThrowCalculator').then(m => ({ default: m.PedestrianThrowCalculator })));
+const StoppingDistanceCalculator = lazy(() => import('./StoppingDistanceCalculator').then(m => ({ default: m.StoppingDistanceCalculator })));
+const CrushEnergyCalculator = lazy(() => import('./CrushEnergyCalculator').then(m => ({ default: m.CrushEnergyCalculator })));
+const MotorcycleSlideCalculator = lazy(() => import('./MotorcycleSlideCalculator').then(m => ({ default: m.MotorcycleSlideCalculator })));
+const SightDistanceCalculator = lazy(() => import('./SightDistanceCalculator').then(m => ({ default: m.SightDistanceCalculator })));
+const FrictionTableCalculator = lazy(() => import('./FrictionTableCalculator').then(m => ({ default: m.FrictionTableCalculator })));
+const AccidentReconstructionCalculator = lazy(() => import('./AccidentReconstructionCalculator').then(m => ({ default: m.AccidentReconstructionCalculator })));
+const FallCalculator = lazy(() => import('../FallCalculator').then(m => ({ default: m.FallCalculator })));
+const PedestrianLaunchCalculator = lazy(() => import('./PedestrianLaunchCalculator').then(m => ({ default: m.PedestrianLaunchCalculator })));
+const ShotDirectionCalculator = lazy(() => import('./ShotDirectionCalculator').then(m => ({ default: m.ShotDirectionCalculator })));
 
 type CalculatorType =
   | 'skid'
@@ -136,9 +137,16 @@ export const CalculatorIndex: React.FC = () => {
         </div>
       </div>
 
-      {/* Active Calculator Content */}
+      {/* Active Calculator Content — bölüt yüklenene kadar iskelet gösterilir */}
       <div className="flex-1 overflow-y-auto custom-scrollbar">
-        {activeCalculator?.component}
+        <Suspense fallback={
+          <div className="flex items-center justify-center p-8 gap-3 text-gray-500">
+            <span className="w-4 h-4 border-2 border-[#F5C518]/70 border-t-transparent rounded-full animate-spin" />
+            <span className="text-[10px] font-bold uppercase tracking-widest">Hesaplayıcı yükleniyor...</span>
+          </div>
+        }>
+          {activeCalculator?.component}
+        </Suspense>
       </div>
     </div>
   );

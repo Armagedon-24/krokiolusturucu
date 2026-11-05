@@ -1,17 +1,1 @@
-<svg width="400" height="200" viewBox="0 0 400 200" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-  <!-- House Base -->
-  <rect x="20" y="80" width="360" height="110" fill="none" stroke="#000000" stroke-width="3" />
-  <!-- Roof -->
-  <path d="M 10 80 L 200 10 L 390 80 Z" fill="none" stroke="#000000" stroke-width="3" />
-  <!-- Door -->
-  <rect x="175" y="140" width="50" height="50" fill="none" stroke="#000000" stroke-width="2" />
-  <circle cx="218" cy="165" r="2" fill="#000000" />
-  <!-- Windows -->
-  <rect x="60" y="110" width="60" height="40" fill="none" stroke="#000000" stroke-width="2" />
-  <line x1="60" y1="130" x2="120" y2="130" stroke="#000000" stroke-width="1" />
-  <line x1="90" y1="110" x2="90" y2="150" stroke="#000000" stroke-width="1" />
-  
-  <rect x="280" y="110" width="60" height="40" fill="none" stroke="#000000" stroke-width="2" />
-  <line x1="280" y1="130" x2="340" y2="130" stroke="#000000" stroke-width="1" />
-  <line x1="310" y1="110" x2="310" y2="150" stroke="#000000" stroke-width="1" />
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="200" preserveAspectRatio="none" viewBox="0 0 400 200"><path fill="none" stroke="#000" stroke-width="3" d="M20 80h360v110H20zM10 80l190-70 190 70Z"/><path fill="none" stroke="#000" stroke-width="2" d="M175 140h50v50h-50z"/><circle cx="218" cy="165" r="2"/><path fill="none" stroke="#000" stroke-width="2" d="M60 110h60v40H60z"/><path stroke="#000" d="M60 130h60M90 110v40"/><path fill="none" stroke="#000" stroke-width="2" d="M280 110h60v40h-60z"/><path stroke="#000" d="M280 130h60M310 110v40"/></svg>

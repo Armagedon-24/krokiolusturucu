@@ -1,14 +1,1 @@
-<svg width="60" height="120" viewBox="0 0 60 120" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-  <!-- Klasik kroki merdiveni: siyah çerçeve + gri mahfil kenarları + siyah basamaklar -->
-  <rect x="0" y="0" width="60" height="120" fill="none" stroke="#000000" stroke-width="3" />
-  <line x1="2.5" y1="0" x2="2.5" y2="120" stroke="#666666" stroke-width="1.5" />
-  <line x1="57.5" y1="0" x2="57.5" y2="120" stroke="#666666" stroke-width="1.5" />
-  <!-- Basamaklar (15 birim aralık) -->
-  <line x1="0" y1="15" x2="60" y2="15" stroke="#000000" stroke-width="1.5" />
-  <line x1="0" y1="30" x2="60" y2="30" stroke="#000000" stroke-width="1.5" />
-  <line x1="0" y1="45" x2="60" y2="45" stroke="#000000" stroke-width="1.5" />
-  <line x1="0" y1="60" x2="60" y2="60" stroke="#000000" stroke-width="1.5" />
-  <line x1="0" y1="75" x2="60" y2="75" stroke="#000000" stroke-width="1.5" />
-  <line x1="0" y1="90" x2="60" y2="90" stroke="#000000" stroke-width="1.5" />
-  <line x1="0" y1="105" x2="60" y2="105" stroke="#000000" stroke-width="1.5" />
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="60" height="120" preserveAspectRatio="none" viewBox="0 0 60 120"><path fill="none" stroke="#000" stroke-width="3" d="M0 0h60v120H0z"/><path stroke="#666" stroke-width="1.5" d="M2.5 0v120M57.5 0v120"/><path stroke="#000" stroke-width="1.5" d="M0 15h60M0 30h60M0 45h60M0 60h60M0 75h60M0 90h60M0 105h60"/></svg>

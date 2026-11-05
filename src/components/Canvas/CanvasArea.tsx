@@ -40,7 +40,9 @@ const RemoveWhiteFilter = (imageData: any) => {
 };
 
 import { v4 as uuidv4 } from 'uuid';
-import { jsPDF } from 'jspdf';
+// HIZ: jsPDF ağır bir pakettir (~350KB gz). Tip tanımı dışında çalışma anı kullanımı
+// PDF dışa aktarma fonksiyonunda dinamik import ile yapılır — açılış paketine girmez.
+import type { jsPDF } from 'jspdf';
 
 import { calculateCalloutSize, getEffectiveZIndex, compressAndResizeImage, processUploadedSymbolImage } from '../../utils/canvasUtils';
 
@@ -4582,6 +4584,8 @@ export const CanvasArea: React.FC = () => {
 
       try {
         const orientation = canvasOrientation === 'landscape' ? 'l' : 'p';
+        // Dinamik import: jsPDF yalnızca kullanıcı PDF ürettiğinde indirilir
+        const { jsPDF: JsPDFCtor } = await import('jspdf');
         let pdf: jsPDF | null = null;
         let pageWidth = 1000;
         let pageHeight = 1400;
@@ -4728,7 +4732,7 @@ export const CanvasArea: React.FC = () => {
           pageHeight = H;
 
           if (!pdf) {
-            pdf = new jsPDF({
+            pdf = new JsPDFCtor({
               orientation: orientation,
               unit: 'px',
               format: [pageWidth, pageHeight]
@@ -5265,11 +5269,6 @@ export const CanvasArea: React.FC = () => {
                 scaleX: 1,
                 scaleY: 1
               });
-              addNotification({
-                type: 'success',
-                message: 'Ölçü Eklendi',
-                description: `"${input}" etiketiyle mesafe oku yerleştirildi.`
-              });
             }
             setPromptState(prev => ({ ...prev, isOpen: false }));
           }
@@ -5298,11 +5297,6 @@ export const CanvasArea: React.FC = () => {
           rotation: 0,
           scaleX: 1,
           scaleY: 1
-        });
-        addNotification({
-          type: 'info',
-          message: 'Sembol Eklendi',
-          description: `"${symbol.name || 'Sembol'}" tuvale eklendi.`
         });
       } else if (symbol.id === 'ev-human-poseable') {
         const w = symbol.width || 100;
@@ -5335,11 +5329,6 @@ export const CanvasArea: React.FC = () => {
             { id: 'r_ankle', x: w*0.65, y: h*0.95 }
           ]
         });
-        addNotification({
-          type: 'success',
-          message: 'Ceset Eklendi',
-          description: 'Şekillendirilebilir ceset figürü başarıyla eklendi.'
-        });
       } else if (symbol.id === 'ev-callout') {
         setPromptState({
           isOpen: true,
@@ -5365,11 +5354,6 @@ export const CanvasArea: React.FC = () => {
                 scaleY: 1,
                 fill: 'transparent',
                 distanceColor: '#000000',
-              });
-              addNotification({
-                type: 'success',
-                message: 'Balon Eklendi',
-                description: `Açıklama balonu başarıyla eklendi.`
               });
             }
             setPromptState(prev => ({ ...prev, isOpen: false }));
@@ -5399,10 +5383,6 @@ export const CanvasArea: React.FC = () => {
                 fill: '#000000',
                 distanceColor: '#000000',
                 distanceFontSize: 12,
-              });
-              addNotification({
-                type: 'success',
-                message: 'Ok İşaretli Metin Eklendi'
               });
             }
             setPromptState(prev => ({ ...prev, isOpen: false }));
@@ -5443,10 +5423,6 @@ export const CanvasArea: React.FC = () => {
                 distanceColor: '#000000',
                 distanceFontSize: 12,
               });
-              addNotification({
-                type: 'success',
-                message: 'Ok İşaretli Delil Eklendi'
-              });
             }
             setPromptState(prev => ({ ...prev, isOpen: false }));
           }
@@ -5484,13 +5460,6 @@ export const CanvasArea: React.FC = () => {
             streetName: '',
             zIndex: objects.length,
         });
-        addNotification({
-          type: 'info',
-          message: isCadde ? 'Cadde Eklendi' : (isSokak ? 'Sokak Eklendi' : 'Yol Eklendi'),
-          description: isCadde || isSokak
-            ? 'Orta çizgisiz bant eklendi. Üst panelden cadde/sokak adını yazabilirsin; diğer yollarla birleşiminde yumuşak geçiş oluşur.'
-            : 'Esnek yol tuvale eklendi.'
-        });
       } else if (symbol.id === 'ev-rope') {
         addObject({
           ...symbol,
@@ -5507,11 +5476,6 @@ export const CanvasArea: React.FC = () => {
           curvature: 0,
           zIndex: objects.length,
         });
-        addNotification({
-          type: 'info',
-          message: 'İp Eklendi',
-          description: 'Şekillendirilebilir ip tuvale eklendi.'
-        });
       } else if (symbol.id === 'ev-noose') {
         addObject({
           ...symbol,
@@ -5526,11 +5490,6 @@ export const CanvasArea: React.FC = () => {
           scaleX: 1,
           scaleY: 1,
           zIndex: objects.length,
-        });
-        addNotification({
-          type: 'info',
-          message: 'Ası İpi Eklendi',
-          description: 'Kement yapılmış ası ipi tuvale eklendi.'
         });
       } else {
         const doorIds = ['arch-d1r', 'arch-d1l', 'arch-d2'];
@@ -5573,11 +5532,6 @@ export const CanvasArea: React.FC = () => {
           scaleY: 1,
           distanceColor: '#000000',
           zIndex: objects.length,
-        });
-        addNotification({
-          type: 'info',
-          message: isDoor ? 'Kapı Eklendi' : isWindow ? 'Pencere Eklendi' : isWall ? 'Duvar Eklendi' : 'Sembol Eklendi',
-          description: `"${symbol.name || 'Sembol'}" tuvale eklendi.`
         });
 
         if (symbol.id === 'ev-shooting-trajectory') {

@@ -39,6 +39,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!dataUri || typeof dataUri !== 'string' || !dataUri.startsWith('data:')) {
       return res.status(400).json({ error: 'dataUri (data:...) gerekli' });
     }
+    // GÜVENLİK: Yalnızca görsel MIME tipleri kabul edilir. text/html veya SVG-script
+    // gibi aktif içerik barındırabilecek yüklerin görsel olarak kaydedilmesi engellenir.
+    if (!/^data:image\/(png|jpe?g|webp|gif|bmp|avif|svg\+xml);base64,[A-Za-z0-9+/=]+$/.test(dataUri)) {
+      return res.status(400).json({ error: 'dataUri geçerli bir base64 görsel (data:image/*) olmalıdır.' });
+    }
+    if (dataUri.length > 4_200_000) {
+      return res.status(413).json({ error: 'Görsel çok büyük (>4MB). Lütfen daha küçük bir görsel kullanın.' });
+    }
     if (tag !== undefined && typeof tag !== 'string') {
       return res.status(400).json({ error: 'Geçersiz tag' });
     }

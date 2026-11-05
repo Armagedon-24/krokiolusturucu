@@ -832,14 +832,21 @@ export const useStore = create<StoreState>()(
       },
 
       addNotification: (n) => {
+        // BİLDİRİM POLİTİKASI: Yalnızca önemli hata (error) ve düzeltme gerektiren
+        // uyarılar (warning) gösterilir. Rutin işlemlerin (sembol ekleme, kaydetme,
+        // senkron vb.) "başarılı"/"bilgi" bildirimleri tamamen sessize alınır —
+        // kullanıcı yalnızca müdahale gerektiren durumlarda uyarılır.
+        if (n.type !== 'error' && n.type !== 'warning') return;
+
         const id = uuidv4();
         set((state) => ({
           // En fazla 5 eşzamanlı bildirim: toplu yüklemelerde yığın birikmesin
           notifications: [...state.notifications.slice(-4), { ...n, id }]
         }));
+        // Hata/uyarı bildirimleri ekranda daha uzun kalır (8 sn): okunması gerekir.
         setTimeout(() => {
           get().removeNotification(id);
-        }, 5000);
+        }, 8000);
       },
 
       removeNotification: (id) => {
