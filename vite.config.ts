@@ -49,7 +49,7 @@ export default defineConfig({
             urlPattern: ({ request, url }) => url.pathname.startsWith('/assets/') && (request.destination === 'image' || request.destination === 'font' || request.destination === ''),
             handler: 'CacheFirst',
             options: {
-              cacheName: 'kroki-assets',
+              cacheName: 'kroki-assets-v2',
               expiration: { maxEntries: 900, maxAgeSeconds: 60 * 60 * 24 * 180 },
               cacheableResponse: { statuses: [0, 200] },
             },

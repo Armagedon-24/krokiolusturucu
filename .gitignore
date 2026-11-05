@@ -1,5 +1,14 @@
-# Logs
-logs
+# Bağımlılıklar
+node_modules/
+
+# Derleme çıktıları
+dist/
+dist-ssr/
+build/
+dev-dist/
+
+# Loglar
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -7,72 +16,37 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
+# Ortam / gizli dosyalar — istisnasız tümü depoya girmez
+.env
+.env.*
 *.local
 
-# Editor directories and files
+# IDE dosyaları
 .vscode/*
 !.vscode/extensions.json
-.idea
-.DS_Store
+.idea/
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
 
-.vercel
-.env*.local
-
-# Auto-generated entries
-# Dependencies
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Build outputs
-dist/
-build/
-*.log
-
-# Environment files
-.env
-.env.*
-!.env.example
-
-# IDE files
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# OS files
+# OS dosyaları
 .DS_Store
 Thumbs.db
 
-# Temporary files
+# Geçici dosyalar
 *.tmp
 *.temp
 .cache/
 
-# Sensitive files (auto-detected)
-.env.example
-.env.local
-.env.production
-dev-dist
-dist
-node_modules
-
-
-# Agent temp files
+# Araç / ajan çalışma klasörleri
+.vercel/
 .omo/
 .playwright-mcp/
 
-.env*
-
 # Electron masaüstü derleme çıktıları
 release/
+
+# Ham görsel üretim arşivi
 _gen/
