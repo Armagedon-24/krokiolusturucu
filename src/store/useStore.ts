@@ -31,6 +31,14 @@ export interface Notification {
 
 interface StoreState extends CanvasState {
   addObject: (obj: Partial<CanvasObject>) => void;
+  /** Panoya kopyalanan nesne (kopyala/yapıştır motoru). Oturum içi, kalıcı değil. */
+  clipboard: CanvasObject | null;
+  /** Seçili nesneyi panoya kopyalar. Kopyalanamaz öğe ise false döner. */
+  copyObject: (id: string) => boolean;
+  /** Panodaki nesneyi tuvale yapıştırır: yeni kimlik, +24px kaydırma, en üstte ve seçili. */
+  pasteClipboard: () => void;
+  /** Tek adımda kopyala + yapıştır (Ctrl+D ve araç çubuğu ÇOĞALT için). */
+  duplicateObject: (id: string) => void;
   addUploadedImage: (img: { id: string, src: string, name: string, category?: string, group?: string }, opts?: { allowDeletedName?: boolean }) => void;
   removeUploadedImage: (id: string) => void;
   updateUploadedImage: (id: string, category?: string, group?: string, name?: string) => void;
@@ -524,6 +532,44 @@ export const useStore = create<StoreState>()(
       historyIndex: 0,
       isAdmin: false,
       adminPassword: null,
+      clipboard: null,
+
+      /** KOPYALA: nesneyi derin kopya olarak panoya al. Kurumsal logo ve bulgu
+       *  listesi özel/tekil öğelerdir — kopyalanamaz (false döner). */
+      copyObject: (id) => {
+        const obj = get().objects.find(o => o.id === id);
+        if (!obj) return false;
+        if (obj.id === 'corporate-logo' || obj.type === 'finding-list') return false;
+        set({ clipboard: JSON.parse(JSON.stringify(obj)) });
+        return true;
+      },
+
+      /** YAPIŞTIR: panodaki nesneyi yeni kimlik ve +24px kaydırmayla tuvale ekler.
+       *  Konum çizim alanına çakıştırılır; nesne en üste alınır ve seçili olur. */
+      pasteClipboard: () => {
+        const clip = get().clipboard;
+        if (!clip) return;
+        const clone: CanvasObject = JSON.parse(JSON.stringify(clip));
+        const maxZ = get().objects.reduce((max, o) => Math.max(max, o.zIndex || 0), -1);
+        clone.id = uuidv4();
+        clone.x = (clone.x || 0) + 24;
+        clone.y = (clone.y || 0) + 24;
+        clone.zIndex = maxZ + 1;
+        const area = get().drawingArea;
+        if (area) {
+          const w = clone.width || 100;
+          const h = clone.height || 100;
+          clone.x = Math.max(area.x, Math.min(clone.x, area.x + area.width - w));
+          clone.y = Math.max(area.y, Math.min(clone.y, area.y + area.height - h));
+        }
+        set((state) => ({ objects: [...state.objects, clone], selectedId: clone.id }));
+        get().saveHistory();
+      },
+
+      /** ÇOĞALT: kopyala + yapıştır tek adımda. */
+      duplicateObject: (id) => {
+        if (get().copyObject(id)) get().pasteClipboard();
+      },
 
       addObject: (obj) => {
         let width = obj.type === 'text' ? 200 : 100;

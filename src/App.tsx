@@ -47,18 +47,45 @@ function App() {
         return;
       }
 
+      const store = useStore.getState();
+
       if (e.ctrlKey || e.metaKey) {
-        if (e.key.toLowerCase() === 'z') {
+        const k = e.key.toLowerCase();
+        if (k === 'z') {
           e.preventDefault();
           undo();
-        } else if (e.key.toLowerCase() === 'y') {
+        } else if (k === 'y') {
           e.preventDefault();
           redo();
+        } else if (k === 'c') {
+          // Tuvalsembole kopyala (kendi panomuz) — tarayıcı kopyalama olayı tetiklenmez
+          if (selectedId) {
+            e.preventDefault();
+            store.copyObject(selectedId);
+          }
+        } else if (k === 'x') {
+          // Kes: kopyala + orijinali sil
+          if (selectedId) {
+            e.preventDefault();
+            if (store.copyObject(selectedId)) store.removeObject(selectedId);
+          }
+        } else if (k === 'v') {
+          // Tuvale yapıştır (kullanıcı bir metin alanında değilse)
+          e.preventDefault();
+          store.pasteClipboard();
+        } else if (k === 'd') {
+          // Yerinde çoğalt
+          if (selectedId) {
+            e.preventDefault();
+            store.duplicateObject(selectedId);
+          }
         }
       } else if (e.key === 'Delete') {
         if (selectedId) {
           removeObject(selectedId);
         }
+      } else if (e.key === 'Escape') {
+        if (store.selectedId) store.setSelectedId(null);
       }
     };
 
@@ -76,6 +103,9 @@ function App() {
     };
 
     const handleCopy = (e: ClipboardEvent) => {
+      // Tuvalsembole seçiliyken kopyalama uygulamanın KENDİ panosuna düşer
+      // (yukarıdaki Ctrl+C işleyicisi) — güvenlik engeli ve uyarı gösterilmez.
+      if (useStore.getState().selectedId) return;
       if (!(document.activeElement instanceof HTMLInputElement || document.activeElement instanceof HTMLTextAreaElement)) {
         e.preventDefault();
         addNotification({

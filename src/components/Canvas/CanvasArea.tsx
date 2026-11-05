@@ -10,7 +10,18 @@ import {
   Camera, 
   User, 
   Info,
-  Activity
+  Activity,
+  Copy,
+  ClipboardPaste,
+  CopyPlus,
+  X,
+  FlipHorizontal2,
+  FlipVertical2,
+  RotateCw,
+  AlignCenterHorizontal,
+  AlignCenterVertical,
+  MoveUp,
+  MoveDown
 } from 'lucide-react';
 import Konva from 'konva';
 const DistanceModal = lazy(() => import('../UI/DistanceModal').then(m => ({ default: m.DistanceModal })));
@@ -41,6 +52,7 @@ const RemoveWhiteFilter = (imageData: any) => {
 };
 
 import { v4 as uuidv4 } from 'uuid';
+import { SYMBOL_CATEGORIES } from '../../constants/symbols';
 // HIZ: jsPDF ağır bir pakettir (~350KB gz). Tip tanımı dışında çalışma anı kullanımı
 // PDF dışa aktarma fonksiyonunda dinamik import ile yapılır — açılış paketine girmez.
 import type { jsPDF } from 'jspdf';
@@ -4169,6 +4181,35 @@ const IndividualObject = ({
   );
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SEÇİM ARAÇ PANELİ YARDIMCILARI — gruplu, düzenli, kolay erişilir panel
+// ─────────────────────────────────────────────────────────────────────────────
+const ToolbarSection = ({ title, color = '#F5C518', children }: { title: string; color?: string; children: React.ReactNode }) => (
+  <div>
+    <div className="flex items-center gap-2 mb-2">
+      <span className="text-[8px] font-black uppercase tracking-widest" style={{ color }}>{title}</span>
+      <span className="flex-1 h-px bg-[#2a2a2a]" />
+    </div>
+    {children}
+  </div>
+);
+
+const ToolbarField = ({ label, accent, children }: { label: string; accent?: string; children: React.ReactNode }) => (
+  <label className="flex flex-col gap-1 min-w-0">
+    <span className="text-[8px] font-black uppercase tracking-wider truncate" style={{ color: accent || '#9ca3af' }}>{label}</span>
+    {children}
+  </label>
+);
+
+const ChipToggle = ({ id, label, checked, onChange, activeClass = 'border-purple-500/50 bg-purple-500/10 text-purple-300' }: {
+  id: string; label: string; checked: boolean; onChange: (e: React.ChangeEvent<HTMLInputElement>) => void; activeClass?: string;
+}) => (
+  <label htmlFor={id} className={`flex items-center justify-center gap-1.5 px-2 py-[7px] rounded-md border cursor-pointer text-[9px] font-bold transition-colors ${checked ? activeClass : 'border-[#333] text-gray-400 hover:border-gray-600'}`}>
+    <input type="checkbox" id={id} checked={checked} onChange={onChange} className="sr-only" />
+    {label}
+  </label>
+);
+
 export const CanvasArea: React.FC = () => {
   const { 
     objects,
@@ -4194,6 +4235,12 @@ export const CanvasArea: React.FC = () => {
     updateProjectInfo,
     scaleCalibration,
     scenes,
+    clipboard,
+    copyObject,
+    pasteClipboard,
+    duplicateObject,
+    allSymbols,
+    uploadedImages,
   } = useStore();
 
   // BULGU LİSTESİ SAYFALAR ARASI TOPLAMA: liste, tüm sayfalardaki bulguları
@@ -6471,17 +6518,48 @@ export const CanvasArea: React.FC = () => {
         </div>
 
         {selectedId && (
-          <div className="fixed top-20 right-8 bg-[#1e1e1e] border border-[#333] rounded-lg p-1.5 shadow-2xl flex items-center gap-1 animate-in fade-in slide-in-from-top-4 duration-200 z-50">
+          <div className="fixed top-[76px] right-4 w-[330px] max-h-[calc(100vh-96px)] overflow-y-auto bg-[#1a1a1a] border border-[#333] rounded-xl shadow-2xl z-50 animate-in fade-in slide-in-from-top-2 duration-200">
             {(() => {
               const selectedObj = objects.find(o => o.id === selectedId);
               if (!selectedObj) return null;
 
+              const isLogo = selectedObj.id === 'corporate-logo';
+              const canCopy = !isLogo && selectedObj.type !== 'finding-list';
+              const symMeta = (allSymbols as any).flatMap((c: any) => (c.symbols || [])).find((s: any) => s.id === selectedObj.symbolId)
+                || SYMBOL_CATEGORIES.flatMap((c: any) => (c.symbols || [])).find((s: any) => s.id === selectedObj.symbolId);
+              const upMeta = (uploadedImages || []).find((u: any) => u.id === selectedObj.symbolId);
+              const symName = selectedObj.name || symMeta?.name || upMeta?.name || (selectedObj.type === 'text' ? 'Metin Kutusu' : selectedObj.symbolId || 'Nesne');
+
+              const handleCopyClick = () => {
+                if (!canCopy) {
+                  addNotification({ type: 'warning', message: 'Kopyalanamaz', description: 'Kurumsal logo ve bulgu listesi gibi özel öğeler kopyalanamaz.' });
+                  return;
+                }
+                copyObject(selectedObj.id);
+                addNotification({ type: 'success', message: 'Kopyalandı', description: 'Ctrl+V ile yapıştırın veya ÇOĞALT düğmesini kullanın.' });
+              };
+
               return (
                 <>
+                  {/* ═══ BAŞLIK: sembol adı + ana eylemler (kopyala / yapıştır / çoğalt / bırak) ═══ */}
+                  <div className="sticky top-0 z-10 bg-[#1a1a1a]/95 backdrop-blur px-3 py-2 border-b border-[#333] flex items-center justify-between gap-2 rounded-t-xl">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="w-2 h-2 bg-[#F5C518] rounded-full shrink-0" />
+                      <span className="text-[10px] font-black text-white uppercase tracking-wider truncate" title={symName}>{symName}</span>
+                    </div>
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      <button onClick={handleCopyClick} className="p-1.5 rounded-md text-gray-400 hover:text-white hover:bg-[#2a2a2a] transition-colors" title="Kopyala (Ctrl+C)"><Copy size={14} /></button>
+                      <button onClick={() => pasteClipboard()} disabled={!clipboard} title={clipboard ? 'Yapıştır (Ctrl+V)' : 'Pano boş — önce Kopyala'} className={`p-1.5 rounded-md transition-colors ${clipboard ? 'text-gray-400 hover:text-white hover:bg-[#2a2a2a]' : 'text-gray-600 cursor-not-allowed'}`}><ClipboardPaste size={14} /></button>
+                      <button onClick={() => { if (canCopy) duplicateObject(selectedObj.id); }} disabled={!canCopy} title={canCopy ? 'Çoğalt (Ctrl+D)' : 'Bu öğe çoğaltılamaz'} className={`p-1.5 rounded-md transition-colors ${canCopy ? 'text-gray-400 hover:text-white hover:bg-[#2a2a2a]' : 'text-gray-600 cursor-not-allowed'}`}><CopyPlus size={14} /></button>
+                      <span className="w-px h-4 bg-[#333] mx-1" />
+                      <button onClick={() => setSelectedId(null)} className="p-1.5 rounded-md text-gray-400 hover:text-white hover:bg-[#2a2a2a] transition-colors" title="Seçimi Bırak (Esc)"><X size={14} /></button>
+                    </div>
+                  </div>
+
+                  <div className="p-3 space-y-4">
                   {/* Group 1: Text Editing (for type='text' only) */}
                   {selectedObj.type === 'text' && (
-                    <div className="flex items-center gap-2 px-2 border-r border-[#333]">
-                      <span className="text-[9px] font-bold text-[#F5C518] uppercase">Metin:</span>
+                    <ToolbarSection title="METİN">
                       {['ev-callout', 'ev-arrow-desc', 'ev-arrow-desc-ellipse'].includes(selectedObj.symbolId || '') ? (
                         <textarea
                           value={selectedObj.distance || ''}
@@ -6489,7 +6567,7 @@ export const CanvasArea: React.FC = () => {
                           onBlur={() => saveHistory()}
                           onKeyDown={(e) => e.stopPropagation()}
                           rows={2}
-                          className="border border-[#333] bg-[#111] rounded px-2 py-1 text-[10px] text-gray-200 focus:ring-1 focus:ring-[#F5C518]/50 outline-none w-40 resize-none leading-tight"
+                          className="w-full border border-[#333] bg-[#111] rounded-md px-2 py-1.5 text-[11px] text-gray-200 focus:ring-1 focus:ring-[#F5C518]/40 outline-none resize-none leading-tight"
                         />
                       ) : (
                         <input
@@ -6501,108 +6579,98 @@ export const CanvasArea: React.FC = () => {
                           }, true)}
                           onBlur={() => saveHistory()}
                           onKeyDown={(e) => e.stopPropagation()}
-                          className="border border-[#333] bg-[#111] rounded px-2 py-1 text-xs text-gray-200 focus:ring-1 focus:ring-[#F5C518]/50 outline-none w-32"
+                          className="w-full border border-[#333] bg-[#111] rounded-md px-2 py-1.5 text-[11px] text-gray-200 focus:ring-1 focus:ring-[#F5C518]/40 outline-none"
                         />
                       )}
-                      <select
-                        value={selectedObj.fontFamily || 'Inter'}
-                        onChange={(e) => updateObject(selectedId, { fontFamily: e.target.value })}
-                        className="bg-[#111] border border-[#333] text-white text-[10px] rounded px-1 py-0.5 outline-none"
-                      >
-                        <option value="Arial">Arial</option>
-                        <option value="Times New Roman">Times New Roman</option>
-                        <option value="Courier New">Courier New</option>
-                        <option value="Georgia">Georgia</option>
-                        <option value="Verdana">Verdana</option>
-                        <option value="Tahoma">Tahoma</option>
-                        <option value="Impact">Impact</option>
-                      </select>
-                      <span className="text-[9px] font-bold text-gray-400 uppercase">Punto:</span>
-                      <input
-                        type="number"
-                        value={Math.round(selectedObj.fontSize || 20)}
-                        onChange={(e) => updateObject(selectedId, { fontSize: parseInt(e.target.value) || 12 }, true)}
-                        onBlur={() => saveHistory()}
-                        className="bg-[#111] border border-[#333] text-white text-[10px] rounded px-1 py-0.5 w-10 text-center"
-                      />
-                      <button
-                        onClick={() => updateObject(selectedId, { fontStyle: selectedObj.fontStyle === 'bold' ? 'normal' : 'bold' })}
-                        className={`w-7 h-7 rounded flex items-center justify-center font-bold text-xs ${
-                          selectedObj.fontStyle === 'bold' ? 'bg-[#F5C518] text-black' : 'bg-[#111] text-gray-400 border border-[#333]'
-                        }`}
-                      >
-                        B
-                      </button>
-                    </div>
+                      <div className="flex gap-1.5 mt-2">
+                        <select
+                          value={selectedObj.fontFamily || 'Inter'}
+                          onChange={(e) => updateObject(selectedId, { fontFamily: e.target.value })}
+                          className="flex-1 min-w-0 bg-[#111] border border-[#333] text-white text-[10px] rounded-md px-1.5 py-1.5 outline-none"
+                        >
+                          <option value="Arial">Arial</option>
+                          <option value="Times New Roman">Times New Roman</option>
+                          <option value="Courier New">Courier New</option>
+                          <option value="Georgia">Georgia</option>
+                          <option value="Verdana">Verdana</option>
+                          <option value="Tahoma">Tahoma</option>
+                          <option value="Impact">Impact</option>
+                        </select>
+                        <ToolbarField label="PUNTO">
+                          <input
+                            type="number"
+                            value={Math.round(selectedObj.fontSize || 20)}
+                            onChange={(e) => updateObject(selectedId, { fontSize: parseInt(e.target.value) || 12 }, true)}
+                            onBlur={() => saveHistory()}
+                            className="w-14 bg-[#111] border border-[#333] text-white text-[10px] rounded-md px-1 py-1.5 text-center outline-none"
+                          />
+                        </ToolbarField>
+                        <button
+                          onClick={() => updateObject(selectedId, { fontStyle: selectedObj.fontStyle === 'bold' ? 'normal' : 'bold' })}
+                          className={`w-8 h-[30px] self-end rounded-md flex items-center justify-center font-bold text-xs transition-colors ${
+                            selectedObj.fontStyle === 'bold' ? 'bg-[#F5C518] text-black' : 'bg-[#111] text-gray-400 border border-[#333] hover:border-gray-500'
+                          }`}
+                          title="Kalın"
+                        >
+                          B
+                        </button>
+                      </div>
+                    </ToolbarSection>
                   )}
 
                   {/* Group 2: Dimension Inputs (Architecture, Streets, Symbols, Images) */}
                   {(selectedObj.categoryId === 'architecture' || selectedObj.categoryId === 'streets' || selectedObj.type === 'image' || ['ev-ruler-straight', 'ev-ruler-l'].includes(selectedObj.symbolId || '')) && (
-                    <div className="flex items-center gap-2 px-2 border-r border-[#333]">
-                      <div className="flex items-center gap-1">
-                        <span className="text-[9px] font-bold text-orange-400 uppercase">{selectedObj.symbolId === 'arch-1v' ? 'EN:' : 'BOY:'}</span>
-                        <input
-                          type="number"
-                          value={Math.round(selectedObj.width || 100)}
-                          onChange={(e) => updateObject(selectedId, { width: parseInt(e.target.value) || 1 })}
-                          className="border border-[#333] bg-[#111] rounded px-1 py-0.5 text-[10px] text-gray-200 w-12 text-center"
-                        />
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <span className="text-[9px] font-bold text-orange-400 uppercase">{selectedObj.symbolId === 'arch-1v' ? 'BOY:' : 'EN:'}</span>
-                        <input
-                          type="number"
-                          value={Math.round(selectedObj.height || 10)}
-                          onChange={(e) => updateObject(selectedId, { height: parseInt(e.target.value) || 1 })}
-                          className="border border-[#333] bg-[#111] rounded px-1 py-0.5 text-[10px] text-gray-200 w-12 text-center"
-                        />
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <span className="text-[9px] font-bold text-emerald-400 uppercase">YÜKSEKLİK:</span>
-                        <input
-                          type="number"
-                          value={Math.round(selectedObj.zHeight || (selectedObj.symbolId === 'arch-win' ? 120 : 210))}
-                          onChange={(e) => updateObject(selectedId, { zHeight: parseInt(e.target.value) || 0 })}
-                          className="border border-[#333] bg-[#111] rounded px-1 py-0.5 text-[10px] text-gray-200 w-12 text-center"
-                        />
+                    <ToolbarSection title="BOYUT" color="#fb923c">
+                      <div className="grid grid-cols-3 gap-2">
+                        <ToolbarField label={selectedObj.symbolId === 'arch-1v' ? 'EN' : 'BOY'} accent="#fb923c">
+                          <input
+                            type="number"
+                            value={Math.round(selectedObj.width || 100)}
+                            onChange={(e) => updateObject(selectedId, { width: parseInt(e.target.value) || 1 })}
+                            className="w-full bg-[#111] border border-[#333] rounded-md px-1 py-1.5 text-[10px] text-gray-200 text-center outline-none focus:border-[#F5C518]/50"
+                          />
+                        </ToolbarField>
+                        <ToolbarField label={selectedObj.symbolId === 'arch-1v' ? 'BOY' : 'EN'} accent="#fb923c">
+                          <input
+                            type="number"
+                            value={Math.round(selectedObj.height || 10)}
+                            onChange={(e) => updateObject(selectedId, { height: parseInt(e.target.value) || 1 })}
+                            className="w-full bg-[#111] border border-[#333] rounded-md px-1 py-1.5 text-[10px] text-gray-200 text-center outline-none focus:border-[#F5C518]/50"
+                          />
+                        </ToolbarField>
+                        <ToolbarField label="YÜKSEKLİK" accent="#34d399">
+                          <input
+                            type="number"
+                            value={Math.round(selectedObj.zHeight || (selectedObj.symbolId === 'arch-win' ? 120 : 210))}
+                            onChange={(e) => updateObject(selectedId, { zHeight: parseInt(e.target.value) || 0 })}
+                            className="w-full bg-[#111] border border-[#333] rounded-md px-1 py-1.5 text-[10px] text-gray-200 text-center outline-none focus:border-[#F5C518]/50"
+                          />
+                        </ToolbarField>
                       </div>
                       {!selectedObj.symbolId?.startsWith('arch-') && !selectedObj.symbolId?.startsWith('p-') && (
-                        <>
-                          <div className="flex items-center gap-1 ml-2 border-l border-[#333] pl-2">
-                            <input
-                              type="checkbox"
-                              id="isVertical"
-                              checked={!!(selectedObj as any).isVertical}
-                              onChange={(e) => updateObject(selectedId, { isVertical: e.target.checked } as any)}
-                              className="accent-purple-500 w-3 h-3 cursor-pointer"
-                            />
-                            <label htmlFor="isVertical" className="text-[9px] font-bold text-purple-400 uppercase cursor-pointer">
-                              DİK DUR (3D)
-                            </label>
-                          </div>
-                          <div className="flex items-center gap-1 ml-2 border-l border-[#333] pl-2">
-                            <input
-                              type="checkbox"
-                              id="isMannequin"
-                              checked={!!(selectedObj as any).isMannequin}
-                              onChange={(e) => updateObject(selectedId, { isMannequin: e.target.checked } as any)}
-                              className="accent-blue-500 w-3 h-3 cursor-pointer"
-                            />
-                            <label htmlFor="isMannequin" className="text-[9px] font-bold text-blue-400 uppercase cursor-pointer">
-                              3D CESET
-                            </label>
-                          </div>
-                        </>
+                        <div className="grid grid-cols-2 gap-2 mt-2">
+                          <ChipToggle
+                            id="isVertical"
+                            label="DİK DUR (3D)"
+                            checked={!!(selectedObj as any).isVertical}
+                            onChange={(e) => updateObject(selectedId, { isVertical: e.target.checked } as any)}
+                            activeClass="border-purple-500/50 bg-purple-500/10 text-purple-300"
+                          />
+                          <ChipToggle
+                            id="isMannequin"
+                            label="3D CESET"
+                            checked={!!(selectedObj as any).isMannequin}
+                            onChange={(e) => updateObject(selectedId, { isMannequin: e.target.checked } as any)}
+                            activeClass="border-blue-500/50 bg-blue-500/10 text-blue-300"
+                          />
+                        </div>
                       )}
-                    </div>
+                    </ToolbarSection>
                   )}
 
                   {/* Group 2.5: YOL ADI + ORTA ÇİZGİ (Yol motoru ailesi: st-1/cadde/sokak) */}
                   {['st-1', 'st-cadde', 'st-sokak'].includes(selectedObj.symbolId || '') && (
-                    <div className="flex items-center gap-2 px-2 border-r border-[#333]">
-                      <span className="text-[9px] font-bold text-orange-400 uppercase">
-                        {selectedObj.symbolId === 'st-cadde' ? 'CADDE ADI:' : selectedObj.symbolId === 'st-sokak' ? 'SOKAK ADI:' : 'YOL ADI:'}
-                      </span>
+                    <ToolbarSection title={selectedObj.symbolId === 'st-cadde' ? 'CADDE' : selectedObj.symbolId === 'st-sokak' ? 'SOKAK' : 'YOL'} color="#fb923c">
                       <input
                         type="text"
                         placeholder={selectedObj.symbolId === 'st-cadde' ? 'Örn. Atatürk Caddesi' : selectedObj.symbolId === 'st-sokak' ? 'Örn. 5. Sokak' : 'Örn. İstasyon Yolu'}
@@ -6610,35 +6678,34 @@ export const CanvasArea: React.FC = () => {
                         onChange={(e) => updateObject(selectedId, { streetName: e.target.value } as any, true)}
                         onBlur={() => saveHistory()}
                         onKeyDown={(e) => e.stopPropagation()}
-                        className="border border-[#333] bg-[#111] rounded px-2 py-1 text-[10px] text-gray-200 focus:ring-1 focus:ring-[#F5C518]/50 outline-none w-36"
+                        className="w-full border border-[#333] bg-[#111] rounded-md px-2 py-1.5 text-[11px] text-gray-200 focus:ring-1 focus:ring-[#F5C518]/40 outline-none"
                       />
-                      <span className="text-[9px] font-bold text-gray-400 uppercase">Punto:</span>
-                      <input
-                        type="number"
-                        value={Math.round(selectedObj.streetFontSize || Math.max(11, Math.min(30, (selectedObj.height || 40) * 0.32)))}
-                        onChange={(e) => updateObject(selectedId, { streetFontSize: parseInt(e.target.value) || undefined } as any, true)}
-                        onBlur={() => saveHistory()}
-                        className="bg-[#111] border border-[#333] text-white text-[10px] rounded px-1 py-0.5 w-10 text-center"
-                      />
-                      <div className="flex items-center gap-1 ml-1 border-l border-[#333] pl-2">
-                        <input
-                          type="checkbox"
-                          id="roadMidLine"
-                          checked={selectedObj.roadMiddleLine !== undefined ? !!selectedObj.roadMiddleLine : selectedObj.symbolId === 'st-1'}
-                          onChange={(e) => updateObject(selectedId, { roadMiddleLine: e.target.checked } as any)}
-                          className="accent-orange-500 w-3 h-3 cursor-pointer"
-                        />
-                        <label htmlFor="roadMidLine" className="text-[9px] font-bold text-orange-300 uppercase cursor-pointer">
-                          ORTA ÇİZGİ
-                        </label>
+                      <div className="flex items-end gap-2 mt-2">
+                        <ToolbarField label="PUNTO">
+                          <input
+                            type="number"
+                            value={Math.round(selectedObj.streetFontSize || Math.max(11, Math.min(30, (selectedObj.height || 40) * 0.32)))}
+                            onChange={(e) => updateObject(selectedId, { streetFontSize: parseInt(e.target.value) || undefined } as any, true)}
+                            onBlur={() => saveHistory()}
+                            className="w-14 bg-[#111] border border-[#333] text-white text-[10px] rounded-md px-1 py-1.5 text-center outline-none"
+                          />
+                        </ToolbarField>
+                        <div className="flex-1">
+                          <ChipToggle
+                            id="roadMidLine"
+                            label="ORTA ÇİZGİ"
+                            checked={selectedObj.roadMiddleLine !== undefined ? !!selectedObj.roadMiddleLine : selectedObj.symbolId === 'st-1'}
+                            onChange={(e) => updateObject(selectedId, { roadMiddleLine: e.target.checked } as any)}
+                            activeClass="border-orange-500/50 bg-orange-500/10 text-orange-300"
+                          />
+                        </div>
                       </div>
-                    </div>
+                    </ToolbarSection>
                   )}
 
                   {/* Group 3: Label/Annotation (Available for everything that isn't raw text) */}
                   {selectedObj.type !== 'text' && selectedObj.symbolId !== 'ev-shooting-trajectory' && (
-                    <div className="flex items-center gap-2 px-2 border-r border-[#333]">
-                      <span className="text-[9px] font-bold text-blue-400 uppercase">Metin:</span>
+                    <ToolbarSection title="ETİKET" color="#60a5fa">
                       <input
                         type="text"
                         placeholder="Açıklama..."
@@ -6660,339 +6727,331 @@ export const CanvasArea: React.FC = () => {
                         }}
                         onBlur={() => saveHistory()}
                         onKeyDown={(e) => e.stopPropagation()}
-                        className="border border-[#333] bg-[#111] rounded px-2 py-1 text-xs text-gray-200 w-28"
+                        className="w-full border border-[#333] bg-[#111] rounded-md px-2 py-1.5 text-[11px] text-gray-200 focus:ring-1 focus:ring-[#F5C518]/40 outline-none"
                       />
-                      <span className="text-[9px] font-bold text-gray-400 uppercase">Yazı Boyu:</span>
-                      <input
-                        type="number"
-                        value={Math.round(selectedObj.distanceFontSize || 14)}
-                        onChange={(e) => updateObject(selectedId, { distanceFontSize: parseInt(e.target.value) || 12 }, true)}
-                        onBlur={() => saveHistory()}
-                        className="bg-[#111] border border-[#333] text-white text-[10px] rounded px-1 py-0.5 w-10 text-center"
-                      />
-                    </div>
+                      <div className="mt-2 w-20">
+                        <ToolbarField label="YAZI BOYU">
+                          <input
+                            type="number"
+                            value={Math.round(selectedObj.distanceFontSize || 14)}
+                            onChange={(e) => updateObject(selectedId, { distanceFontSize: parseInt(e.target.value) || 12 }, true)}
+                            onBlur={() => saveHistory()}
+                            className="w-full bg-[#111] border border-[#333] text-white text-[10px] rounded-md px-1 py-1.5 text-center outline-none"
+                          />
+                        </ToolbarField>
+                      </div>
+                    </ToolbarSection>
                   )}
 
-                  {/* Group 4: Visual Style (Unified Color Picker and Transformations) */}
-                  <div className="flex items-center gap-2 px-2 border-r border-[#333]">
-                    {/* DOKU MODU — görsel semboller uzatıldığında desen bozulmasın.
-                        Şerit: desen uzun eksende tekrar eder (yol/refüj/iz şeritleri).
-                        Karo: desen iki eksende tekrar eder (çukur/islak zemin dokuları).
-                        Yüklenen görsellerde de çalışır. */}
-                    {!!selectedObj.src && (selectedObj.type === 'symbol' || selectedObj.type === 'image') && (
-                      <div className="flex items-center gap-1">
-                        <span className="text-[9px] font-bold text-cyan-400 uppercase" title="Uzatma modu: Şerit/Karo seçiliyken görsel uzatıldığında desen bozulmadan tekrar eder">Doku:</span>
+                  {/* Group 4: Visual Style (Renk, Doku, Çevirme, Döndürme, Ortalama) */}
+                  <ToolbarSection title="GÖRÜNÜM" color="#22d3ee">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={selectedObj.distanceColor || selectedObj.fill || '#000000'}
+                        onInput={(e: any) => updateObject(selectedId, { distanceColor: e.target.value, fill: e.target.value }, true)}
+                        onChange={() => saveHistory()}
+                        className="w-8 h-8 rounded-md cursor-pointer border border-[#333] p-0.5 bg-transparent shrink-0"
+                        title="Renk"
+                      />
+                      {/* DOKU MODU — görsel semboller uzatıldığında desen bozulmasın.
+                          Şerit: desen uzun eksende tekrar eder (yol/refüj/iz şeritleri).
+                          Karo: desen iki eksende tekrar eder (çukur/islak zemin dokuları).
+                          Yüklenen görsellerde de çalışır. */}
+                      {!!selectedObj.src && (selectedObj.type === 'symbol' || selectedObj.type === 'image') && (
                         <select
                           value={selectedObj.tileMode || 'auto'}
                           onChange={(e) => updateObject(selectedId, { tileMode: e.target.value as CanvasObject['tileMode'] })}
                           title="Uzatma modu: Şerit/Karo seçiliyken görsel uzatıldığında desen bozulmadan tekrar eder"
-                          className="bg-[#111] border border-[#333] text-white text-[10px] rounded px-1 py-0.5 outline-none"
+                          className="flex-1 min-w-0 bg-[#111] border border-[#333] text-white text-[10px] rounded-md px-1.5 py-2 outline-none"
                         >
-                          <option value="auto">OTO</option>
+                          <option value="auto">DOKU: OTO</option>
                           <option value="stretch">NORMAL</option>
                           <option value="strip-auto">ŞERİT (OTO)</option>
                           <option value="strip-x">ŞERİT YATAY</option>
                           <option value="strip-y">ŞERİT DİKEY</option>
                           <option value="tile">KARO (2D)</option>
                         </select>
-                      </div>
-                    )}
-                    <span className="text-[9px] font-bold text-gray-400 uppercase">Renk:</span>
-                    <input
-                      type="color"
-                      value={selectedObj.distanceColor || selectedObj.fill || '#000000'}
-                      onInput={(e: any) => updateObject(selectedId, { distanceColor: e.target.value, fill: e.target.value }, true)}
-                      onChange={() => saveHistory()}
-                      className="w-7 h-7 rounded cursor-pointer border border-[#333] p-0 bg-transparent"
-                      title="Renk"
-                    />
+                      )}
+                    </div>
                     {(selectedObj.type === 'symbol' || selectedObj.type === 'image') && (
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1.5 mt-2 flex-wrap">
                         {/* Door Specific Orientation Controls */}
                         {['arch-d1r', 'arch-d1l', 'arch-d2'].includes(selectedObj.symbolId || '') && (
-                          <div className="flex items-center gap-1 mr-2 bg-black/20 p-0.5 rounded border border-[#333]">
-                            <span className="text-[8px] font-bold text-gray-500 px-1">KAPI:</span>
-                            <button 
-                              onClick={() => updateObject(selectedId, { scaleX: (selectedObj.scaleX || 1) * -1 })} 
-                              className="w-7 h-7 bg-[#111] border border-[#333] rounded hover:border-[#F5C518] flex items-center justify-center text-[10px]"
+                          <>
+                            <span className="text-[8px] font-black text-gray-500 uppercase">Kapı:</span>
+                            <button
+                              onClick={() => updateObject(selectedId, { scaleX: (selectedObj.scaleX || 1) * -1 })}
+                              className="w-8 h-8 bg-[#111] border border-[#333] rounded-md hover:border-[#F5C518] flex items-center justify-center text-[11px] text-gray-300"
                               title="Yönü Değiştir (Sağ/Sol)"
                             >
                               ⇄
                             </button>
-                            <button 
-                              onClick={() => updateObject(selectedId, { scaleY: (selectedObj.scaleY || 1) * -1 })} 
-                              className="w-7 h-7 bg-[#111] border border-[#333] rounded hover:border-[#F5C518] flex items-center justify-center text-[10px]"
+                            <button
+                              onClick={() => updateObject(selectedId, { scaleY: (selectedObj.scaleY || 1) * -1 })}
+                              className="w-8 h-8 bg-[#111] border border-[#333] rounded-md hover:border-[#F5C518] flex items-center justify-center text-[11px] text-gray-300"
                               title="Açılış Yönü (İç/Dış)"
                             >
                               ⇅
                             </button>
-                          </div>
+                            <span className="w-px h-5 bg-[#333] mx-0.5" />
+                          </>
                         )}
-                        
-                        <button onClick={() => updateObject(selectedId, { scaleX: (selectedObj.scaleX || 1) * -1 })} className="w-7 h-7 bg-[#111] border border-[#333] rounded hover:border-[#F5C518]" title="Yatay Çevir">↔️</button>
-                        <button onClick={() => updateObject(selectedId, { scaleY: (selectedObj.scaleY || 1) * -1 })} className="w-7 h-7 bg-[#111] border border-[#333] rounded hover:border-[#F5C518]" title="Dikey Çevir">↕️</button>
+                        <button onClick={() => updateObject(selectedId, { scaleX: (selectedObj.scaleX || 1) * -1 })} className="w-8 h-8 bg-[#111] border border-[#333] rounded-md hover:border-[#F5C518] flex items-center justify-center text-gray-300" title="Yatay Çevir"><FlipHorizontal2 size={13} /></button>
+                        <button onClick={() => updateObject(selectedId, { scaleY: (selectedObj.scaleY || 1) * -1 })} className="w-8 h-8 bg-[#111] border border-[#333] rounded-md hover:border-[#F5C518] flex items-center justify-center text-gray-300" title="Dikey Çevir"><FlipVertical2 size={13} /></button>
                         {!['arch-1', 'arch-1v'].includes(selectedObj.symbolId || '') && (
-                          <button onClick={() => updateObject(selectedId, { rotation: ((selectedObj.rotation || 0) + 90) % 360 })} className="w-7 h-7 bg-[#111] border border-[#333] rounded hover:border-[#F5C518]" title="90 Derece Döndür">🔄</button>
+                          <button onClick={() => updateObject(selectedId, { rotation: ((selectedObj.rotation || 0) + 90) % 360 })} className="w-8 h-8 bg-[#111] border border-[#333] rounded-md hover:border-[#F5C518] flex items-center justify-center text-gray-300" title="90 Derece Döndür"><RotateCw size={13} /></button>
                         )}
-
-                        {/* Center Alignment Buttons */}
-                        <div className="flex items-center gap-1 ml-2 border-l border-[#333] pl-2">
-                          <button 
-                            onClick={() => {
-                              if (drawingArea) {
-                                updateObject(selectedId, { x: drawingArea.x + (drawingArea.width - (selectedObj.width || 0)) / 2 });
-                              }
-                            }} 
-                            className="w-7 h-7 bg-[#111] border border-[#333] rounded hover:border-[#F5C518] flex items-center justify-center text-[10px]"
-                            title="Yatayda Ortala"
-                          >
-                            ┶
-                          </button>
-                          <button 
-                            onClick={() => {
-                              if (drawingArea) {
-                                updateObject(selectedId, { y: drawingArea.y + (drawingArea.height - (selectedObj.height || 0)) / 2 });
-                              }
-                            }} 
-                            className="w-7 h-7 bg-[#111] border border-[#333] rounded hover:border-[#F5C518] flex items-center justify-center text-[10px]"
-                            title="Dikeyde Ortala"
-                          >
-                            ┚
-                          </button>
-                        </div>
+                        <span className="w-px h-5 bg-[#333] mx-0.5" />
+                        <button
+                          onClick={() => {
+                            if (drawingArea) {
+                              updateObject(selectedId, { x: drawingArea.x + (drawingArea.width - (selectedObj.width || 0)) / 2 });
+                            }
+                          }}
+                          className="w-8 h-8 bg-[#111] border border-[#333] rounded-md hover:border-[#F5C518] flex items-center justify-center text-gray-300"
+                          title="Yatayda Ortala"
+                        >
+                          <AlignCenterHorizontal size={13} />
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (drawingArea) {
+                              updateObject(selectedId, { y: drawingArea.y + (drawingArea.height - (selectedObj.height || 0)) / 2 });
+                            }
+                          }}
+                          className="w-8 h-8 bg-[#111] border border-[#333] rounded-md hover:border-[#F5C518] flex items-center justify-center text-gray-300"
+                          title="Dikeyde Ortala"
+                        >
+                          <AlignCenterVertical size={13} />
+                        </button>
                       </div>
                     )}
-                  </div>
+                    {isLogo && isAdmin && (
+                      <button
+                        onClick={() => logoInputRef.current?.click()}
+                        className="w-full mt-2 px-2 py-1.5 bg-[#F5C518]/10 text-[#F5C518] border border-[#F5C518]/30 rounded-md text-[9px] font-bold hover:bg-[#F5C518]/20 transition-all flex items-center justify-center gap-1"
+                      >
+                        <Upload size={10} />
+                        {objects.find(o => o.id === 'corporate-logo')?.src ? 'LOGOYU DEĞİŞTİR' : 'LOGO YÜKLE'}
+                      </button>
+                    )}
+                  </ToolbarSection>
 
                   {/* Ballistic Analysis Controls */}
                   {selectedObj.symbolId === 'ev-shooting-trajectory' && (
-                    <div className="flex items-center gap-2 px-2 border-r border-[#333]">
-                      <div className="flex items-center gap-1">
-                        <span className="text-[9px] font-bold text-red-500 uppercase">Yatay Açı:</span>
-                        <input
-                          type="number"
-                          value={selectedObj.azimuth || 0}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            if (val === '-' || val === '.' || val === '') return;
-                            const newAz = parseFloat(val);
-                            if (isNaN(newAz)) return;
-
-                            const sx = selectedObj.startX ?? 0;
-                            const sy = selectedObj.startY ?? 0;
-                            const ex = selectedObj.endX ?? 150;
-                            const ey = selectedObj.endY ?? 0;
-                            const dx = ex - sx;
-                            const dy = ey - sy;
-                            const len = Math.sqrt(dx*dx + dy*dy) || 100;
-                            const rad = (newAz - 90) * (Math.PI / 180); 
-                            const nEx = sx + len * Math.cos(rad);
-                            const nEy = sy + len * Math.sin(rad);
-                            
-                            if (isNaN(nEx) || isNaN(nEy)) return;
-
-                            updateObject(selectedId, { 
-                              azimuth: newAz,
-                              endX: nEx,
-                              endY: nEy,
-                              x: (sx + nEx) / 2,
-                              y: (sy + nEy) / 2
-                            });
-                          }}
-                          className="border border-[#333] bg-[#111] rounded px-1 py-0.5 text-[10px] text-gray-200 w-12 text-center"
-                        />
-                        <span className="text-[9px] text-gray-500">°</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <span className="text-[9px] font-bold text-red-500 uppercase">Dikey Açı:</span>
-                        <input
-                          type="number"
-                          value={selectedObj.tilt || 0}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            if (val === '-' || val === '.' || val === '') return;
-                            const valNum = parseFloat(val);
-                            if (!isNaN(valNum)) {
-                              updateObject(selectedId, { tilt: valNum });
-                            }
-                          }}
-                          className="border border-[#333] bg-[#111] rounded px-1 py-0.5 text-[10px] text-gray-200 w-12 text-center"
-                        />
-                        <span className="text-[9px] text-gray-500">°</span>
-                      </div>
-                      <div className="flex items-center gap-1 ml-1">
-                        <span className="text-[9px] font-bold text-red-500 uppercase">Uzunluk:</span>
-                        <input
-                          type="number"
-                          value={(selectedObj as any).length || Math.round(Math.sqrt(Math.pow((selectedObj.endX || 0) - (selectedObj.startX || 0), 2) + Math.pow((selectedObj.endY || 0) - (selectedObj.startY || 0), 2)))}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            if (val === '') return;
-                            const newLen = parseFloat(val);
-                            if (isNaN(newLen) || newLen <= 0) return;
-
-                            const sx = selectedObj.startX || 0;
-                            const sy = selectedObj.startY || 0;
-                            const ex = selectedObj.endX || 150;
-                            const ey = selectedObj.endY || 0;
-                            const dx = ex - sx;
-                            const dy = ey - sy;
-                            const currentLen = Math.sqrt(dx*dx + dy*dy);
-                            const ratio = newLen / (currentLen || 1);
-                            const nEx = sx + dx * ratio;
-                            const nEy = sy + dy * ratio;
-                            updateObject(selectedId, { 
-                              length: newLen,
-                              endX: nEx,
-                              endY: nEy,
-                              x: (sx + nEx) / 2,
-                              y: (sy + nEy) / 2
-                            } as any);
-                          }}
-                          className="border border-[#333] bg-[#111] rounded px-1 py-0.5 text-[10px] text-gray-200 w-16 text-center"
-                        />
-                        <span className="text-[9px] text-gray-500">cm</span>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Hız Analizi Butonu - Her zaman erişilebilir (tr-2 için) */}
-                  {selectedObj.symbolId === 'tr-2' && (
-                    <div className="flex items-center gap-1 px-2 border-r border-[#333]">
-                      <button
-                        onClick={() => {
-                          const meters = (selectedObj.width * (selectedObj.scaleX || 1)) / 50; 
-                          window.dispatchEvent(new CustomEvent('open-skid-calculator', { 
-                            detail: { distance: meters.toFixed(2) } 
-                          }));
-                        }}
-                        className="px-2 py-1 bg-emerald-500 text-black rounded text-[9px] font-black hover:bg-emerald-400 transition-all flex items-center gap-1 shadow-lg shadow-emerald-500/20"
-                      >
-                        <Activity size={10} />
-                        HIZ ANALİZİ
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Ok/Mesafe için Hız Göstergesi Toggle */}
-                  {(selectedObj.symbolId === 'a-4' || selectedObj.isDistanceArrow) && (
-                    <div className="flex items-center gap-2 px-2 border-r border-[#333]">
-                      <label className="flex items-center gap-1.5 cursor-pointer group">
-                        <div className="relative">
-                          <input 
-                            type="checkbox" 
-                            className="sr-only" 
-                            checked={selectedObj.showSpeedInfo || false}
+                    <ToolbarSection title="ATIŞ YÖNÜ" color="#f87171">
+                      <div className="grid grid-cols-3 gap-2">
+                        <ToolbarField label="YATAY AÇI" accent="#f87171">
+                          <input
+                            type="number"
+                            value={selectedObj.azimuth || 0}
                             onChange={(e) => {
-                              const checked = e.target.checked;
-                              updateObject(selectedId, { showSpeedInfo: checked });
-                              if (checked) {
-                                // Extract distance and open calculator
-                                const rawText = String(selectedObj.text || selectedObj.distance || '');
-                                const match = rawText.match(/\d+(\.\d+)?/);
-                                const cm = match ? parseFloat(match[0]) : 0;
-                                const meters = rawText.toLowerCase().includes('metre') ? cm : cm / 100;
-                                window.dispatchEvent(new CustomEvent('open-skid-calculator', { 
-                                  detail: { 
-                                    distance: meters.toFixed(2),
-                                    objectId: selectedId
-                                  } 
-                                }));
+                              const val = e.target.value;
+                              if (val === '-' || val === '.' || val === '') return;
+                              const newAz = parseFloat(val);
+                              if (isNaN(newAz)) return;
+
+                              const sx = selectedObj.startX ?? 0;
+                              const sy = selectedObj.startY ?? 0;
+                              const ex = selectedObj.endX ?? 150;
+                              const ey = selectedObj.endY ?? 0;
+                              const dx = ex - sx;
+                              const dy = ey - sy;
+                              const len = Math.sqrt(dx*dx + dy*dy) || 100;
+                              const rad = (newAz - 90) * (Math.PI / 180);
+                              const nEx = sx + len * Math.cos(rad);
+                              const nEy = sy + len * Math.sin(rad);
+
+                              if (isNaN(nEx) || isNaN(nEy)) return;
+
+                              updateObject(selectedId, {
+                                azimuth: newAz,
+                                endX: nEx,
+                                endY: nEy,
+                                x: (sx + nEx) / 2,
+                                y: (sy + nEy) / 2
+                              });
+                            }}
+                            className="w-full bg-[#111] border border-[#333] rounded-md px-1 py-1.5 text-[10px] text-gray-200 text-center outline-none focus:border-[#F5C518]/50"
+                          />
+                        </ToolbarField>
+                        <ToolbarField label="DİKEY AÇI" accent="#f87171">
+                          <input
+                            type="number"
+                            value={selectedObj.tilt || 0}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val === '-' || val === '.' || val === '') return;
+                              const valNum = parseFloat(val);
+                              if (!isNaN(valNum)) {
+                                updateObject(selectedId, { tilt: valNum });
                               }
                             }}
+                            className="w-full bg-[#111] border border-[#333] rounded-md px-1 py-1.5 text-[10px] text-gray-200 text-center outline-none focus:border-[#F5C518]/50"
                           />
-                          <div className={`w-6 h-3.5 rounded-full transition-colors ${selectedObj.showSpeedInfo ? 'bg-emerald-500' : 'bg-gray-700'}`}></div>
-                          <div className={`absolute left-0.5 top-0.5 w-2.5 h-2.5 bg-white rounded-full transition-transform ${selectedObj.showSpeedInfo ? 'translate-x-2.5' : ''}`}></div>
+                        </ToolbarField>
+                        <ToolbarField label="UZUNLUK" accent="#f87171">
+                          <input
+                            type="number"
+                            value={(selectedObj as any).length || Math.round(Math.sqrt(Math.pow((selectedObj.endX || 0) - (selectedObj.startX || 0), 2) + Math.pow((selectedObj.endY || 0) - (selectedObj.startY || 0), 2)))}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val === '') return;
+                              const newLen = parseFloat(val);
+                              if (isNaN(newLen) || newLen <= 0) return;
+
+                              const sx = selectedObj.startX || 0;
+                              const sy = selectedObj.startY || 0;
+                              const ex = selectedObj.endX || 150;
+                              const ey = selectedObj.endY || 0;
+                              const dx = ex - sx;
+                              const dy = ey - sy;
+                              const currentLen = Math.sqrt(dx*dx + dy*dy);
+                              const ratio = newLen / (currentLen || 1);
+                              const nEx = sx + dx * ratio;
+                              const nEy = sy + dy * ratio;
+                              updateObject(selectedId, {
+                                length: newLen,
+                                endX: nEx,
+                                endY: nEy,
+                                x: (sx + nEx) / 2,
+                                y: (sy + nEy) / 2
+                              } as any);
+                            }}
+                            className="w-full bg-[#111] border border-[#333] rounded-md px-1 py-1.5 text-[10px] text-gray-200 text-center outline-none focus:border-[#F5C518]/50"
+                          />
+                        </ToolbarField>
+                      </div>
+                      <p className="text-[8px] text-gray-600 mt-1.5">Açı değerleri derece (°), uzunluk cm cinsindendir.</p>
+                    </ToolbarSection>
+                  )}
+
+                  {/* Analiz Araçları: hız analizi, hız göstergesi, BPA kuyruğu */}
+                  {(selectedObj.symbolId === 'tr-2' || selectedObj.symbolId === 'ev-bpa-drop' || selectedObj.symbolId === 'a-4' || selectedObj.isDistanceArrow) && (
+                    <ToolbarSection title="ANALİZ" color="#34d399">
+                      {selectedObj.symbolId === 'ev-bpa-drop' && (
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-[8px] font-black text-red-400 uppercase shrink-0">Kuyruk</span>
+                          <input
+                            type="range"
+                            min="20" max="800"
+                            value={selectedObj.tailLength || 100}
+                            onChange={(e) => updateObject(selectedId, { tailLength: parseInt(e.target.value) })}
+                            className="flex-1 h-1 rounded-lg appearance-none bg-[#333] cursor-pointer accent-red-500"
+                          />
                         </div>
-                        <span className="text-[9px] font-bold text-gray-400 group-hover:text-emerald-400 transition-colors uppercase">HIZ GÖSTER</span>
-                      </label>
-                    </div>
+                      )}
+                      {(selectedObj.symbolId === 'tr-2' || selectedObj.symbolId === 'ev-bpa-drop') && (
+                        <button
+                          onClick={() => {
+                            const meters = (selectedObj.width * (selectedObj.scaleX || 1)) / 50;
+                            window.dispatchEvent(new CustomEvent('open-skid-calculator', {
+                              detail: { distance: meters.toFixed(2) }
+                            }));
+                          }}
+                          className="w-full px-2 py-1.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-md text-[9px] font-black hover:bg-emerald-500/20 transition-all flex items-center justify-center gap-1"
+                        >
+                          <Activity size={10} />
+                          HIZ ANALİZİ YAP
+                        </button>
+                      )}
+                      {(selectedObj.symbolId === 'a-4' || selectedObj.isDistanceArrow) && (
+                        <label className="flex items-center gap-1.5 cursor-pointer group mt-1.5">
+                          <div className="relative">
+                            <input
+                              type="checkbox"
+                              className="sr-only"
+                              checked={selectedObj.showSpeedInfo || false}
+                              onChange={(e) => {
+                                const checked = e.target.checked;
+                                updateObject(selectedId, { showSpeedInfo: checked });
+                                if (checked) {
+                                  // Extract distance and open calculator
+                                  const rawText = String(selectedObj.text || selectedObj.distance || '');
+                                  const match = rawText.match(/\d+(\.\d+)?/);
+                                  const cm = match ? parseFloat(match[0]) : 0;
+                                  const meters = rawText.toLowerCase().includes('metre') ? cm : cm / 100;
+                                  window.dispatchEvent(new CustomEvent('open-skid-calculator', {
+                                    detail: {
+                                      distance: meters.toFixed(2),
+                                      objectId: selectedId
+                                    }
+                                  }));
+                                }
+                              }}
+                            />
+                            <div className={`w-6 h-3.5 rounded-full transition-colors ${selectedObj.showSpeedInfo ? 'bg-emerald-500' : 'bg-gray-700'}`}></div>
+                            <div className={`absolute left-0.5 top-0.5 w-2.5 h-2.5 bg-white rounded-full transition-transform ${selectedObj.showSpeedInfo ? 'translate-x-2.5' : ''}`}></div>
+                          </div>
+                          <span className="text-[9px] font-bold text-gray-400 group-hover:text-emerald-400 transition-colors uppercase">HIZ GÖSTER</span>
+                        </label>
+                      )}
+                    </ToolbarSection>
                   )}
 
                   {/* Triangulation and Matrix Tools */}
                   {(selectedObj.findingNo || selectedObj.isTriangulation) && (
-                    <div className="flex items-center gap-1 px-2 border-r border-[#333]">
+                    <ToolbarSection title="BULGU ARAÇLARI" color="#F5C518">
                       <button
                         onClick={() => setFindingModalState({
                           isOpen: true,
                           symbol: selectedObj,
                           pos: { x: selectedObj.x, y: selectedObj.y }
                         })}
-                        className="px-2 py-1 bg-[#F5C518]/10 text-[#F5C518] border border-[#F5C518]/30 rounded text-[9px] font-bold hover:bg-[#F5C518]/20 transition-all flex items-center gap-1"
+                        className="w-full px-2 py-1.5 bg-[#F5C518]/10 text-[#F5C518] border border-[#F5C518]/30 rounded-md text-[9px] font-bold hover:bg-[#F5C518]/20 transition-all flex items-center justify-center gap-1"
                         title="Bulgu numarasını veya açıklamasını düzenle"
                       >
                         <Info size={10} />
                         {selectedObj.isTriangulation ? 'NO DÜZENLE' : 'BİLGİ DÜZENLE'}
                       </button>
-                      <button
-                        onClick={() => handleTriangulate(selectedId)}
-                        className="px-2 py-1 bg-emerald-500/10 text-emerald-500 border border-emerald-500/30 rounded text-[9px] font-bold hover:bg-emerald-500/20 transition-all flex items-center gap-1"
-                        title="En yakın duvarlara veya sabit noktalara olan mesafeyi otomatik hesapla"
-                      >
-                        <Target size={10} />
-                        SABİT NOKTA
-                      </button>
-                      <button
-                        onClick={() => setIsDistanceMatrixOpen(true)}
-                        className="px-2 py-1 bg-blue-500/10 text-blue-500 border border-blue-500/30 rounded text-[9px] font-bold hover:bg-blue-500/20 transition-all flex items-center gap-1"
-                        title="Tüm bulguların birbirine olan mesafesini gör"
-                      >
-                        <Grid size={10} />
-                        MESAFE ÖLÇ
-                      </button>
-                    </div>
+                      <div className="grid grid-cols-2 gap-1.5 mt-1.5">
+                        <button
+                          onClick={() => handleTriangulate(selectedId)}
+                          className="px-2 py-1.5 bg-emerald-500/10 text-emerald-500 border border-emerald-500/30 rounded-md text-[9px] font-bold hover:bg-emerald-500/20 transition-all flex items-center justify-center gap-1"
+                          title="En yakın duvarlara veya sabit noktalara olan mesafeyi otomatik hesapla"
+                        >
+                          <Target size={10} />
+                          SABİT NOKTA
+                        </button>
+                        <button
+                          onClick={() => setIsDistanceMatrixOpen(true)}
+                          className="px-2 py-1.5 bg-blue-500/10 text-blue-500 border border-blue-500/30 rounded-md text-[9px] font-bold hover:bg-blue-500/20 transition-all flex items-center justify-center gap-1"
+                          title="Tüm bulguların birbirine olan mesafesini gör"
+                        >
+                          <Grid size={10} />
+                          MESAFE ÖLÇ
+                        </button>
+                      </div>
+                    </ToolbarSection>
                   )}
 
-                  {/* BPA Analytics Panel */}
-                  {selectedObj.symbolId === 'ev-bpa-drop' && (
-                    <div className="flex items-center gap-2 px-2 border-r border-[#333]">
-                      <span className="text-[9px] font-bold text-red-500 uppercase">Analiz Kuyruğu:</span>
-                      <input
-                        type="range"
-                        min="20" max="800"
-                        value={selectedObj.tailLength || 100}
-                        onChange={(e) => updateObject(selectedId, { tailLength: parseInt(e.target.value) })}
-                        className="w-20 h-1 rounded-lg appearance-none bg-[#333] cursor-pointer accent-red-500"
-                      />
+                  {/* Evidence Photo Management for any finding */}
+                  {selectedObj.findingNo && (
+                    <ToolbarSection title="FOTOĞRAFLAR" color="#60a5fa">
                       <button
                         onClick={() => {
-                          const meters = (selectedObj.width * (selectedObj.scaleX || 1)) / 50;
-                          window.dispatchEvent(new CustomEvent('open-skid-calculator', { 
-                            detail: { distance: meters.toFixed(2) } 
-                          }));
+                          setEvidencePhotoTarget(selectedId);
+                          setIsEvidencePhotoModalOpen(true);
                         }}
-                        className="px-2 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded text-[9px] font-black hover:bg-emerald-500/20 transition-all flex items-center gap-1.5"
+                        className={`w-full px-2 py-1.5 border rounded-md text-[9px] font-bold transition-all flex items-center justify-center gap-1 ${
+                          (selectedObj.photos?.length || 0) > 0
+                            ? 'bg-[#F5C518]/10 text-[#F5C518] border-[#F5C518]/30'
+                            : 'bg-white/5 text-gray-400 border-[#333] hover:border-gray-500'
+                        }`}
                       >
-                        <Activity size={10} />
-                        HIZ ANALİZİ YAP
+                        <Camera size={10} />
+                        FOTOĞRAFLAR {(selectedObj.photos?.length || 0) > 0 && `(${selectedObj.photos?.length})`}
                       </button>
-                    </div>
-                  )}
-
-                  {/* Tire Track Speed Analysis */}
-                  {selectedObj.symbolId === 'tr-2' && (
-                    <div className="flex items-center gap-2 px-2 border-r border-[#333]">
-                      <button
-                        onClick={() => {
-                          const meters = (selectedObj.width * (selectedObj.scaleX || 1)) / 50; // Use current scale 50px = 1m
-                          window.dispatchEvent(new CustomEvent('open-skid-calculator', { 
-                            detail: { distance: meters.toFixed(2) } 
-                          }));
-                        }}
-                        className="px-2 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded text-[9px] font-black hover:bg-emerald-500/20 transition-all flex items-center gap-1.5"
-                      >
-                        <Activity size={10} />
-                        HIZ ANALİZİ YAP
-                      </button>
-                    </div>
+                    </ToolbarSection>
                   )}
 
                   {/* Camera Link Anchor Controls */}
                   {selectedObj.symbolId === 'ev-camera-link' && (
-                    <div className="flex items-center gap-2 px-2 border-r border-[#333]">
+                    <ToolbarSection title="KAMERA" color="#60a5fa">
                       <button
                         onClick={() => cameraInputRef.current?.click()}
-                        className="px-2 py-1 bg-blue-500/10 text-blue-500 border border-blue-500/30 rounded text-[9px] font-bold hover:bg-blue-500/20 transition-all flex items-center gap-1"
+                        className="w-full px-2 py-1.5 bg-blue-500/10 text-blue-500 border border-blue-500/30 rounded-md text-[9px] font-bold hover:bg-blue-500/20 transition-all flex items-center justify-center gap-1"
                       >
                         <Upload size={10} />
                         {selectedObj.photo ? 'FOTOĞRAFI DEĞİŞTİR' : 'FOTOĞRAF BAĞLA'}
@@ -7012,74 +7071,57 @@ export const CanvasArea: React.FC = () => {
                               body.appendChild(img);
                             }
                           }}
-                          className="px-2 py-1 bg-green-500/10 text-green-500 border border-green-500/30 rounded text-[9px] font-bold hover:bg-green-500/20 transition-all"
+                          className="w-full mt-1.5 px-2 py-1.5 bg-green-500/10 text-green-500 border border-green-500/30 rounded-md text-[9px] font-bold hover:bg-green-500/20 transition-all flex items-center justify-center gap-1"
                         >
                           FOTOĞRAFI GÖR
                         </button>
                       )}
-                    </div>
-                  )}
-
-                  {/* Evidence Photo Management for any finding */}
-                  {selectedObj.findingNo && (
-                    <div className="flex items-center px-2 border-r border-[#333]">
-                      <button
-                        onClick={() => {
-                          setEvidencePhotoTarget(selectedId);
-                          setIsEvidencePhotoModalOpen(true);
-                        }}
-                        className={`px-2 py-1 border rounded text-[9px] font-bold transition-all flex items-center gap-1 ${
-                          (selectedObj.photos?.length || 0) > 0 
-                            ? 'bg-[#F5C518]/10 text-[#F5C518] border-[#F5C518]/30' 
-                            : 'bg-white/5 text-gray-400 border-[#333] hover:border-gray-500'
-                        }`}
-                      >
-                        <Camera size={10} />
-                        FOTOĞRAFLAR {(selectedObj.photos?.length || 0) > 0 && `(${selectedObj.photos?.length})`}
-                      </button>
-                    </div>
+                    </ToolbarSection>
                   )}
 
                   {/* Body Map Analysis */}
                   {selectedObj.symbolId === 'ev-body-map' && (
-                    <div className="flex items-center px-2 border-r border-[#333]">
+                    <ToolbarSection title="VÜCUT ANALİZİ" color="#f87171">
                       <button
                         onClick={() => {
                           setBodyMapTarget(selectedId);
                           setIsBodyMapModalOpen(true);
                         }}
-                        className="px-2 py-1 bg-red-500/10 text-red-500 border border-red-500/30 rounded text-[9px] font-bold hover:bg-red-500/20 transition-all flex items-center gap-1"
+                        className="w-full px-2 py-1.5 bg-red-500/10 text-red-500 border border-red-500/30 rounded-md text-[9px] font-bold hover:bg-red-500/20 transition-all flex items-center justify-center gap-1"
                       >
                         <User size={10} />
                         VÜCUT ANALİZİ {(selectedObj.injuries?.length || 0) > 0 && `(${selectedObj.injuries?.length})`}
                       </button>
-                    </div>
+                    </ToolbarSection>
                   )}
 
                   {/* Group 5: Arrows Specifics */}
                   {(selectedObj.isDistanceArrow || selectedObj.symbolId?.startsWith('a-5')) && (
-                    <div className="flex items-center px-2 border-r border-[#333]">
+                    <ToolbarSection title="OK KALINLIĞI" color="#F5C518">
                       <input
                         type="range"
                         min="1" max="15"
                         value={selectedObj.strokeWidth || 4}
                         onChange={(e) => updateObject(selectedId, { strokeWidth: parseInt(e.target.value) })}
-                        className="w-16 h-1 rounded-lg appearance-none bg-[#333] cursor-pointer accent-[#F5C518]"
+                        className="w-full h-1 rounded-lg appearance-none bg-[#333] cursor-pointer accent-[#F5C518]"
                       />
-                    </div>
+                    </ToolbarSection>
                   )}
 
-                  {/* Group 6: Z-Index & Delete */}
-                  <div className="flex items-center gap-1 pl-1">
-                    <button onClick={() => {
-                      const maxZ = Math.max(...objects.map(o => getEffectiveZIndex(o)), 0);
-                      updateObject(selectedId, { zIndex: maxZ + 1 });
-                    }} className="px-2 py-1.5 hover:bg-[#2a2a2a] rounded text-gray-400 text-[9px] font-bold" title="Öne Getir">ÖNE</button>
-                    <button onClick={() => {
-                      const minZ = Math.min(...objects.filter(o => !o.isTemplate).map(o => getEffectiveZIndex(o)), 0);
-                      updateObject(selectedId, { zIndex: Math.max(0, minZ - 1) });
-                    }} className="px-2 py-1.5 hover:bg-[#2a2a2a] rounded text-gray-400 text-[9px] font-bold" title="Arka Getir">ARKA</button>
-                    <button onClick={() => removeObject(selectedId)} className="p-1.5 hover:bg-red-500/10 text-red-500 rounded transition-colors" title="Sil"><Trash2 size={16} /></button>
+                  {/* Group 6: DÜZEN — katman sırası ve silme */}
+                  <ToolbarSection title="DÜZEN" color="#9ca3af">
+                    <div className="flex items-center gap-1.5">
+                      <button onClick={() => {
+                        const maxZ = Math.max(...objects.map(o => getEffectiveZIndex(o)), 0);
+                        updateObject(selectedId, { zIndex: maxZ + 1 });
+                      }} className="flex-1 px-2 py-1.5 bg-[#111] border border-[#333] rounded-md text-gray-300 text-[9px] font-bold hover:border-[#F5C518] transition-colors flex items-center justify-center gap-1" title="Öne Getir"><MoveUp size={11} /> ÖNE</button>
+                      <button onClick={() => {
+                        const minZ = Math.min(...objects.filter(o => !o.isTemplate).map(o => getEffectiveZIndex(o)), 0);
+                        updateObject(selectedId, { zIndex: Math.max(0, minZ - 1) });
+                      }} className="flex-1 px-2 py-1.5 bg-[#111] border border-[#333] rounded-md text-gray-300 text-[9px] font-bold hover:border-[#F5C518] transition-colors flex items-center justify-center gap-1" title="Arka Getir"><MoveDown size={11} /> ARKA</button>
+                      <button onClick={() => removeObject(selectedId)} className="p-2 bg-red-500/10 border border-red-500/30 rounded-md text-red-400 hover:bg-red-500/20 transition-colors" title="Sil (Delete)"><Trash2 size={14} /></button>
+                    </div>
+                  </ToolbarSection>
                   </div>
                 </>
               );
@@ -7087,18 +7129,8 @@ export const CanvasArea: React.FC = () => {
           </div>
         )}
 
-        {/* Logo Upload Trigger Button in Toolbar */}
-        {selectedId === 'corporate-logo' && isAdmin && (
-          <div className="flex items-center px-2 border-r border-[#333]">
-            <button
-              onClick={() => logoInputRef.current?.click()}
-              className="px-2 py-1 bg-[#F5C518]/10 text-[#F5C518] border border-[#F5C518]/30 rounded text-[9px] font-bold hover:bg-[#F5C518]/20 transition-all flex items-center gap-1"
-            >
-              <Upload size={10} />
-              {objects.find(o => o.id === 'corporate-logo')?.src ? 'LOGOYU DEĞİŞTİR' : 'LOGO YÜKLE'}
-            </button>
-          </div>
-        )}
+
+        {/* Logo yükleme düğmesi artık seçim panelinin GÖRÜNÜM bölümünde (logoInputRef aşağıda) */}
 
         <input 
           type="file" 
