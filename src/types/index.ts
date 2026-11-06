@@ -89,6 +89,9 @@ export interface CanvasObject {
   /** SATIR ARALIĞI (kullanıcı isteği: satır ayarlama) — çok satırlı metin/etiketlerde
    *  satırlar arası boşluk çarpanı (1 = normal). Ekran ve PDF aynı kuralı izler. */
   lineHeight?: number;
+  /** HİZALAMA (kullanıcı isteği) — mesafe oku rakamı/etiketinin kutu içindeki yatay
+   *  hizası: sola yasla / ortala / sağa yasla. Ekran (Konva align) ve PDF aynı kuralı izler. */
+  labelAlign?: 'left' | 'center' | 'right';
   /** YAZI KONUMU (kullanıcı isteği) — metin kutusunda yazının dikey hizalaması:
    *  üst / orta / alt. Ekran (Konva verticalAlign) ve PDF aynı kuralı izler. */
   vAlign?: 'top' | 'middle' | 'bottom';

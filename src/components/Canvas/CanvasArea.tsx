@@ -111,6 +111,24 @@ const chevronHeadPoints = (fromX: number, fromY: number, toX: number, toY: numbe
   ];
 };
 
+// ═══ MESAFE OKU RAKAMI OTOMATİK ÖLÇEK ═══
+// Kullanıcı isteği: "rakam o ok ile beraber hareket etsin" — okun uçları
+// sürüklenip uzatıldığında/kısaltıldığında etiketteki sayı, uzunluk oranıyla
+// birlikte güncellenir. Metin bir SAYIYLA başlıyorsa (örn. "12 cm", "45 metre",
+// "120") sayı orantılanır, birim ve kalan metin aynen korunur; sayı içermeyen
+// etiketlere (örn. "Merkez") dokunulmaz. Tamsayı taban tamsayı, ondalıklı taban
+// 1 ondalık basamakla gösterilir.
+const rescaleDistanceText = (text: any, oldLen: number, newLen: number): any => {
+  if (text === undefined || text === null || !(oldLen > 0) || !(newLen > 0)) return text;
+  const m = String(text).match(/^\s*(-?\d+(?:[.,]\d+)?)(.*)$/);
+  if (!m) return text;
+  const baseVal = parseFloat(m[1].replace(',', '.'));
+  if (!isFinite(baseVal)) return text;
+  let nv = baseVal * (newLen / oldLen);
+  nv = Number.isInteger(baseVal) ? Math.round(nv) : Math.round(nv * 10) / 10;
+  return `${nv}${m[2]}`;
+};
+
 const drawArrowHeadExport = (ctx: CanvasRenderingContext2D, fromX: number, fromY: number, toX: number, toY: number, headLen: number, openChevron: boolean = false) => {
   const p = chevronHeadPoints(fromX, fromY, toX, toY, headLen);
   ctx.beginPath();
@@ -154,10 +172,16 @@ const drawDistanceLabelExport = (ctx: CanvasRenderingContext2D, obj: any, symbol
   }
   const fontSize = obj.distanceFontSize || (isDistanceTool ? 10 : 14);
   const hasArrowCoords = obj.startX !== undefined && obj.endX !== undefined;
-  // Ekranla aynı kural: koordinatlı oklarda grup orijini = çizgi orta noktası → (0,0);
-  // koordinatsız oklarda çizgi 0..w aralığında → (w/2, h/2).
-  const gx = isDistanceTool ? (hasArrowCoords ? 0 : w / 2) : 0;
-  const gy = isDistanceTool ? (hasArrowCoords ? 0 : h / 2) : (symbolId === 'ev-arrow-text' ? -20 : (h ? h + 5 : 50));
+  // Ekranla aynı kural: etiket çizginin GERÇEK orta noktasına iliştirilir. Uçlar
+  // sürüklenip grup orijini orta noktadan kaydıysa bile rakam okun ortasında kalır
+  // (kullanıcı isteği: rakam oka hareket etsin). Koordinatsız oklarda çizgi 0..w
+  // yayılımındadır → (w/2, h/2).
+  const gx = isDistanceTool
+    ? (hasArrowCoords ? (obj.startX + obj.endX) / 2 - (obj.x || 0) : w / 2)
+    : 0;
+  const gy = isDistanceTool
+    ? (hasArrowCoords ? (obj.startY + obj.endY) / 2 - (obj.y || 0) : h / 2)
+    : (symbolId === 'ev-arrow-text' ? -20 : (h ? h + 5 : 50));
   // RAKAM KONUM OFSETİ: ekrandaki sürükleme/konum butonları ofseti çıktıda aynen uygulanır
   const lo = obj.labelOffset || { dx: 0, dy: 0 };
   ctx.save();
@@ -165,12 +189,19 @@ const drawDistanceLabelExport = (ctx: CanvasRenderingContext2D, obj: any, symbol
   ctx.rotate((labelRotation * Math.PI) / 180);
   ctx.font = `bold ${fontSize}px Inter, Arial`;
   ctx.fillStyle = obj.distanceColor || '#000000';
-  ctx.textAlign = 'center';
+  // HİZALAMA (kullanıcı isteği: sola/ortalı/sağa yaslama): ekran Konva Text'i
+  // width=labelW kutusunda align uygular; kutu -labelW/2..+labelW/2 aralığındadır.
+  // Aynı kural çıktıda da: left → metin -labelW/2'den başlar, right → +labelW/2'de biter.
+  const lblAlign = obj.labelAlign || 'center';
   // ÇOK SATIRLI ETİKET + SATIR ARALIĞI (ekrandaki kuralın aynısı): ilk satır eski
   // konumunda kalır, sonraki satırlar punto × satır aralığı ilerlemeyle altına yazılır.
   const labelLinesPdf = String(obj.text || obj.distance || '').split('\n');
   const labelLhPdf = obj.lineHeight || 1;
-  labelLinesPdf.forEach((ln: string, li: number) => ctx.fillText(ln, 0, -fontSize - 8 + fontSize * labelLhPdf * li));
+  const longestPdf = labelLinesPdf.reduce((m: number, l: string) => Math.max(m, l.length), 1);
+  const labelWPdf = Math.max(30, Math.min(420, longestPdf * fontSize * 0.75 + 12));
+  ctx.textAlign = lblAlign as CanvasTextAlign;
+  const txPdf = lblAlign === 'left' ? -labelWPdf / 2 : lblAlign === 'right' ? labelWPdf / 2 : 0;
+  labelLinesPdf.forEach((ln: string, li: number) => ctx.fillText(ln, txPdf, -fontSize - 8 + fontSize * labelLhPdf * li));
   if (obj.showSpeedInfo) {
     const rawText = String(obj.text || obj.distance || '');
     const match = rawText.match(/\d+(\.\d+)?/);
@@ -182,6 +213,8 @@ const drawDistanceLabelExport = (ctx: CanvasRenderingContext2D, obj: any, symbol
       const speed = Math.round(15.94 * Math.sqrt(mu * meters * (efficiency / 100)));
       ctx.font = `italic bold ${fontSize * 0.85}px Inter, Arial`;
       ctx.fillStyle = '#059669';
+      // Hız satırı ekranda daima ortalanır — hizalamadan bağımsız sabit kural
+      ctx.textAlign = 'center';
       ctx.fillText(`(~${speed} km/s)`, 0, 5 + fontSize * 0.85);
     }
   }
@@ -1793,6 +1826,31 @@ const IndividualObject = ({
     }
   }, [isSelected]);
 
+  // KÜTÜPHANE a-4'ÜNÜ KOORDİNAT FORMUNA GEÇİR (seçimde, tek seferlik):
+  // Kütüphaneden sürüklenen Mesafe Oku koordinatsızdır (çizgi yerel 0..w bandında);
+  // uçtan uca boyutlandırma tutamaçları ve etiket-orta-nokta matematiği ise MUTLAK
+  // uç koordinatları (startX/endX) bekler. (0, h/2)-(w, h/2) yerel çizgisi birebir
+  // aynı uçlara dönüştürülür — görünümde hiçbir değişiklik olmaz, eski kayıtlı
+  // sahneler de dahil tüm mesafe okları tek motoru kullanır.
+  useEffect(() => {
+    if (!isSelected) return;
+    const isMeas = shapeProps.isDistanceArrow || shapeProps.symbolId === 'a-4';
+    if (!isMeas) return;
+    if (shapeProps.startX !== undefined && shapeProps.endX !== undefined) return;
+    const ox = Number(shapeProps.x) || 0;
+    const oy = Number(shapeProps.y) || 0;
+    const w0 = Number(shapeProps.width) || 0;
+    const h0 = Number(shapeProps.height) || 0;
+    onChange({
+      ...shapeProps,
+      startX: ox,
+      startY: oy + h0 / 2,
+      endX: ox + w0,
+      endY: oy + h0 / 2,
+    }, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSelected]);
+
   // Uzatma niyeti: hangi tutamaçla başladı? Kenar (orta) tutamaçlar tek ekseni
   // uzatır → yol/refüj/şerit dokularında "uzatma" eylemi budur.
   const handleTransformStart = () => {
@@ -2320,11 +2378,28 @@ const IndividualObject = ({
         onDragEnd={(e) => {
           if (onDragEnd) onDragEnd(e);
           if (e.target !== groupRef.current) return;
-          onChange({
-            ...shapeProps,
+          const dragUpd: any = {
             x: e.target.x(),
             y: e.target.y(),
             rotation: e.target.rotation(), // Rotasyonu da kaydet (snap desteği için)
+          };
+          // KOORDİNATLİ OKLAR (MESAFE ÖLÇ / Nirengi / a-4 / atış yörüngesi):
+          // startX/endX SAYFAYA MUTLAK koordinattır ve çizgi yerel olarak
+          // pts = startX - x ile hesaplanır. Sürükleme deltası uçlara da
+          // uygulanmazsa çizgi eski dünya konumunda kalır; yalnızca grup çerçevesi
+          // ve rakam taşınır, ok yerinde sayardı (kullanıcı raporu: "rakam o okla
+          // beraber hareket etsin" — ok da, rakam da birlikte taşınmalı).
+          if (shapeProps.startX !== undefined && shapeProps.endX !== undefined) {
+            const ddx = e.target.x() - (shapeProps.x || 0);
+            const ddy = e.target.y() - (shapeProps.y || 0);
+            dragUpd.startX = shapeProps.startX + ddx;
+            dragUpd.startY = shapeProps.startY + ddy;
+            dragUpd.endX = shapeProps.endX + ddx;
+            dragUpd.endY = shapeProps.endY + ddy;
+          }
+          onChange({
+            ...shapeProps,
+            ...dragUpd,
           });
           e.target.getLayer()?.batchDraw();
         }}
@@ -2463,22 +2538,30 @@ const IndividualObject = ({
           // eksende serbesttir.
           if (!shapeProps.isTemplate) {
             const P = paperArea || { w: 1000, h: 1400 };
-            const w = shapeProps.width || 0;
-            const h = (shapeProps.type === 'text' || shapeProps.type === 'finding-list') ? 20 : (shapeProps.height || 0);
+            // KOORDİNATLİ OKLAR: gerçek içerik kutusu uç noktalarından çıkar.
+            // Eski kod 0..w (width/height attr) kutusunu kullanıyordu; oysa bu
+            // oklarda çizgi yerel ORİJİN çevresinde ortalanmıştır (-w/2..w/2) —
+            // sınır yanlış eksende kelepçeliyor, ok kenara yaklaşamıyordu.
+            const hasLineCoords = shapeProps.startX !== undefined && shapeProps.endX !== undefined;
+            const bx = hasLineCoords ? Math.min(shapeProps.startX, shapeProps.endX) - (shapeProps.x || 0) : 0;
+            const by = hasLineCoords ? Math.min(shapeProps.startY, shapeProps.endY) - (shapeProps.y || 0) : 0;
+            const w = hasLineCoords ? Math.abs(shapeProps.endX - shapeProps.startX) : (shapeProps.width || 0);
+            const h = hasLineCoords
+              ? Math.abs(shapeProps.endY - shapeProps.startY)
+              : ((shapeProps.type === 'text' || shapeProps.type === 'finding-list') ? 20 : (shapeProps.height || 0));
 
             const rad = ((shapeProps.rotation || 0) * Math.PI) / 180;
             const cosR = Math.cos(rad);
             const sinR = Math.sin(rad);
-            // Yerel köşeler (0,0)(w,0)(w,h)(0,h) döndürülür — Konva'da (x,y) düğüm orijinidir,
-            // pozitif açı saat yönüdür (ekranda x sağa, y aşağı).
-            // KOORDİNLATLI OKLAR (MESAFE ÖLÇ/NİRENGİ): grup orijini çizgi ORTA
-            // noktasıdır → yerel kutu (-w/2..w/2, -h/2..h/2) MERKEZLİDİR. 0..w
-            // varsayımı çizgiyi yarım ok uzunluğu kadar kaydırarak sınırı yanlış
-            // yere çiziyordu (kullanıcı raporu: ok her yere götürülemiyor).
-            const isCoordArrow = (shapeProps.isDistanceArrow || shapeProps.symbolId === 'a-4') &&
-                                 shapeProps.startX !== undefined && shapeProps.endX !== undefined;
-            const cornerXs = isCoordArrow ? [-w / 2, w / 2, w / 2, -w / 2] : [0, w, w, 0];
-            const cornerYs = isCoordArrow ? [-h / 2, -h / 2, h / 2, h / 2] : [0, 0, h, h];
+            // Yerel köşeler (bx,by)(bx+w,by)(bx+w,by+h)(bx,by+h) döndürülür — Konva'da
+            // (x,y) düğüm orijinidir, pozitif açı saat yönüdür (ekranda x sağa, y aşağı).
+            // KOORDİNATLİ OKLAR (MESAFE ÖLÇ/NİRENGİ/atış yörüngesi): kutu uç
+            // noktalarından çıkar — ölçü okunda orijin çizgi ORTA noktasıdır
+            // (-w/2..w/2 merkezli), yörünge okunda orijin serbesttir; min/max
+            // hesabı her iki durumu da birebir kapsar. 0..w varsayımı çizgiyi yarım
+            // ok uzunluğu kadar kaydırarak sınırı yanlış yere çiziyordu.
+            const cornerXs = [bx, bx + w, bx + w, bx];
+            const cornerYs = [by, by, by + h, by + h];
             let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
             for (let ci = 0; ci < 4; ci++) {
               const cxAbs = cornerXs[ci] * cosR - cornerYs[ci] * sinR;
@@ -2681,6 +2764,69 @@ const IndividualObject = ({
                     draggable={false}
                   />
                 )}
+                {/* ═══ UÇ TUTAMAÇLARI (MESAFE OKU) ═══
+                    Kullanıcı isteği: "oku uzatınca formu bozuluyor; çevirdiğim ve
+                    bıraktığım yerde dursun". Kutu tutamaçları yerine okun UÇLARI
+                    sürüklenerek uzatılır/kısaltılır: çizgi + chevron uçlar uç
+                    koordinatlarından yeniden hesaplandığı için form HİÇBOZULMAZ;
+                    rakam (etiket) orta noktaya bağlı kaldığından okla birlikte
+                    taşınır ve uzunluk oranıyla güncellenir (rescaleDistanceText).
+                    Döndürülmüş grupta da çalışır (Konva çocuğu mutlak konumda
+                    sürükler, x()/y() yerel koordinat verir). */}
+                {isSelected && isMeasurement && hasCoords && (() => {
+                  const emitEndpoint = (isStart: boolean, lx: number, ly: number, live: boolean) => {
+                    const nsx = isStart ? (shapeProps.x || 0) + lx : shapeProps.startX;
+                    const nsy = isStart ? (shapeProps.y || 0) + ly : shapeProps.startY;
+                    const nex = isStart ? shapeProps.endX : (shapeProps.x || 0) + lx;
+                    const ney = isStart ? shapeProps.endY : (shapeProps.y || 0) + ly;
+                    const oldLen = Math.hypot(shapeProps.endX - shapeProps.startX, shapeProps.endY - shapeProps.startY);
+                    const newLen = Math.hypot(nex - nsx, ney - nsy);
+                    const updates: any = {
+                      startX: nsx,
+                      startY: nsy,
+                      endX: nex,
+                      endY: ney,
+                      width: Math.abs(nex - nsx),
+                      height: Math.abs(ney - nsy),
+                    };
+                    // RAKAM OKLA BİRLİKTE: uzunluk oranıyla etiket sayısını güncelle
+                    const nd = rescaleDistanceText(shapeProps.distance, oldLen, newLen);
+                    if (nd !== shapeProps.distance) updates.distance = nd;
+                    onChange({ ...shapeProps, ...updates }, live);
+                  };
+                  const mkHandle = (isStart: boolean) => {
+                    const hx = isStart ? pts[0] : pts[2];
+                    const hy = isStart ? pts[1] : pts[3];
+                    return (
+                      <Circle
+                        key={isStart ? 'ep-start' : 'ep-end'}
+                        x={hx}
+                        y={hy}
+                        radius={10}
+                        fill="rgba(245,197,24,0.18)"
+                        stroke="#F5C518"
+                        strokeWidth={1.5}
+                        draggable
+                        onDragMove={(e: any) => emitEndpoint(isStart, e.target.x(), e.target.y(), true)}
+                        onDragEnd={(e: any) => emitEndpoint(isStart, e.target.x(), e.target.y(), false)}
+                        onMouseEnter={(e: any) => {
+                          const stg = e.target.getStage?.();
+                          if (stg) stg.container().style.cursor = 'crosshair';
+                        }}
+                        onMouseLeave={(e: any) => {
+                          const stg = e.target.getStage?.();
+                          if (stg) stg.container().style.cursor = 'default';
+                        }}
+                      />
+                    );
+                  };
+                  return (
+                    <Group>
+                      {mkHandle(true)}
+                      {mkHandle(false)}
+                    </Group>
+                  );
+                })()}
               </Group>
             );
           })()
@@ -4423,14 +4569,22 @@ const IndividualObject = ({
           (() => {
             const isDistanceTool = shapeProps.isDistanceArrow || shapeProps.symbolId === 'a-4';
 
-            // Etiket çizgi ORTASINA konumlanır: koordinatlı oklarda (startX/endX tanımlı)
-            // grup orijini zaten çizginin orta noktasıdır → yerel (0,0). Koordinatsız
-            // (kütüphaneden sürüklenmiş) oklarda çizgi 0..w yayılımındadır → (w/2, h/2).
-            // ESKİ DAVRANIŞ (hata): koordinatlı oklarda da (w/2, h/2) kullanılıyordu;
-            // etiket orta nokta yerine ok ucuna düşüyordu.
+            // Etiket çizginin GERÇEK orta noktasına iliştirilir: uç tutamaçlarıyla
+            // uzatma sırasında grup orijini orta noktadan kayabilir; koordinatlı
+            // oklarda orta nokta uçlardan, koordinatsız oklarda çizgi 0..w
+            // yayılımından hesaplanır. Böylece rakam uzatma/sürükleme sırasında
+            // daima okun tam ortasında kalır (kullanıcı isteği: rakam oka hareket
+            // etsin). ESKİ DAVRANIŞ (hata): koordinatlı oklarda daima (0,0)
+            // varsayılıyordu; grup orijini kayarsa rakam ok ucuna düşüyordu.
             const hasArrowCoords = shapeProps.startX !== undefined && shapeProps.endX !== undefined;
-            const textX = isDistanceTool ? (hasArrowCoords ? 0 : shapeProps.width / 2) : 0;
-            const textY = isDistanceTool ? (hasArrowCoords ? 0 : shapeProps.height / 2) : 0;
+            const midLocalX = hasArrowCoords
+              ? (shapeProps.startX + shapeProps.endX) / 2 - (shapeProps.x || 0)
+              : shapeProps.width / 2;
+            const midLocalY = hasArrowCoords
+              ? (shapeProps.startY + shapeProps.endY) / 2 - (shapeProps.y || 0)
+              : shapeProps.height / 2;
+            const textX = isDistanceTool ? midLocalX : 0;
+            const textY = isDistanceTool ? midLocalY : 0;
 
             const angle = isDistanceTool && shapeProps.startX !== undefined
               ? Math.atan2(shapeProps.endY - shapeProps.startY, shapeProps.endX - shapeProps.startX) * (180 / Math.PI)
@@ -4520,7 +4674,9 @@ const IndividualObject = ({
                   x={0}
                   y={-fontSize - 8}
                   width={labelW}
-                  align="center"
+                  // HİZALAMA (kullanıcı isteği): düzenleme kartındaki HİZALAMA
+                  // butonlarıyla sola/ortalı/sağa yaslama; PDF aynı kuralı izler.
+                  align={(shapeProps.labelAlign as any) || 'center'}
                   padding={0}
                   listening={false}
                   offsetX={labelW / 2}
@@ -4617,14 +4773,22 @@ const IndividualObject = ({
             !['arch-1', 'arch-1v'].includes(shapeProps.symbolId || '')
           }
           enabledAnchors={
-            // TÜM nesnelerde (metin kutuları dahil) köşe + kenar (orta) tutamaçları aktif
-            // (kullanıcı isteği: tüm sembollerin çerçevesinde köşe ve kenar tutamaçları olsun).
-            // Metinde punto tutamaçla değişmez: kutu boyutlanır, yazı aynı puntoyla yeniden sarılır.
-            [
-              'top-left', 'top-center', 'top-right',
-              'middle-left', 'middle-right',
-              'bottom-left', 'bottom-center', 'bottom-right',
-            ]
+            // MESAFE OKU (a-4 / isDistanceArrow): köşe/kenar KUTU tutamaçları YOK.
+            // Kutu uzatması ok çizgisiyle çerçeve uyuşmazlığına, bırakınca formun
+            // kaymasına/bozulmasına yol açıyordu (kullanıcı raporu). Uzatma artık
+            // okun UÇ TUTAMAÇLARINDAN (sarı daireler) yapılır — form bozulmaz,
+            // rakam okla hareket eder. DÖNDÜRME JESTİ (rotater) serbest kalır:
+            // kullanıcı oku istediği açıda çevirir, bıraktığı yerde durur.
+            (shapeProps.isDistanceArrow || shapeProps.symbolId === 'a-4')
+              ? []
+              : // TÜM nesnelerde (metin kutuları dahil) köşe + kenar (orta) tutamaçları aktif
+              // (kullanıcı isteği: tüm sembollerin çerçevesinde köşe ve kenar tutamaçları olsun).
+              // Metinde punto tutamaçla değişmez: kutu boyutlanır, yazı aynı puntoyla yeniden sarılır.
+              [
+                'top-left', 'top-center', 'top-right',
+                'middle-left', 'middle-right',
+                'bottom-left', 'bottom-center', 'bottom-right',
+              ]
           }
           keepRatio={shapeProps.categoryId === 'furniture' ? true : !isStretchable}
           boundBoxFunc={(oldBox, newBox) => {
@@ -7036,9 +7200,12 @@ export const CanvasArea: React.FC = () => {
                         setIsDistanceModalOpen(true);
                       }}
                       paperArea={{ w: canvasOrientation === 'landscape' ? 1400 : 1000, h: canvasOrientation === 'landscape' ? 1000 : 1400 }}
-                      onChange={(newAttrs: any) => {
-                        updateObject(obj.id, newAttrs);
-                        saveHistory();
+                      onChange={(newAttrs: any, skipHistory?: boolean) => {
+                        // skipHistory: uç tutamaç sürüklemesi gibi canlı (dragmove
+                        // başına) güncellemelerde geçmiş kirlenmesin; sürükleme
+                        // bitince tek kayıt atılır (dragend'de skipHistory=false).
+                        updateObject(obj.id, newAttrs, skipHistory);
+                        if (!skipHistory) saveHistory();
                       }}
                     />
                   );
@@ -7394,6 +7561,32 @@ export const CanvasArea: React.FC = () => {
                             className="w-full bg-[#111] border border-[#333] text-white text-[10px] rounded-md px-1 py-1.5 text-center outline-none"
                           />
                         </ToolbarField>
+                      </div>
+                      {/* HİZALAMA (kullanıcı isteği: "sağa sola yaslama veya ortalama
+                          seçenekleri de olsun"): etiket metnini kutu içinde sola yasla /
+                          ortala / sağa yasla. Ekran (Konva align) ve PDF dışa aktarımı
+                          (drawDistanceLabelExport) aynı kuralı izler. Çok satırlı
+                          etiketlerde satırlar seçilen kenara hizalanır. */}
+                      <div className="flex gap-1 mt-2">
+                        <span className="text-[8px] font-black text-gray-500 uppercase self-center mr-0.5 shrink-0">HİZALAMA</span>
+                        {([
+                          { v: 'left', I: AlignLeft, t: 'Sola yasla' },
+                          { v: 'center', I: AlignCenter, t: 'Ortala' },
+                          { v: 'right', I: AlignRight, t: 'Sağa yasla' },
+                        ] as const).map(({ v, I, t }) => (
+                          <button
+                            key={v}
+                            onClick={() => updateObject(selectedId, { labelAlign: v })}
+                            className={`flex-1 h-[28px] rounded-md flex items-center justify-center transition-colors ${
+                              (selectedObj.labelAlign || 'center') === v
+                                ? 'bg-[#F5C518] text-black'
+                                : 'bg-[#111] text-gray-400 border border-[#333] hover:border-gray-500'
+                            }`}
+                            title={t}
+                          >
+                            <I size={13} />
+                          </button>
+                        ))}
                       </div>
                       {/* YAZI KONUMU (kullanıcı isteği): etiketin sembole göre konum ofseti.
                           Etiket tuvalde sürüklenebilir; buradan da hassas sayısal değer
