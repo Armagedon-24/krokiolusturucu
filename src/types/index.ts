@@ -83,6 +83,9 @@ export interface CanvasObject {
   showSpeedInfo?: boolean; // Show calculated speed on canvas
   /** Ok motoru — ok başı (pointer) uzunluğu; kenar/köşe tutamağıyla ölçeklemede orantılı değişir */
   arrowHead?: number;
+  /** Mesafe etiketi (rakam) konum ofseti — otomatik konuma göre nesne-yerel dx/dy.
+   *  Kullanıcı etiketi sürükleyince güncellenir; ekran ve PDF dışa aktarımı aynı ofseti kullanır. */
+  labelOffset?: { dx: number; dy: number };
   /** Açıklama oku çerçevesi (ev-arrow-desc / -ellipse) — tutamakla büyütülüp küçültülür */
   frameWidth?: number;
   frameHeight?: number;

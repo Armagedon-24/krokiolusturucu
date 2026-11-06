@@ -20,6 +20,9 @@ import {
   RotateCw,
   AlignCenterHorizontal,
   AlignCenterVertical,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
   MoveUp,
   MoveDown
 } from 'lucide-react';
@@ -146,6 +149,31 @@ const ROAD_JUNCTION_TOL = 24; // px — port çakışma toleransı (snap eşiği
 // bantlar; birleşim yerleri yuvarlak yumuşak geçiş (elips pedi) ile birleşir.
 const ROAD_ENGINE_IDS = ['st-1', 'st-cadde', 'st-sokak'];
 const isRoadEngineSymbol = (sid?: string | null): boolean => !!sid && ROAD_ENGINE_IDS.includes(sid);
+
+/** Yol motoru grubunun GERÇEK mürekkep sınırlarını Transformer'a bildirir.
+ *  Konva Path.getClientRect çizgi kalınlığını (strokeWidth/2) TÜM yönlere ekler;
+ *  yatay yol için bu ±(h/2) yanlış genişleme demektir — seçim çerçevesi sembolün
+ *  her iki yanından ~55px taşardı (kullanıcı raporu: çerçeve sembolü tam
+ *  çevrelesin). Yama, yol bandının gerçek kutusunu (kavis/kıvrım dahil) döndürür. */
+function patchRoadEngineBounds(g: any, props: any) {
+  if (!g) return;
+  const w = Number(props?.width) || 0;
+  const h = Number(props?.height) || 0;
+  if (!w || !h) return;
+  const edge = Math.max(1.5, h / 20);
+  const curv = Number(props?.curvature) || 0;
+  const curvX = props?.curvatureX !== undefined ? Number(props.curvatureX) : w / 2;
+  const x0 = Math.min(0, w, curvX);
+  const x1 = Math.max(0, w, curvX);
+  const y0 = Math.min(-edge, curv - edge);
+  const y1 = Math.max(h + edge, h + curv + edge);
+  if (!g.__origGetClientRect) g.__origGetClientRect = g.getClientRect;
+  g.getClientRect = (config: any = {}) => {
+    const tight = { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
+    if (config.skipTransform) return tight;
+    return g._transformedRect(tight, config.relativeTo);
+  };
+}
 /** Orta kesikli şerit çizgisi görünür mü? (st-1: varsayılan açık; cadde/sokak: varsayılan kapalı) */
 const roadShowsMiddleLine = (o: any): boolean =>
   o.roadMiddleLine !== undefined ? !!o.roadMiddleLine : (o.symbolId || '') === 'st-1';
@@ -1474,8 +1502,10 @@ export const drawExportObject = (ctx: CanvasRenderingContext2D, obj: any, img: H
     const hasArrowCoords = obj.startX !== undefined && obj.endX !== undefined;
     const gx = isDistanceTool ? (hasArrowCoords ? 0 : w / 2) : 0;
     const gy = isDistanceTool ? (hasArrowCoords ? 0 : h / 2) : (symbolId === 'ev-arrow-text' ? -20 : (h ? h + 5 : 50));
+    // RAKAM KONUM OFSETİ: ekrandaki sürükleme ofseti PDF'te de aynen uygulanır
+    const lo = (obj as any).labelOffset || { dx: 0, dy: 0 };
     ctx.save();
-    ctx.translate(gx, gy);
+    ctx.translate(gx + (lo.dx || 0), gy + (lo.dy || 0));
     ctx.rotate((textRotation * Math.PI) / 180);
     ctx.font = `bold ${fontSize}px Inter, Arial`;
     ctx.fillStyle = obj.distanceColor || '#000000';
@@ -1525,6 +1555,7 @@ const IndividualObject = ({
   onMouseEnter,
   onMouseLeave,
   onTrajectoryUpdate,
+  paperArea,
 }: any) => {
   // ─── ALL HOOKS MUST BE CALLED BEFORE ANY EARLY RETURNS (Rules of Hooks) ───
   const [showTooltip, setShowTooltip] = useState(false);
@@ -1667,9 +1698,15 @@ const IndividualObject = ({
     
     if (shapeProps.type === 'text') {
       // Kullanıcı isteği: tutamaçla ölçekleme puntoyu DEĞİŞTİRMESİN.
-      // Yalnızca metin kutusu genişliği değişir, yazı aynı puntoyla yeniden sarılır.
+      // Köşe/kenar tutamaçlar kutu boyutunu değiştirir; yazı aynı puntoyla yeniden sarılır.
       // Punto yalnızca özellik panelindeki 'Punto' alanından büyütülür/küçültülür.
       const newWidth = Math.max(20, node.width() * scaleX);
+      // Yükseklik: yerel (ölçeksiz) istemci kutusunun yüksekliği * scaleY — köşe tutamacıyla
+      // dikey büyütme/küçültme de kalıcı olur (yerel kutu sarımın otomatik yüksekliğini içerir).
+      let localH = 0;
+      try { localH = groupRef.current.getClientRect({ skipTransform: true }).height || 0; } catch { localH = 0; }
+      const baseH = Math.max(20, shapeProps.height || localH || 20);
+      const newHeight = Math.max(20, baseH * scaleY);
 
       onChange({
         ...shapeProps,
@@ -1677,6 +1714,7 @@ const IndividualObject = ({
         y: node.y(),
         rotation: node.rotation(),
         width: newWidth,
+        height: newHeight,
         fontSize: shapeProps.fontSize || 20,
         scaleX: 1,
         scaleY: 1,
@@ -1954,10 +1992,14 @@ const IndividualObject = ({
             container.style.cursor = 'default';
           }
         }}
-        clipX={!shapeProps.isTemplate && drawingArea && !isSelected ? drawingArea.x - shapeProps.x : undefined}
-        clipY={!shapeProps.isTemplate && drawingArea && !isSelected ? drawingArea.y - shapeProps.y : undefined}
-        clipWidth={!shapeProps.isTemplate && drawingArea && !isSelected ? drawingArea.width : undefined}
-        clipHeight={!shapeProps.isTemplate && drawingArea && !isSelected ? drawingArea.height : undefined}
+        // KIRPMA = TÜM SAYFA: seçim kaldırıldığında nesne, çizim alanı kenar boşlukları
+        // yerine yalnızca sayfa sınırında kırpılır. PDF dışa aktarımı zaten tam sayfaya
+        // çizdiği için bu tutarlıdır; aksi halde kenara taşan uzatmalar seçim kalkınca
+        // kaybolurdu (kullanıcı raporu: uzatma siliniyor).
+        clipX={!shapeProps.isTemplate && !isSelected ? -(shapeProps.x || 0) : undefined}
+        clipY={!shapeProps.isTemplate && !isSelected ? -(shapeProps.y || 0) : undefined}
+        clipWidth={!shapeProps.isTemplate && !isSelected ? (paperArea?.w || 1000) : undefined}
+        clipHeight={!shapeProps.isTemplate && !isSelected ? (paperArea?.h || 1400) : undefined}
         dragBoundFunc={(pos) => {
           let newX = pos.x;
           let newY = pos.y;
@@ -2057,7 +2099,10 @@ const IndividualObject = ({
             }
           }
 
-          if (drawingArea && !shapeProps.isTemplate) {
+          // SÜRÜKLEME SINIRI = TÜM SAYFA: çizim alanı yerine sayfa sınırıyla kelepçele
+          // (uzatılan uzun yollar kenar boşluklarına da taşınabilsin)
+          if (!shapeProps.isTemplate) {
+            const P = paperArea || { w: 1000, h: 1400 };
             const w = shapeProps.width || 0;
             const h = (shapeProps.type === 'text' || shapeProps.type === 'finding-list') ? 20 : (shapeProps.height || 0);
             
@@ -2069,9 +2114,9 @@ const IndividualObject = ({
               actualH = w;
             }
 
-            // Katı sınır: sembolün tamamı çizim alanı içinde kalsın
-            newX = Math.max(drawingArea.x, Math.min(newX, drawingArea.x + drawingArea.width - actualW));
-            newY = Math.max(drawingArea.y, Math.min(newY, drawingArea.y + drawingArea.height - actualH));
+            // Katı sınır: nesnenin tamamı sayfa içinde kalsın
+            newX = Math.max(0, Math.min(newX, P.w - actualW));
+            newY = Math.max(0, Math.min(newY, P.h - actualH));
           }
           
           return { x: newX, y: newY };
@@ -2194,6 +2239,7 @@ const IndividualObject = ({
             x={0}
             y={0}
             width={shapeProps.width > 0 ? shapeProps.width : undefined}
+            height={shapeProps.height && shapeProps.height > 0 ? shapeProps.height : undefined}
             wrap="word"
             align={shapeProps.align}
             rotation={0}
@@ -2707,7 +2753,7 @@ const IndividualObject = ({
         ) : isRoadEngineSymbol(shapeProps.symbolId) ? (
           // Advanced Vector Road Engine with Curvature & Inflection Support
           // (st-1 Düz Yol + st-cadde Cadde + st-sokak Sokak aynı motoru paylaşır)
-          <Group>
+          <Group ref={(g: any) => patchRoadEngineBounds(g, shapeProps)}>
             {(() => {
               const curv = shapeProps.curvature || 0;
               const w = shapeProps.width;
@@ -4009,41 +4055,68 @@ const IndividualObject = ({
 
             const fontSize = shapeProps.distanceFontSize || ((shapeProps.isDistanceArrow || shapeProps.symbolId === 'a-4') ? 10 : 14);
 
+            // RAKAM KONUM OFSETİ: kullanıcı etiketi sürükleyebilir (kullanıcı isteği).
+            // Ofset nesne-yerel uzaydadır; PDF dışa aktarımı aynı ofseti kullanır.
+            const lo = shapeProps.labelOffset || { dx: 0, dy: 0 };
+            const labelW = Math.max(30, Math.min(420, String(shapeProps.text || shapeProps.distance || '').length * fontSize * 0.75 + 12));
+            const autoGX = isDistanceTool ? textX : 0;
+            const autoGY = isDistanceTool ? textY : (
+              shapeProps.symbolId === 'ev-arrow-text' ? -20 : 
+              shapeProps.symbolId === 'ev-callout' ? 0 :
+              (shapeProps.isDistanceArrow || shapeProps.symbolId === 'a-4') 
+                ? (shapeProps.height / 2)
+                : (shapeProps.height ? Number(shapeProps.height) + 5 : 50)
+            );
+
             return (
               <Group 
-                x={isDistanceTool ? textX : 0} 
-                y={isDistanceTool ? textY : (
-                  shapeProps.symbolId === 'ev-arrow-text' ? -20 : 
-                  shapeProps.symbolId === 'ev-callout' ? 0 :
-                  (shapeProps.isDistanceArrow || shapeProps.symbolId === 'a-4') 
-                    ? (shapeProps.height / 2)
-                    : (shapeProps.height ? Number(shapeProps.height) + 5 : 50)
-                )}
+                x={autoGX + lo.dx} 
+                y={autoGY + lo.dy}
                 rotation={textRotation}
+                draggable
+                onDragEnd={(e: any) => {
+                  const nd = e.target;
+                  onChange({
+                    ...shapeProps,
+                    labelOffset: { dx: nd.x() - autoGX, dy: nd.y() - autoGY },
+                  });
+                }}
+                onMouseEnter={(e: any) => {
+                  const stg = e.target.getStage?.();
+                  if (stg) stg.container().style.cursor = 'move';
+                }}
+                onMouseLeave={(e: any) => {
+                  const stg = e.target.getStage?.();
+                  if (stg) stg.container().style.cursor = 'default';
+                }}
               >
                 {/* Distance Text (Above Line) — genişlik METNE göre: sabit 400px
                     kutu grup sınırlarını şişirip seçim çerçevesini oktan uzun
                     yapıyordu (kullanıcı raporu: çerçeve ok boyunda olsun). */}
-                {(() => {
-                  const lt = String(shapeProps.text || shapeProps.distance || '');
-                  const lw = Math.max(30, Math.min(420, lt.length * fontSize * 0.75 + 12));
-                  return (
-                    <Text
-                      text={lt}
-                      fontSize={fontSize}
-                      fontStyle="bold"
-                      fill={shapeProps.distanceColor || '#000000'}
-                      x={0}
-                      y={-fontSize - 8}
-                      width={lw}
-                      align="center"
-                      padding={0}
-                      listening={false}
-                      offsetX={lw / 2}
-                      wrap="none"
-                    />
-                  );
-                })()}
+                {/* GÖRİNMEZ TIKLAMA BÖLGESİ: metin listening=false olduğu için grup
+                    tıklanamazdı (kullanıcı rakamı sürükleyemiyordu). Şeffaf dolgulu Rect
+                    hit-test'i grup üstüne taşır (ekranda görünmez). */}
+                <Rect
+                  x={-(labelW + 10) / 2}
+                  y={-fontSize - 11}
+                  width={labelW + 10}
+                  height={fontSize + 16}
+                  fill="transparent"
+                />
+                <Text
+                  text={String(shapeProps.text || shapeProps.distance || '')}
+                  fontSize={fontSize}
+                  fontStyle="bold"
+                  fill={shapeProps.distanceColor || '#000000'}
+                  x={0}
+                  y={-fontSize - 8}
+                  width={labelW}
+                  align="center"
+                  padding={0}
+                  listening={false}
+                  offsetX={labelW / 2}
+                  wrap="none"
+                />
                 
                 {/* Speed Text (Below Line) - Conditional */}
                 {shapeProps.showSpeedInfo && (() => {
@@ -4134,42 +4207,48 @@ const IndividualObject = ({
             !['arch-1', 'arch-1v'].includes(shapeProps.symbolId || '')
           }
           enabledAnchors={
-            shapeProps.type === 'text'
-              ? // Metin nesneleri: yalnızca yan (orta) tutamaçlar — köşe tutamağı yok,
-                // böylece punto tutamaçla büyüp bozulmaz; kutu genişliği değişir, yazı sarılır.
-                ['middle-left', 'middle-right']
-              : [
-                // Tüm nesnelerde köşe + kenar (orta) tutamaçları aktif.
-                // Kenar tutamaçları Konva'da keepRatio'dan bağımsız tek eksen ölçekler.
-                'top-left', 'top-center', 'top-right',
-                'middle-left', 'middle-right',
-                'bottom-left', 'bottom-center', 'bottom-right',
-              ]
+            // TÜM nesnelerde (metin kutuları dahil) köşe + kenar (orta) tutamaçları aktif
+            // (kullanıcı isteği: tüm sembollerin çerçevesinde köşe ve kenar tutamaçları olsun).
+            // Metinde punto tutamaçla değişmez: kutu boyutlanır, yazı aynı puntoyla yeniden sarılır.
+            [
+              'top-left', 'top-center', 'top-right',
+              'middle-left', 'middle-right',
+              'bottom-left', 'bottom-center', 'bottom-right',
+            ]
           }
           keepRatio={shapeProps.categoryId === 'furniture' ? true : !isStretchable}
           boundBoxFunc={(oldBox, newBox) => {
-            if (Math.abs(newBox.width) < 5 || Math.abs(newBox.height) < 5) {
+            // NEGATİF KUTU = KONVA FLIP'İ: tutamaç karşı kenarın ötesine taşınırsa Konva
+            // nesneyi aynalar (scaleX/scaleY negatife döner). TransformEnd kaydı negatif
+            // ölçeği yazmadığı için nesne 1px'e çöküyordu (kullanıcı raporu: uzatma
+            // siliniyor). Flip yerine çerçeve eski hâlinde sabitlenir.
+            if (newBox.width < 5 || newBox.height < 5) {
               return oldBox;
             }
             
-            if (drawingArea && !shapeProps.isTemplate) {
-              if (newBox.x < drawingArea.x) {
-                newBox.width += newBox.x - drawingArea.x;
-                newBox.x = drawingArea.x;
+            // KÂĞIT SINIRI: çerçeve, kenar boşluklu çizim alanı yerine TÜM SAYFA ile
+            // sınırlandırılır. Aksi halde kenara yakın sembol/ok hiç uzatılamıyordu
+            // (kullanıcı raporu: mesafe oku belli yerden sonra uzamıyor). PDF dışa
+            // aktarımı tam sayfaya çizdiği için tutarlı sınır sayfadır.
+            if (!shapeProps.isTemplate) {
+              const P = paperArea || { w: 1000, h: 1400 };
+              if (newBox.x < 0) {
+                newBox.width += newBox.x;
+                newBox.x = 0;
               }
-              if (newBox.y < drawingArea.y) {
-                newBox.height += newBox.y - drawingArea.y;
-                newBox.y = drawingArea.y;
+              if (newBox.y < 0) {
+                newBox.height += newBox.y;
+                newBox.y = 0;
               }
-              if (newBox.x + newBox.width > drawingArea.x + drawingArea.width) {
-                newBox.width = drawingArea.x + drawingArea.width - newBox.x;
+              if (newBox.x + newBox.width > P.w) {
+                newBox.width = P.w - newBox.x;
               }
-              if (newBox.y + newBox.height > drawingArea.y + drawingArea.height) {
-                newBox.height = drawingArea.y + drawingArea.height - newBox.y;
+              if (newBox.y + newBox.height > P.h) {
+                newBox.height = P.h - newBox.y;
               }
               
               // Kırpmadan sonra çok küçüldüyse iptal et
-              if (Math.abs(newBox.width) < 5 || Math.abs(newBox.height) < 5) {
+              if (newBox.width < 5 || newBox.height < 5) {
                 return oldBox;
               }
             }
@@ -5381,6 +5460,17 @@ export const CanvasArea: React.FC = () => {
     };
   }, [setGridVisible, setSelectedId]);
 
+  // DEV SADECE: otomasyon testleri için stage + store erişim köprüsü (üretim derlemesine girmez)
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      (window as any).__kroki_debug = {
+        getStage: () => stageRef.current,
+        store: useStore,
+      };
+    }
+  }, []);
+
+
   useEffect(() => {
     const handleGlobalMouseUp = () => {
       // Force stop any active Konva drag operation
@@ -6424,6 +6514,7 @@ export const CanvasArea: React.FC = () => {
                             drawingArea={drawingArea}
                             isAdmin={isAdmin}
                             allObjects={objects}
+                            paperArea={{ w: canvasOrientation === 'landscape' ? 1400 : 1000, h: canvasOrientation === 'landscape' ? 1000 : 1400 }}
                             onChange={(newAttrs: any) => {
                               updateObject(obj.id, newAttrs);
                               saveHistory();
@@ -6492,6 +6583,7 @@ export const CanvasArea: React.FC = () => {
                         setInitialDistance(initial);
                         setIsDistanceModalOpen(true);
                       }}
+                      paperArea={{ w: canvasOrientation === 'landscape' ? 1400 : 1000, h: canvasOrientation === 'landscape' ? 1000 : 1400 }}
                       onChange={(newAttrs: any) => {
                         updateObject(obj.id, newAttrs);
                         saveHistory();
@@ -6570,16 +6662,18 @@ export const CanvasArea: React.FC = () => {
                           className="w-full border border-[#333] bg-[#111] rounded-md px-2 py-1.5 text-[11px] text-gray-200 focus:ring-1 focus:ring-[#F5C518]/40 outline-none resize-none leading-tight"
                         />
                       ) : (
-                        <input
-                          type="text"
+                        // ÇOK SATIRLI METİN: Enter ile satır eklenir (kullanıcı isteği:
+                        // satırları ayarlayabileyim). Sarım ekranda ve PDF'te aynı kuraldadır.
+                        <textarea
                           autoFocus
+                          rows={3}
                           value={selectedObj.text || selectedObj.distance || ''}
                           onChange={(e) => updateObject(selectedId, { 
                             [selectedObj.distance !== undefined ? 'distance' : 'text']: e.target.value 
                           }, true)}
                           onBlur={() => saveHistory()}
                           onKeyDown={(e) => e.stopPropagation()}
-                          className="w-full border border-[#333] bg-[#111] rounded-md px-2 py-1.5 text-[11px] text-gray-200 focus:ring-1 focus:ring-[#F5C518]/40 outline-none"
+                          className="w-full border border-[#333] bg-[#111] rounded-md px-2 py-1.5 text-[11px] text-gray-200 focus:ring-1 focus:ring-[#F5C518]/40 outline-none resize-none leading-snug"
                         />
                       )}
                       <div className="flex gap-1.5 mt-2">
@@ -6614,6 +6708,27 @@ export const CanvasArea: React.FC = () => {
                         >
                           B
                         </button>
+                      </div>
+                      {/* HİZALAMA (kullanıcı isteği: ortalama ayarlaması) — ekran ve PDF aynı kuralı izler */}
+                      <div className="flex gap-1 mt-2">
+                        {([
+                          { v: 'left', I: AlignLeft, t: 'Sola hizala' },
+                          { v: 'center', I: AlignCenter, t: 'Ortala' },
+                          { v: 'right', I: AlignRight, t: 'Sağa hizala' },
+                        ] as const).map(({ v, I, t }) => (
+                          <button
+                            key={v}
+                            onClick={() => updateObject(selectedId, { align: v })}
+                            className={`flex-1 h-[28px] rounded-md flex items-center justify-center transition-colors ${
+                              (selectedObj.align || 'left') === v
+                                ? 'bg-[#F5C518] text-black'
+                                : 'bg-[#111] text-gray-400 border border-[#333] hover:border-gray-500'
+                            }`}
+                            title={t}
+                          >
+                            <I size={13} />
+                          </button>
+                        ))}
                       </div>
                     </ToolbarSection>
                   )}
