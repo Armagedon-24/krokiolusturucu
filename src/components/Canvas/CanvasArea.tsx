@@ -126,6 +126,53 @@ const drawArrowHeadExport = (ctx: CanvasRenderingContext2D, fromX: number, fromY
   }
 };
 
+// ═══ MESAFE ETİKETİ EXPORT ÇİZİCİ ═══
+// Ekran (Konva Group+Text) ile aynı geometri: çizgi orta noktası + labelOffset +
+// açı normalizasyonu + hız satırı. drawExportObject'in ok dalı (erken return
+// yüzünden etiket bölümüne hiç ulaşmıyordu — kullanıcı raporu: önizleme ve
+// PDF'te mesafe oku rakamları görünmüyor) ve genel etiket bölümü (8. adım)
+// bu tek yardımcıyı paylaşır → ekran = çıktı birebir.
+const drawDistanceLabelExport = (ctx: CanvasRenderingContext2D, obj: any, symbolId: string, w: number, h: number) => {
+  if (!obj.distance) return;
+  const isDistanceTool = obj.isDistanceArrow || symbolId === 'a-4';
+  const angle = isDistanceTool && obj.startX !== undefined
+    ? Math.atan2(obj.endY - obj.startY, obj.endX - obj.startX) * (180 / Math.PI)
+    : 0;
+  let textRotation = angle;
+  if (textRotation > 90) textRotation -= 180;
+  if (textRotation < -90) textRotation += 180;
+  const fontSize = obj.distanceFontSize || (isDistanceTool ? 10 : 14);
+  const hasArrowCoords = obj.startX !== undefined && obj.endX !== undefined;
+  // Ekranla aynı kural: koordinatlı oklarda grup orijini = çizgi orta noktası → (0,0);
+  // koordinatsız oklarda çizgi 0..w aralığında → (w/2, h/2).
+  const gx = isDistanceTool ? (hasArrowCoords ? 0 : w / 2) : 0;
+  const gy = isDistanceTool ? (hasArrowCoords ? 0 : h / 2) : (symbolId === 'ev-arrow-text' ? -20 : (h ? h + 5 : 50));
+  // RAKAM KONUM OFSETİ: ekrandaki sürükleme/konum butonları ofseti çıktıda aynen uygulanır
+  const lo = obj.labelOffset || { dx: 0, dy: 0 };
+  ctx.save();
+  ctx.translate(gx + (lo.dx || 0), gy + (lo.dy || 0));
+  ctx.rotate((textRotation * Math.PI) / 180);
+  ctx.font = `bold ${fontSize}px Inter, Arial`;
+  ctx.fillStyle = obj.distanceColor || '#000000';
+  ctx.textAlign = 'center';
+  ctx.fillText(String(obj.text || obj.distance || ''), 0, -fontSize - 8);
+  if (obj.showSpeedInfo) {
+    const rawText = String(obj.text || obj.distance || '');
+    const match = rawText.match(/\d+(\.\d+)?/);
+    const cm = match ? parseFloat(match[0]) : NaN;
+    if (!isNaN(cm) && cm > 0) {
+      const meters = rawText.toLowerCase().includes('metre') ? cm : cm / 100;
+      const mu = obj.mu || 0.75;
+      const efficiency = obj.efficiency || 100;
+      const speed = Math.round(15.94 * Math.sqrt(mu * meters * (efficiency / 100)));
+      ctx.font = `italic bold ${fontSize * 0.85}px Inter, Arial`;
+      ctx.fillStyle = '#059669';
+      ctx.fillText(`(~${speed} km/s)`, 0, 5 + fontSize * 0.85);
+    }
+  }
+  ctx.restore();
+};
+
 // ═══ OK MOTORU — ORANTILI BAŞ ÖLÇEĞİ ═══
 // Kullanıcı isteği: oklar kenar/köşe tutamağından büyütülüp küçültüldüğünde
 // ok başları (pointer) da orantılı büyüyüp küçülmeli. Baş boyutu objeye
@@ -1146,6 +1193,9 @@ export const drawExportObject = (ctx: CanvasRenderingContext2D, obj: any, img: H
     // st-5 tarzı AÇIK chevron uçlar (içi dolu üçgen değil)
     drawArrowHeadExport(ctx, pts[0], pts[1], pts[2], pts[3], arrowHeadLen, true);
     if (isMeasurement) drawArrowHeadExport(ctx, pts[2], pts[3], pts[0], pts[1], arrowHeadLen, true);
+    // MESAFE ETİKETİ: ok çizgisi erken return ile çıkmadan rakam da çizilmeli
+    // (yoksa önizleme/PDF'te rakam görünmüyordu — kullanıcı raporu).
+    drawDistanceLabelExport(ctx, obj, symbolId, w, h);
     return;
   }
 
@@ -1486,46 +1536,11 @@ export const drawExportObject = (ctx: CanvasRenderingContext2D, obj: any, img: H
   // 7) Bulgu işaretleyicileri yukarıda (5. adım) ele alınıyor — drawImage'dan önce
   //    yakalanmazsa sarı daire yerine boş karakalem PNG basılıyordu.
 
-  // 8) Mesafe/hız etiketi (ev-callout vb. hariç — ekrandaki kuralla aynı)
+  // 8) Mesafe/hız etiketi (ev-callout vb. hariç — ekrandaki kuralla aynı).
+  // Çizim mantığı drawDistanceLabelExport'ta (ok dalıyla paylaşımlı — tek kaynak).
   const labelExcluded = ['ev-arrow-desc', 'ev-arrow-desc-ellipse', 'ev-callout', 'ev-shooting-trajectory'];
   if (obj.distance && !labelExcluded.includes(symbolId)) {
-    const isDistanceTool = obj.isDistanceArrow || symbolId === 'a-4';
-    const angle = isDistanceTool && obj.startX !== undefined
-      ? Math.atan2(obj.endY - obj.startY, obj.endX - obj.startX) * (180 / Math.PI)
-      : 0;
-    let textRotation = angle;
-    if (textRotation > 90) textRotation -= 180;
-    if (textRotation < -90) textRotation += 180;
-    const fontSize = obj.distanceFontSize || (isDistanceTool ? 10 : 14);
-    // Ekranla aynı kural: koordinatlı oklarda grup orijini = çizgi orta noktası → (0,0);
-    // koordinatsız oklarda çizgi 0..w aralığında → (w/2, h/2).
-    const hasArrowCoords = obj.startX !== undefined && obj.endX !== undefined;
-    const gx = isDistanceTool ? (hasArrowCoords ? 0 : w / 2) : 0;
-    const gy = isDistanceTool ? (hasArrowCoords ? 0 : h / 2) : (symbolId === 'ev-arrow-text' ? -20 : (h ? h + 5 : 50));
-    // RAKAM KONUM OFSETİ: ekrandaki sürükleme ofseti PDF'te de aynen uygulanır
-    const lo = (obj as any).labelOffset || { dx: 0, dy: 0 };
-    ctx.save();
-    ctx.translate(gx + (lo.dx || 0), gy + (lo.dy || 0));
-    ctx.rotate((textRotation * Math.PI) / 180);
-    ctx.font = `bold ${fontSize}px Inter, Arial`;
-    ctx.fillStyle = obj.distanceColor || '#000000';
-    ctx.textAlign = 'center';
-    ctx.fillText(String(obj.text || obj.distance || ''), 0, -fontSize - 8);
-    if (obj.showSpeedInfo) {
-      const rawText = String(obj.text || obj.distance || '');
-      const match = rawText.match(/\d+(\.\d+)?/);
-      const cm = match ? parseFloat(match[0]) : NaN;
-      if (!isNaN(cm) && cm > 0) {
-        const meters = rawText.toLowerCase().includes('metre') ? cm : cm / 100;
-        const mu = obj.mu || 0.75;
-        const efficiency = obj.efficiency || 100;
-        const speed = Math.round(15.94 * Math.sqrt(mu * meters * (efficiency / 100)));
-        ctx.font = `italic bold ${fontSize * 0.85}px Inter, Arial`;
-        ctx.fillStyle = '#059669';
-        ctx.fillText(`(~${speed} km/s)`, 0, 5 + fontSize * 0.85);
-      }
-    }
-    ctx.restore();
+    drawDistanceLabelExport(ctx, obj, symbolId, w, h);
   }
 
   // 9) Bulgu numarası madalyonu (sembol üstünde küçük sarı rozet)
@@ -1540,6 +1555,90 @@ export const drawExportObject = (ctx: CanvasRenderingContext2D, obj: any, img: H
     ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
   }
 };
+
+/** Döndürülmüş kutuyu sayfa sınırına göre orantılı kırpar (AABB taşma testi).
+ *  Yerel kutunun 4 köşesi sayfa uzayına proje edilir; taşma varsa kutu orijin
+ *  etrafında s oranıyla küçültülür. Döndürmemiş kutuda (0°) eski davranış birebir
+ *  korunur (Sağ/Taşma = (P.w - x)/w). Manuel boyutlandırma motoru ile
+ *  Transformer boundBoxFunc bu tek yardımcıyı paylaşır. */
+function clampRotatedDims(
+  x: number, y: number, w: number, h: number,
+  rotationDeg: number, P: { w: number; h: number }
+): { w: number; h: number } {
+  const rad = (rotationDeg * Math.PI) / 180;
+  const cos = Math.cos(rad), sin = Math.sin(rad);
+  const corners = [[0, 0], [w, 0], [0, h], [w, h]].map(([lx, ly]) => [
+    x + lx * cos - ly * sin,
+    y + lx * sin + ly * cos,
+  ]);
+  const minX = Math.min(...corners.map(c => c[0]));
+  const maxX = Math.max(...corners.map(c => c[0]));
+  const minY = Math.min(...corners.map(c => c[1]));
+  const maxY = Math.max(...corners.map(c => c[1]));
+  let s = 1;
+  if (maxX > 0 && x < P.w && maxX > P.w - x) s = Math.min(s, (P.w - x) / maxX);
+  if (minX < 0 && x > 0 && -minX > x) s = Math.min(s, x / -minX);
+  if (maxY > 0 && y < P.h && maxY > P.h - y) s = Math.min(s, (P.h - y) / maxY);
+  if (minY < 0 && y > 0 && -minY > y) s = Math.min(s, y / -minY);
+  if (s < 1) return { w: Math.max(5, w * s), h: Math.max(5, h * s) };
+  return { w, h };
+}
+
+/** MANÜEL DÖNDÜRMELİ BOYUTLANDIRMA ADIMI — mouse'un ham sayfa deltasını nesnenin
+ *  YEREL eksenine çevirir, width/height/x/y'yi doğrudan yazar. Konva'nın
+ *  Transformer delta zincirini tamamen bypass eder (frame kayması yok).
+ *  - Kenar tutamaçlar tek ekseni, köşeler iki ekseni büyütür/küçültür.
+ *  - Sol/üst tutamaçlarda orijin, sabit kalacak karşı kenar boyunca kaydırılır.
+ *  - keepRatio'lu köşelerde iki eksen aynı faktörle ölçeklenir.
+ *  - Sayfa sınırı clampRotatedDims ile (AABB) uygulanır. */
+function manualResizeStep(tr: any, mr: any, evt: any) {
+  const node = mr.node;
+  const stage = mr.stage;
+  stage.setPointersPositions(evt);
+  const pp = stage.getPointerPosition();
+  if (!pp) return;
+  const dx = pp.x - mr.startPointer.x;
+  const dy = pp.y - mr.startPointer.y;
+  // Sayfa deltasını nesnenin yerel eksenine döndür (rotasyonu geri al)
+  const ldx = dx * mr.cos + dy * mr.sin;
+  const ldy = -dx * mr.sin + dy * mr.cos;
+  const an: string = mr.anchorName || '';
+  let w: number;
+  let h: number;
+  if (mr.isEdge || !mr.keepRatio) {
+    const dw = an.includes('right') ? ldx : an.includes('left') ? -ldx : 0;
+    const dh = an.includes('bottom') ? ldy : an.includes('top') ? -ldy : 0;
+    w = Math.max(5, mr.start.w + dw);
+    h = Math.max(5, mr.start.h + dh);
+  } else {
+    // Köşe + oran koruma: iki ekseni aynı faktörle ölçekle
+    const dw = an.includes('right') ? ldx : an.includes('left') ? -ldx : 0;
+    const dh = an.includes('bottom') ? ldy : an.includes('top') ? -ldy : 0;
+    const f = Math.max(
+      (mr.start.w + dw) / (mr.start.w || 1),
+      (mr.start.h + dh) / (mr.start.h || 1),
+      0.02
+    );
+    w = Math.max(5, mr.start.w * f);
+    h = Math.max(5, mr.start.h * f);
+  }
+  // Sol/üst tutamaç: karşı kenar sabit kalsın → orijin yerel eksende kayar
+  let ox = an.includes('left') ? mr.start.w - w : 0;
+  let oy = an.includes('top') ? mr.start.h - h : 0;
+  // Sayfa sınırı: taşan kutuyu orantılı kırp (AABB)
+  const rawX = mr.start.x + (ox * mr.cos - oy * mr.sin);
+  const rawY = mr.start.y + (ox * mr.sin + oy * mr.cos);
+  const clamped = clampRotatedDims(rawX, rawY, w, h, mr.rotDeg, mr.paper);
+  if (clamped.w !== w) { if (an.includes('left')) ox = mr.start.w - clamped.w; w = clamped.w; }
+  if (clamped.h !== h) { if (an.includes('top')) oy = mr.start.h - clamped.h; h = clamped.h; }
+  const px = mr.start.x + (ox * mr.cos - oy * mr.sin);
+  const py = mr.start.y + (ox * mr.sin + oy * mr.cos);
+  node.setAttrs({ width: w, height: h, x: px, y: py, scaleX: 1, scaleY: 1 });
+  // Transformer çerçevesini gerçek kutuya tazele (anchor'lar mouse'u izler)
+  try { tr._resetTransformCache?.(); } catch { /* yoksa önemsemiyoruz */ }
+  try { tr.forceUpdate?.(); } catch { /* yoksa önemsemiyoruz */ }
+  try { node.getLayer()?.batchDraw(); } catch { /* yoksa önemsemiyoruz */ }
+}
 
 const IndividualObject = ({ 
   shapeProps, 
@@ -1563,11 +1662,47 @@ const IndividualObject = ({
   const imgRef = useRef<any>(null);
   const trRef = useRef<any>(null);
   const transformAnchorRef = useRef<string | null>(null);
+  const manualResizeRef = useRef<any>(null);
   const image = useSmartImage(shapeProps?.src);
 
   useEffect(() => {
     if (isSelected && trRef.current && groupRef.current) {
       trRef.current.nodes([groupRef.current]);
+      // MANÜEL BOYUTLANDIRMA KÖPRÜSÜ (bir kez kurulur): Konva 10.2.5 Transformer'ın
+      // delta matematiği DÖNDÜRÜLMÜŞ nesnelerde çerçeve kaymasına neden oluyor —
+      // kutu mouse'u takip etmiyor, bırakınca en/boy bozuluyor (kullanıcı raporu:
+      // döndürülmüş kaldırım uzatması tutamak bırakılınca siliniyor).
+      // Köprü: döndürmeli sürükleme başladığında (__manualResizeState doluysa)
+      // mouse hareketini KENDİ eksen matematiğimizle işleriz; eksen hizalı
+      // nesnelerde Konva'nın sağlam akışı aynen çalışır.
+      const tr: any = trRef.current;
+      if (tr && !tr.__manualResizeInstalled) {
+        tr.__manualResizeInstalled = true;
+        const origMove = tr._handleMouseMove;
+        const origUp = tr._handleMouseUp;
+        // DİKKAT: window dinleyicisi çağırırken `this` = window olur (Konva
+        // addEventListener'a instance metodunu verir); transformer'ı closure ile
+        // yakala, `this`e asla güvenme.
+        const trSelf: any = tr;
+        tr._handleMouseMove = function (evt: any) {
+          const mr = trSelf.__manualResizeState;
+          if (mr) { manualResizeStep(trSelf, mr, evt); return; }
+          origMove.call(trSelf, evt);
+        };
+        tr._handleMouseUp = function (evt: any) {
+          const mr = trSelf.__manualResizeState;
+          if (mr) {
+            trSelf.__manualResizeState = null;
+            // Orijinal up: window dinleyicilerini temizler + 'transformend' fırlatır
+            // → react-konva onTransformEnd → handleTransformEnd (manualResizeRef hâlâ
+            // set — commit node attr'larından okur). Flag'i commit'ten SONRA temizle!
+            origUp.call(trSelf, evt);
+            manualResizeRef.current = null;
+            return;
+          }
+          origUp.call(trSelf, evt);
+        };
+      }
       trRef.current.getLayer().batchDraw();
     }
   }, [isSelected]);
@@ -1580,6 +1715,47 @@ const IndividualObject = ({
     } catch {
       transformAnchorRef.current = null;
     }
+    // DÖNDÜRMELİ NESNE → manuel boyutlandırma motorunu devreye al.
+    // Eksen hizalı (0°/180°) nesnelerde Konva akışı kanıtlanmış şekilde sağlamdır.
+    const node = groupRef.current;
+    const tr: any = trRef.current;
+    if (!node || !tr) return;
+    const rotNorm = ((node.rotation() % 180) + 180) % 180;
+    if (rotNorm < 0.5 || rotNorm > 179.5) return;
+    const stage = node.getStage();
+    if (!stage) return;
+    const startPointer = stage.getPointerPosition();
+    if (!startPointer) return;
+    const anchorName = transformAnchorRef.current || '';
+    if (!anchorName || anchorName === 'rotater') return;
+    const rotDeg = node.rotation();
+    const rad = (rotDeg * Math.PI) / 180;
+    const startState = {
+      x: node.x(),
+      y: node.y(),
+      w: node.width(),
+      h: node.height(),
+    };
+    manualResizeRef.current = {
+      active: true,
+      start: startState,
+      cos: Math.cos(rad),
+      sin: Math.sin(rad),
+    };
+    tr.__manualResizeState = {
+      node,
+      stage,
+      startPointer: { x: startPointer.x, y: startPointer.y },
+      rotDeg,
+      cos: Math.cos(rad),
+      sin: Math.sin(rad),
+      start: startState,
+      anchorName,
+      keepRatio: !!tr.keepRatio(),
+      isEdge: anchorName === 'middle-left' || anchorName === 'middle-right' ||
+              anchorName === 'top-center' || anchorName === 'bottom-center',
+      paper: paperArea || { w: 1000, h: 1400 },
+    };
   };
 
   useEffect(() => {
@@ -1695,6 +1871,56 @@ const IndividualObject = ({
     
     node.scaleX(1);
     node.scaleY(1);
+
+    // MANÜEL MOTOR (döndürülmüş nesneler): en/boy konum doğrudan node attr'larına
+    // yazıldı (ölçek hep 1) — commit'i node'un gerçek durumundan oku.
+    if (manualResizeRef.current?.active) {
+      const mr = manualResizeRef.current;
+      manualResizeRef.current = null;
+      const updates: any = {
+        x: node.x(),
+        y: node.y(),
+        rotation: node.rotation(),
+        width: Math.max(1, node.width()),
+        height: Math.max(1, node.height()),
+        scaleX: 1,
+        scaleY: 1,
+      };
+      // Koordinatlı oklar (MESAFE ÖLÇ vb.): uçları eski kutudan yeni kutuya haritala
+      if (shapeProps.startX !== undefined && shapeProps.endX !== undefined && mr.start) {
+        const sx = updates.width / (mr.start.w || 1);
+        const sy = updates.height / (mr.start.h || 1);
+        const mapPoint = (px_: number, py_: number) => {
+          const rx = px_ - mr.start.x;
+          const ry = py_ - mr.start.y;
+          const lx = rx * mr.cos + ry * mr.sin;
+          const ly = -rx * mr.sin + ry * mr.cos;
+          const nlx = lx * sx;
+          const nly = ly * sy;
+          return {
+            x: node.x() + nlx * mr.cos - nly * mr.sin,
+            y: node.y() + nlx * mr.sin + nly * mr.cos,
+          };
+        };
+        const s0 = mapPoint(shapeProps.startX, shapeProps.startY);
+        const e0 = mapPoint(shapeProps.endX, shapeProps.endY);
+        updates.startX = s0.x;
+        updates.startY = s0.y;
+        updates.endX = e0.x;
+        updates.endY = e0.y;
+        // Ok başı: eksen oranlarının ortalamasıyla orantılı büyüsün/küçülsün
+        const baseHead = shapeProps.arrowHead || ARROW_HEAD_DEFAULT;
+        updates.arrowHead = Math.min(
+          ARROW_HEAD_MAX,
+          Math.max(ARROW_HEAD_MIN, baseHead * ((sx + sy) / 2))
+        );
+      }
+      onChange({
+        ...shapeProps,
+        ...updates,
+      });
+      return;
+    }
     
     if (shapeProps.type === 'text') {
       // Kullanıcı isteği: tutamaçla ölçekleme puntoyu DEĞİŞTİRMESİN.
@@ -4226,27 +4452,59 @@ const IndividualObject = ({
               return oldBox;
             }
             
-            // KÂĞIT SINIRI: çerçeve, kenar boşluklu çizim alanı yerine TÜM SAYFA ile
-            // sınırlandırılır. Aksi halde kenara yakın sembol/ok hiç uzatılamıyordu
-            // (kullanıcı raporu: mesafe oku belli yerden sonra uzamıyor). PDF dışa
-            // aktarımı tam sayfaya çizdiği için tutarlı sınır sayfadır.
+            // KÂĞIT SINIRI — DÖNDÜRME FARKINDALIKLI: Transformer kutusu nesnenin YEREL
+            // çerçevesindedir; döndürülmüş nesnede bu çerçeve sayfa düzlemiyle çakışmaz.
+            // Eski kod yerel kutuyu doğrudan P.w/P.h ile kıyaslıyordu: 90° döndürülmüş
+            // kaldırımda yerel genişlik sayfanın DİKEY eksenine karşılık geldiği halde
+            // P.w ile kıyaslanıp (1000 - node.x) kadar sessizce kırpılıyordu — uzatma
+            // sürüklerken görünüyor, bırakınca eski boyutuna dönüyordu (kullanıcı
+            // raporu: kaldırım uzatması seçim kalkınca siliniyor).
+            // Doğru kural: yerel kutunun 4 köşesini sayfa uzayına çevir (AABB), taşma
+            // varsa kutuyu orantılı kırp. Eksen hizalı (0°/180°) nesnede eski davranış
+            // birebir korunur (orijin kenara çekilir, kenar sayfada kalır).
             if (!shapeProps.isTemplate) {
               const P = paperArea || { w: 1000, h: 1400 };
-              if (newBox.x < 0) {
-                newBox.width += newBox.x;
-                newBox.x = 0;
+              const rotNorm = ((newBox.rotation || 0) % 180 + 180) % 180;
+              const axisAligned = rotNorm < 0.5 || rotNorm > 179.5;
+              if (axisAligned) {
+                if (newBox.x < 0) {
+                  newBox.width += newBox.x;
+                  newBox.x = 0;
+                }
+                if (newBox.y < 0) {
+                  newBox.height += newBox.y;
+                  newBox.y = 0;
+                }
+                if (newBox.x + newBox.width > P.w) {
+                  newBox.width = P.w - newBox.x;
+                }
+                if (newBox.y + newBox.height > P.h) {
+                  newBox.height = P.h - newBox.y;
+                }
+              } else {
+                // Döndürülmüş: köşeleri sayfa uzayına projecte et, AABB taşmasını ölç
+                const rad = ((newBox.rotation || 0) * Math.PI) / 180;
+                const cos = Math.cos(rad), sin = Math.sin(rad);
+                const corners = [
+                  [0, 0], [newBox.width, 0], [0, newBox.height], [newBox.width, newBox.height],
+                ].map(([lx, ly]) => [newBox.x + lx * cos - ly * sin, newBox.y + lx * sin + ly * cos]);
+                const minX = Math.min(...corners.map(c => c[0]));
+                const maxX = Math.max(...corners.map(c => c[0]));
+                const minY = Math.min(...corners.map(c => c[1]));
+                const maxY = Math.max(...corners.map(c => c[1]));
+                // Oran s ile kutu orijin etrafında küçülünce köşe ofsetleri de s ile ölçeklenir;
+                // her taşan kenar için izin veren en büyük s bulunur.
+                let s = 1;
+                if (maxX > 0 && newBox.x < P.w && maxX > P.w - newBox.x) s = Math.min(s, (P.w - newBox.x) / maxX);
+                if (minX < 0 && newBox.x > 0 && -minX > newBox.x) s = Math.min(s, newBox.x / -minX);
+                if (maxY > 0 && newBox.y < P.h && maxY > P.h - newBox.y) s = Math.min(s, (P.h - newBox.y) / maxY);
+                if (minY < 0 && newBox.y > 0 && -minY > newBox.y) s = Math.min(s, newBox.y / -minY);
+                if (s < 1) {
+                  newBox.width = Math.max(5, newBox.width * s);
+                  newBox.height = Math.max(5, newBox.height * s);
+                }
               }
-              if (newBox.y < 0) {
-                newBox.height += newBox.y;
-                newBox.y = 0;
-              }
-              if (newBox.x + newBox.width > P.w) {
-                newBox.width = P.w - newBox.x;
-              }
-              if (newBox.y + newBox.height > P.h) {
-                newBox.height = P.h - newBox.y;
-              }
-              
+
               // Kırpmadan sonra çok küçüldüyse iptal et
               if (newBox.width < 5 || newBox.height < 5) {
                 return oldBox;
@@ -6855,6 +7113,53 @@ export const CanvasArea: React.FC = () => {
                           />
                         </ToolbarField>
                       </div>
+                      {/* RAKAM KONUMU BUTONLARI (kullanıcı isteği): mesafe oku rakamını
+                          sürüklemek yerine tek tıkla çizginin üstüne/ortasına/altına
+                          yerleştir. Ofset nesne-yerel uzaydadır (labelOffset) — ekran,
+                          önizleme ve PDF aynı konumu çizer. SIFIRLA hem yatay hem
+                          dikey ofseti başlangıca döndürür. */}
+                      {(selectedObj.isDistanceArrow || selectedObj.symbolId === 'a-4' || selectedObj.symbolId === 'a-5') && (
+                        <div className="mt-2">
+                          <div className="text-[8px] font-black text-gray-500 uppercase tracking-wider mb-1">Rakam Konumu</div>
+                          <div className="grid grid-cols-4 gap-1">
+                            {(() => {
+                              const fs = selectedObj.distanceFontSize || 10;
+                              const step = fs + 12;
+                              const keepDx = selectedObj.labelOffset?.dx || 0;
+                              const presets: Array<[string, number, string]> = [
+                                ['ÜST', 0, 'Rakam çizginin üstünde'],
+                                ['ORTA', step, 'Rakam çizginin ortasında'],
+                                ['ALT', step * 2, 'Rakam çizginin altında'],
+                              ];
+                              return (
+                                <>
+                                  {presets.map(([lbl, dy, tip]) => (
+                                    <button
+                                      key={lbl}
+                                      title={tip}
+                                      onClick={() => updateObject(selectedId, { labelOffset: { dx: keepDx, dy } })}
+                                      className={`px-1 py-1.5 rounded-md border text-[9px] font-black transition-colors ${
+                                        (selectedObj.labelOffset?.dy || 0) === dy
+                                          ? 'bg-[#F5C518]/15 border-[#F5C518]/50 text-[#F5C518]'
+                                          : 'bg-[#111] border-[#333] text-gray-300 hover:border-[#F5C518]/50'
+                                      }`}
+                                    >
+                                      {lbl}
+                                    </button>
+                                  ))}
+                                  <button
+                                    title="Rakam konumunu başlangıca döndür"
+                                    onClick={() => updateObject(selectedId, { labelOffset: { dx: 0, dy: 0 } })}
+                                    className="px-1 py-1.5 rounded-md border bg-[#111] border-[#333] text-gray-300 text-[9px] font-black hover:border-red-500/50 hover:text-red-400 transition-colors"
+                                  >
+                                    ↺
+                                  </button>
+                                </>
+                              );
+                            })()}
+                          </div>
+                        </div>
+                      )}
                     </ToolbarSection>
                   )}
 
