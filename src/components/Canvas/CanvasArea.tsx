@@ -141,6 +141,17 @@ const drawDistanceLabelExport = (ctx: CanvasRenderingContext2D, obj: any, symbol
   let textRotation = angle;
   if (textRotation > 90) textRotation -= 180;
   if (textRotation < -90) textRotation += 180;
+  // RAKAM OKUNABİLİRLİK (ekrandaki kuralın aynısı): dışa aktarımda ctx zaten
+  // obj.rotation kadar döndürülmüş olur; etiketin görsel açısı = grup + kendi
+  // rotasyonu. Ok 90° geçince rakam başaşağı kalmasın: etkin açı (-90,90]
+  // aralığına indirilir, fark yerel rotasyon olarak uygulanır.
+  let labelRotation = textRotation;
+  if (isDistanceTool) {
+    const parentRot = Number(obj.rotation) || 0;
+    let eff = ((parentRot + textRotation) % 360 + 360) % 360;
+    if (eff > 90 && eff <= 270) eff -= 180; else if (eff > 270) eff -= 360;
+    labelRotation = ((eff - parentRot) % 360 + 540) % 360 - 180;
+  }
   const fontSize = obj.distanceFontSize || (isDistanceTool ? 10 : 14);
   const hasArrowCoords = obj.startX !== undefined && obj.endX !== undefined;
   // Ekranla aynı kural: koordinatlı oklarda grup orijini = çizgi orta noktası → (0,0);
@@ -151,7 +162,7 @@ const drawDistanceLabelExport = (ctx: CanvasRenderingContext2D, obj: any, symbol
   const lo = obj.labelOffset || { dx: 0, dy: 0 };
   ctx.save();
   ctx.translate(gx + (lo.dx || 0), gy + (lo.dy || 0));
-  ctx.rotate((textRotation * Math.PI) / 180);
+  ctx.rotate((labelRotation * Math.PI) / 180);
   ctx.font = `bold ${fontSize}px Inter, Arial`;
   ctx.fillStyle = obj.distanceColor || '#000000';
   ctx.textAlign = 'center';
@@ -228,6 +239,51 @@ function patchRoadEngineBounds(g: any, props: any) {
 /** Orta kesikli şerit çizgisi görünür mü? (st-1: varsayılan açık; cadde/sokak: varsayılan kapalı) */
 const roadShowsMiddleLine = (o: any): boolean =>
   o.roadMiddleLine !== undefined ? !!o.roadMiddleLine : (o.symbolId || '') === 'st-1';
+
+/** MESAFE/YÖN OKU MÜREKKEP SINIRI — Transformer çerçevesi okun GERÇEK çizgi
+ *  kutusuna otursun. Varsayılan Group.getClientRect TÜM çocukları kapsar:
+ *  rakam etiketi çizginin ~18px üstında durduğundan çerçeve oku dikeyde kat
+ *  kat aşıyordu; döndürülmüş okta bu şişme çerçeve↔öznitelik (attr) kutusu
+ *  uyumsuzluğuna → Konva delta matematiğinde kaymaya → uzatmada uçların
+ *  çizgiden kopması/formun bozulmasına yol açıyordu (kullanıcı raporu: "oku
+ *  uzatınca formu bozuluyor, çevirdiğim yerde durmuyor"). Yama: çerçeve =
+ *  çizgi kutusu + ok başı eni + çizgi kalınlığı; etiket hariç. propsRef ile
+ *  her çağrıda GÜNCEL nesne okunur (ref callback bir kez kurulur). */
+function patchArrowInkBounds(g: any, propsRef: { current: any }) {
+  if (!g) return;
+  if (!g.__origGetClientRect) g.__origGetClientRect = g.getClientRect;
+  g.getClientRect = function (config: any = {}) {
+    const p = propsRef.current || {};
+    const isNative = p.isDistanceArrow || p.symbolId === 'a-4' || p.symbolId === 'a-5';
+    if (!isNative) return g.__origGetClientRect.call(g, config);
+    const isMeasurement = p.isDistanceArrow || p.symbolId === 'a-4';
+    const sw = isMeasurement ? 5 : (p.strokeWidth || 5);
+    const head = p.arrowHead || ARROW_HEAD_DEFAULT;
+    // Ok başı kanatları çizgiye dik yönde head·sin(spread) taşar
+    const lateral = sw / 2 + head * Math.sin(ARROW_CHEVRON_SPREAD) + 1;
+    const hasCoords = p.startX !== undefined && p.endX !== undefined;
+    let x0: number, y0: number, x1: number, y1: number;
+    if (hasCoords) {
+      // Koordinatlı oklar: grup orijini çizgi orta noktası → yerel kutu MERKEZLİ
+      const sx = p.startX - p.x, sy = p.startY - p.y;
+      const ex = p.endX - p.x, ey = p.endY - p.y;
+      x0 = Math.min(sx, ex); x1 = Math.max(sx, ex);
+      y0 = Math.min(sy, ey); y1 = Math.max(sy, ey);
+    } else {
+      // Kütüphane okları: çizgi yerel (0..w) × h/2'de
+      x0 = 0; x1 = p.width || 0;
+      y0 = (p.height || 0) / 2; y1 = y0;
+    }
+    const tight = {
+      x: x0 - sw / 2,
+      y: y0 - lateral,
+      width: (x1 - x0) + sw,
+      height: (y1 - y0) + 2 * lateral,
+    };
+    if (config.skipTransform) return tight;
+    return g._transformedRect(tight, config.relativeTo);
+  };
+}
 /** Yol adı punto boyutu — yükseklik orantılı varsayılan */
 const roadNameFontSize = (o: any): number =>
   o.streetFontSize || Math.max(11, Math.min(30, (o.height || 40) * 0.32));
@@ -1648,6 +1704,14 @@ function manualResizeStep(tr: any, mr: any, evt: any) {
   const px = mr.start.x + (ox * mr.cos - oy * mr.sin);
   const py = mr.start.y + (ox * mr.sin + oy * mr.cos);
   node.setAttrs({ width: w, height: h, x: px, y: py, scaleX: 1, scaleY: 1 });
+  // JEST İÇİ STORE COMMITİ (kullanıcı raporu: döndürülmüş nesne uzatınca
+  // küçülüyordu): node'a doğrudan yazılan değerler aynı adımda store'a da
+  // işlenir. Böylece React herhangi bir sebeple yeniden render olduğunda
+  // applyNodeProps ESKİ store değeriyle node'u ezemez — taban kayması,
+  // kutunun kendiliğinden küçülmesi imkansız hale gelir.
+  if (typeof mr.commit === 'function') {
+    mr.commit({ x: px, y: py, width: w, height: h, scaleX: 1, scaleY: 1, rotation: mr.rotDeg });
+  }
   // Transformer çerçevesini gerçek kutuya tazele (anchor'lar mouse'u izler)
   try { tr._resetTransformCache?.(); } catch { /* yoksa önemsemiyoruz */ }
   try { tr.forceUpdate?.(); } catch { /* yoksa önemsemiyoruz */ }
@@ -1678,6 +1742,14 @@ const IndividualObject = ({
   const transformAnchorRef = useRef<string | null>(null);
   const manualResizeRef = useRef<any>(null);
   const image = useSmartImage(shapeProps?.src);
+
+  // OK MÜREKKEP SINIRI YAMASI: getClientRect kapatması GÜNCEL shapeProps'ı
+  // propsRef üzerinden okur; her render'da ref tazelenir, yama bir kez kurulur.
+  const shapePropsRef = useRef<any>(shapeProps);
+  shapePropsRef.current = shapeProps;
+  useEffect(() => {
+    patchArrowInkBounds(groupRef.current, shapePropsRef);
+  });
 
   useEffect(() => {
     if (isSelected && trRef.current && groupRef.current) {
@@ -1736,6 +1808,12 @@ const IndividualObject = ({
     if (!node || !tr) return;
     const rotNorm = ((node.rotation() % 180) + 180) % 180;
     if (rotNorm < 0.5 || rotNorm > 179.5) return;
+    // MESAFE/YÖN OKLARI → KONVA NATİV AKIŞ: patchArrowInkBounds çerçeveyi çizgi
+    // kutusuna indirdiği için Konva'nın delta matematiği artık BİREBİR oturur
+    // (çerçeve = mürekkep = attr kutusu). Manuel motor oklarda uç kayması/
+    // küçülme üretiyordu (kullanıcı raporu: uzatınca form bozuluyor) — oklar
+    // bundan böyle Konva'nın kanıtlanmış akışıyla boyutlanır.
+    if (shapeProps.isDistanceArrow || shapeProps.symbolId === 'a-4' || shapeProps.symbolId === 'a-5') return;
     const stage = node.getStage();
     if (!stage) return;
     const startPointer = stage.getPointerPosition();
@@ -1769,6 +1847,13 @@ const IndividualObject = ({
       isEdge: anchorName === 'middle-left' || anchorName === 'middle-right' ||
               anchorName === 'top-center' || anchorName === 'bottom-center',
       paper: paperArea || { w: 1000, h: 1400 },
+      // JEST İÇİ STORE COMMITİ: manuel motor node'a DOĞRUDAN yazar; React bir
+      // sebeple yeniden render olursa applyNodeProps nesneyi ESKİ store değeriyle
+      // ezer → sürükleme tabanı kayar, kutu küçülür (oklarda yakalanan hata).
+      // Her adımda store'a da yazarak React/Konva ayrışması imkansız kılır.
+      commit: (updates: any) => {
+        try { onChange({ ...shapeProps, ...updates }); } catch { /* jest sırasında commit başarısızsa sessiz */ }
+      },
     };
   };
 
@@ -2012,10 +2097,39 @@ const IndividualObject = ({
         const hasArrowCoords = shapeProps.startX !== undefined && shapeProps.endX !== undefined;
         let headScale: number;
         if (hasArrowCoords) {
+          // UÇ EŞLEMESİ (kanonik): saklanan koordinatlar grup-YEREL vektörlerdir
+          // (çizim [startX-obj.x ...] yerel uzayda, rotasyonu grup taşır). Ölçek
+          // sonrası vektörler simmetrilerini korur → origin çizgi ortasında
+          // kalır, rakam/çerçeve kaymadan oku izler. Uçlar node'un son origin'ine
+          // göre yeniden yazılır; rotasyonu GRUP taşır (çift döndürme yok).
           updates.startX = node.x() + (shapeProps.startX - shapeProps.x) * scaleX;
           updates.startY = node.y() + (shapeProps.startY - shapeProps.y) * scaleY;
           updates.endX = node.x() + (shapeProps.endX - shapeProps.x) * scaleX;
           updates.endY = node.y() + (shapeProps.endY - shapeProps.y) * scaleY;
+          // ORİJİN ORTALAMA (kullanıcı raporu: rakam okdan kopuyor): Konva
+          // döndürme jestinde node origin'ini çerçeve merkezi etrafında kaydırır;
+          // koordinatlı okda origin çizgiden dik yönde ~yarı çerçeve kadar
+          // sapar ve rakam (origin'de) çizginin ortasından ayrılır. Commit
+          // sonunda origin, çizginin YEREL orta noktasına taşınır — uçların
+          // görsel konumları birebir korunur, yerel vektörler simmetrik yazılır
+          // → rakam her jestten sonra çizginin tam ortasında kalır.
+          {
+            const lSx = updates.startX - node.x();
+            const lSy = updates.startY - node.y();
+            const lEx = updates.endX - node.x();
+            const lEy = updates.endY - node.y();
+            const mIdx = (lSx + lEx) / 2;
+            const mIdy = (lSy + lEy) / 2;
+            const radO = ((updates.rotation || 0) * Math.PI) / 180;
+            const cosO = Math.cos(radO);
+            const sinO = Math.sin(radO);
+            updates.x = node.x() + mIdx * cosO - mIdy * sinO;
+            updates.y = node.y() + mIdx * sinO + mIdy * cosO;
+            updates.startX = updates.x + (lSx - mIdx);
+            updates.startY = updates.y + (lSy - mIdy);
+            updates.endX = updates.x + (lEx - mIdx);
+            updates.endY = updates.y + (lEy - mIdy);
+          }
           // Baş ölçeği = ok EKSENİNDEKİ uzunluk değişimi (yön bağımlı doğru hesap;
           // max(|sx|,|sy|) yatay küçültmede scaleY=1'den dolayı 1 çıkıp başı donuk
           // bırakıyordu — kullanıcı testinde yakalandı).
@@ -2357,8 +2471,14 @@ const IndividualObject = ({
             const sinR = Math.sin(rad);
             // Yerel köşeler (0,0)(w,0)(w,h)(0,h) döndürülür — Konva'da (x,y) düğüm orijinidir,
             // pozitif açı saat yönüdür (ekranda x sağa, y aşağı).
-            const cornerXs = [0, w, w, 0];
-            const cornerYs = [0, 0, h, h];
+            // KOORDİNLATLI OKLAR (MESAFE ÖLÇ/NİRENGİ): grup orijini çizgi ORTA
+            // noktasıdır → yerel kutu (-w/2..w/2, -h/2..h/2) MERKEZLİDİR. 0..w
+            // varsayımı çizgiyi yarım ok uzunluğu kadar kaydırarak sınırı yanlış
+            // yere çiziyordu (kullanıcı raporu: ok her yere götürülemiyor).
+            const isCoordArrow = (shapeProps.isDistanceArrow || shapeProps.symbolId === 'a-4') &&
+                                 shapeProps.startX !== undefined && shapeProps.endX !== undefined;
+            const cornerXs = isCoordArrow ? [-w / 2, w / 2, w / 2, -w / 2] : [0, w, w, 0];
+            const cornerYs = isCoordArrow ? [-h / 2, -h / 2, h / 2, h / 2] : [0, 0, h, h];
             let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
             for (let ci = 0; ci < 4; ci++) {
               const cxAbs = cornerXs[ci] * cosR - cornerYs[ci] * sinR;
@@ -2522,7 +2642,9 @@ const IndividualObject = ({
             const arrowWidth = isMeasurement ? 5 : (shapeProps.strokeWidth || 5);
             return (
               <Group>
-                {/* Gövde çizgisi */}
+                {/* Gövde çizgisi — strokeScaleEnabled=false: jest sırasında node
+                    ölçeklenirken çizgi KALINLIĞI sabit kalır (şişme yok); bırakınca
+                    attr'lar kalıcı yazılır, form bozulmaz. */}
                 <Line
                   points={pts}
                   stroke={arrowColor}
@@ -2530,6 +2652,7 @@ const IndividualObject = ({
                   lineCap="round"
                   opacity={1}
                   perfectDrawEnabled={false}
+                  strokeScaleEnabled={false}
                   draggable={false}
                 />
                 {/* Uç başı — st-5 tarzı İÇİ BOŞ chevron (dolu üçgen değil);
@@ -2542,6 +2665,7 @@ const IndividualObject = ({
                   lineJoin="round"
                   opacity={1}
                   perfectDrawEnabled={false}
+                  strokeScaleEnabled={false}
                   draggable={false}
                 />
                 {isMeasurement && (
@@ -2553,6 +2677,7 @@ const IndividualObject = ({
                     lineJoin="round"
                     opacity={1}
                     perfectDrawEnabled={false}
+                    strokeScaleEnabled={false}
                     draggable={false}
                   />
                 )}
@@ -4316,6 +4441,20 @@ const IndividualObject = ({
             if (textRotation > 90) textRotation -= 180;
             if (textRotation < -90) textRotation += 180;
 
+            // RAKAM OKUNABİLİRLİK (kullanıcı raporu: rakam okla beraber hareket
+            // etsin, çevirdiğim yerde dursun): grup döndürüldüğünde etiket de
+            // onunla döner; ok 90° geçince rakam BAŞAŞAĞI görünür. Etkin görsel
+            // açı = grup rotasyonu + çizgi açısı; bu açı (-90,90] aralığına
+            // indirilir, fark etiketin kendi rotasyonuna eklenir → rakam her
+            // açıda okla birlikte ve OKUNABİLİR kalır.
+            let labelRotation = textRotation;
+            if (isDistanceTool) {
+              const parentRot = Number(shapeProps.rotation) || 0;
+              let eff = ((parentRot + textRotation) % 360 + 360) % 360;
+              if (eff > 90 && eff <= 270) eff -= 180; else if (eff > 270) eff -= 360;
+              labelRotation = ((eff - parentRot) % 360 + 540) % 360 - 180;
+            }
+
             const fontSize = shapeProps.distanceFontSize || ((shapeProps.isDistanceArrow || shapeProps.symbolId === 'a-4') ? 10 : 14);
 
             // RAKAM KONUM OFSETİ: kullanıcı etiketi sürükleyebilir (kullanıcı isteği).
@@ -4341,7 +4480,7 @@ const IndividualObject = ({
               <Group 
                 x={autoGX + lo.dx} 
                 y={autoGY + lo.dy}
-                rotation={textRotation}
+                rotation={labelRotation}
                 draggable
                 onDragEnd={(e: any) => {
                   const nd = e.target;
