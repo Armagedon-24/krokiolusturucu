@@ -155,7 +155,11 @@ const drawDistanceLabelExport = (ctx: CanvasRenderingContext2D, obj: any, symbol
   ctx.font = `bold ${fontSize}px Inter, Arial`;
   ctx.fillStyle = obj.distanceColor || '#000000';
   ctx.textAlign = 'center';
-  ctx.fillText(String(obj.text || obj.distance || ''), 0, -fontSize - 8);
+  // ÇOK SATIRLI ETİKET + SATIR ARALIĞI (ekrandaki kuralın aynısı): ilk satır eski
+  // konumunda kalır, sonraki satırlar punto × satır aralığı ilerlemeyle altına yazılır.
+  const labelLinesPdf = String(obj.text || obj.distance || '').split('\n');
+  const labelLhPdf = obj.lineHeight || 1;
+  labelLinesPdf.forEach((ln: string, li: number) => ctx.fillText(ln, 0, -fontSize - 8 + fontSize * labelLhPdf * li));
   if (obj.showSpeedInfo) {
     const rawText = String(obj.text || obj.distance || '');
     const match = rawText.match(/\d+(\.\d+)?/);
@@ -1528,7 +1532,17 @@ export const drawExportObject = (ctx: CanvasRenderingContext2D, obj: any, img: H
       }
       lines.push(cur);
     }
-    lines.forEach((line: string, idx: number) => ctx.fillText(line, textX, fontSize * (idx + 1)));
+    // SATIR ARALIĞI + DİKEY YAZI KONUMU (ekrandaki Konva lineHeight/verticalAlign ile
+    // aynı kural): satır ilerlemesi = punto × satır aralığı; blok kutu içinde üst/
+    // orta/alta hizalanır. varsayılan (1 / üst) eski çıktıyla birebir aynıdır.
+    const expLh = obj.lineHeight || 1;
+    const expBoxH = obj.height && obj.height > 0 ? obj.height : 0;
+    const expBlockH = lines.length * fontSize * expLh;
+    const expVa = obj.vAlign || 'top';
+    const vOffset = expBoxH > 0
+      ? (expVa === 'bottom' ? expBoxH - expBlockH : expVa === 'middle' ? (expBoxH - expBlockH) / 2 : 0)
+      : 0;
+    lines.forEach((line: string, idx: number) => ctx.fillText(line, textX, vOffset + fontSize + idx * fontSize * expLh));
     ctx.textAlign = 'left';
     return;
   }
@@ -2325,24 +2339,43 @@ const IndividualObject = ({
             }
           }
 
-          // SÜRÜKLEME SINIRI = TÜM SAYFA: çizim alanı yerine sayfa sınırıyla kelepçele
-          // (uzatılan uzun yollar kenar boşluklarına da taşınabilsin)
+          // SÜRÜKLEME SINIRI = TÜM SAYFA — GERÇEK DÖNDÜRÜLMÜŞ ÇERÇEVEYLE (kullanıcı raporu:
+          // "mesafe okunu çevirdiğimde grid kareli alanda kısıtlanıyor"). Eski kod yalnızca
+          // 90/270°'de en-boy takası yapıyordu; ara açılarda (örn. 30-45°) nesnenin gerçek
+          // kapladığı alan hesaplanmadığı için döndürülmüş semboller/oklar kenarlara
+          // yaklaşamıyor ve sayfa içinde her noktaya gidemiyordu. Artık yerel köşeler
+          // döndürülerek gerçek AABB çıkarılır; nesne sayfaya sığıyorsa TAMAMI sayfa içinde
+          // kalacak şekilde her konuma taşınabilir, sayfadan büyükse (uzun yol/sokak) o
+          // eksende serbesttir.
           if (!shapeProps.isTemplate) {
             const P = paperArea || { w: 1000, h: 1400 };
             const w = shapeProps.width || 0;
             const h = (shapeProps.type === 'text' || shapeProps.type === 'finding-list') ? 20 : (shapeProps.height || 0);
-            
-            // Rotasyona göre gerçek boyutu hesapla (90/270 derece döndürülmüşse en/boy değişir)
-            let actualW = w;
-            let actualH = h;
-            if (shapeProps.rotation && Math.abs(shapeProps.rotation % 180) === 90) {
-              actualW = h;
-              actualH = w;
-            }
 
-            // Katı sınır: nesnenin tamamı sayfa içinde kalsın
-            newX = Math.max(0, Math.min(newX, P.w - actualW));
-            newY = Math.max(0, Math.min(newY, P.h - actualH));
+            const rad = ((shapeProps.rotation || 0) * Math.PI) / 180;
+            const cosR = Math.cos(rad);
+            const sinR = Math.sin(rad);
+            // Yerel köşeler (0,0)(w,0)(w,h)(0,h) döndürülür — Konva'da (x,y) düğüm orijinidir,
+            // pozitif açı saat yönüdür (ekranda x sağa, y aşağı).
+            const cornerXs = [0, w, w, 0];
+            const cornerYs = [0, 0, h, h];
+            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+            for (let ci = 0; ci < 4; ci++) {
+              const cxAbs = cornerXs[ci] * cosR - cornerYs[ci] * sinR;
+              const cyAbs = cornerXs[ci] * sinR + cornerYs[ci] * cosR;
+              if (cxAbs < minX) minX = cxAbs;
+              if (cxAbs > maxX) maxX = cxAbs;
+              if (cyAbs < minY) minY = cyAbs;
+              if (cyAbs > maxY) maxY = cyAbs;
+            }
+            // Düğüm (x,y) = yerel (0,0) → AABB'nin sol-üst köşesi (x+minX, y+minY).
+            // Sınır: x+minX >= 0 ve x+maxX <= P.w (aynısı y için).
+            if (maxX - minX <= P.w) {
+              newX = Math.max(-minX, Math.min(newX, P.w - maxX));
+            }
+            if (maxY - minY <= P.h) {
+              newY = Math.max(-minY, Math.min(newY, P.h - maxY));
+            }
           }
           
           return { x: newX, y: newY };
@@ -2468,6 +2501,10 @@ const IndividualObject = ({
             height={shapeProps.height && shapeProps.height > 0 ? shapeProps.height : undefined}
             wrap="word"
             align={shapeProps.align}
+            // SATIR ARALIĞI (kullanıcı isteği: satır ayarlama) + DİKEY YAZI KONUMU:
+            // özellik panelinden ayarlanır; PDF dışa aktarımı aynı kuralı izler.
+            lineHeight={shapeProps.lineHeight || 1}
+            verticalAlign={shapeProps.vAlign || 'top'}
             rotation={0}
             draggable={false}
           />
@@ -4284,7 +4321,13 @@ const IndividualObject = ({
             // RAKAM KONUM OFSETİ: kullanıcı etiketi sürükleyebilir (kullanıcı isteği).
             // Ofset nesne-yerel uzaydadır; PDF dışa aktarımı aynı ofseti kullanır.
             const lo = shapeProps.labelOffset || { dx: 0, dy: 0 };
-            const labelW = Math.max(30, Math.min(420, String(shapeProps.text || shapeProps.distance || '').length * fontSize * 0.75 + 12));
+            // ÇOK SATIRLI ETİKET (kullanıcı isteği: satır ayarlama): Enter ile alt alta
+            // satırlar; en uzun satır genişliği belirler. SATIR ARALIĞI lh ile uygulanır.
+            const labelFull = String(shapeProps.text || shapeProps.distance || '');
+            const labelLines = labelFull.split('\n');
+            const labelLongest = labelLines.reduce((m: number, l: string) => Math.max(m, l.length), 1);
+            const labelLh = shapeProps.lineHeight || 1;
+            const labelW = Math.max(30, Math.min(420, labelLongest * fontSize * 0.75 + 12));
             const autoGX = isDistanceTool ? textX : 0;
             const autoGY = isDistanceTool ? textY : (
               shapeProps.symbolId === 'ev-arrow-text' ? -20 : 
@@ -4321,16 +4364,17 @@ const IndividualObject = ({
                     yapıyordu (kullanıcı raporu: çerçeve ok boyunda olsun). */}
                 {/* GÖRİNMEZ TIKLAMA BÖLGESİ: metin listening=false olduğu için grup
                     tıklanamazdı (kullanıcı rakamı sürükleyemiyordu). Şeffaf dolgulu Rect
-                    hit-test'i grup üstüne taşır (ekranda görünmez). */}
+                    hit-test'i grup üstüne taşır (ekranda görünmez). Yükseklik çok
+                    satırlı etiketlerde tüm satırları kapsar. */}
                 <Rect
                   x={-(labelW + 10) / 2}
                   y={-fontSize - 11}
                   width={labelW + 10}
-                  height={fontSize + 16}
+                  height={fontSize * labelLh * Math.max(1, labelLines.length - 1) + fontSize + 19}
                   fill="transparent"
                 />
                 <Text
-                  text={String(shapeProps.text || shapeProps.distance || '')}
+                  text={labelFull}
                   fontSize={fontSize}
                   fontStyle="bold"
                   fill={shapeProps.distanceColor || '#000000'}
@@ -4341,6 +4385,7 @@ const IndividualObject = ({
                   padding={0}
                   listening={false}
                   offsetX={labelW / 2}
+                  lineHeight={labelLh}
                   wrap="none"
                 />
                 
@@ -4450,6 +4495,16 @@ const IndividualObject = ({
             // siliniyor). Flip yerine çerçeve eski hâlinde sabitlenir.
             if (newBox.width < 5 || newBox.height < 5) {
               return oldBox;
+            }
+
+            // DÖNDÜRME JESTİ = SERBEST (kullanıcı raporu: "mesafe okunu çevirdiğimde grid
+            // kareli alanda kısıtlanıyor"). Döndürürken nesnenin çerçevesi büyür; sayfa
+            // sınırı kelepçesi bu büyümeyi küçültme (scale) olarak geri yazıyor, ok
+            // çevrildikçe kısalıp deforme oluyordu. Açı değiştiyse (döndürme jesti)
+            // kelepçe hiç uygulanmaz — kullanıcı nesneyi istediği açıda çevirir.
+            // Büyütme/küçültme jestlerinde (açı sabit) aşağıdaki sayfa sınırı aynen korunur.
+            if (Math.abs((newBox.rotation || 0) - (oldBox.rotation || 0)) > 0.001) {
+              return newBox;
             }
             
             // KÂĞIT SINIRI — DÖNDÜRME FARKINDALIKLI: Transformer kutusu nesnenin YEREL
@@ -6988,6 +7043,76 @@ export const CanvasArea: React.FC = () => {
                           </button>
                         ))}
                       </div>
+                      {/* YAZI KONUMU (kullanıcı isteği): yazının kutu içindeki DİKEY konumu —
+                          üst / orta / alt. Ekran (Konva verticalAlign) ve PDF aynı kuralı izler. */}
+                      <div className="flex gap-1 mt-2">
+                        <span className="text-[8px] font-black text-gray-500 uppercase self-center mr-0.5 shrink-0">YAZI KONUMU</span>
+                        {([
+                          { v: 'top', t: 'ÜST' },
+                          { v: 'middle', t: 'ORTA' },
+                          { v: 'bottom', t: 'ALT' },
+                        ] as const).map(({ v, t }) => (
+                          <button
+                            key={v}
+                            onClick={() => updateObject(selectedId, { vAlign: v })}
+                            className={`flex-1 h-[26px] rounded-md flex items-center justify-center text-[9px] font-bold transition-colors ${
+                              (selectedObj.vAlign || 'top') === v
+                                ? 'bg-[#F5C518] text-black'
+                                : 'bg-[#111] text-gray-400 border border-[#333] hover:border-gray-500'
+                            }`}
+                            title={`Yazıyı kutuda ${t === 'ÜST' ? 'üste' : t === 'ORTA' ? 'ortala' : 'alta'} al`}
+                          >
+                            {t}
+                          </button>
+                        ))}
+                      </div>
+                      {/* KONUM (kullanıcı isteği: yazı konumunu ayarlama) + SATIR AYARI:
+                          kutunun sayfadaki X/Y konumu hassas girilir; SATIR ARALIĞI çok
+                          satırlı metinlerde satırlar arası boşluğu belirler (1 = normal). */}
+                      <div className="grid grid-cols-3 gap-2 mt-2">
+                        <ToolbarField label="KONUM X">
+                          <input
+                            type="number"
+                            value={Math.round(selectedObj.x || 0)}
+                            onChange={(e) => {
+                              const v = parseFloat(e.target.value);
+                              if (isNaN(v)) return;
+                              const P = canvasOrientation === 'landscape' ? 1400 : 1000;
+                              updateObject(selectedId, { x: Math.max(0, Math.min(v, P)) });
+                            }}
+                            className="w-full bg-[#111] border border-[#333] text-white text-[10px] rounded-md px-1 py-1.5 text-center outline-none"
+                          />
+                        </ToolbarField>
+                        <ToolbarField label="KONUM Y">
+                          <input
+                            type="number"
+                            value={Math.round(selectedObj.y || 0)}
+                            onChange={(e) => {
+                              const v = parseFloat(e.target.value);
+                              if (isNaN(v)) return;
+                              const P = canvasOrientation === 'landscape' ? 1000 : 1400;
+                              updateObject(selectedId, { y: Math.max(0, Math.min(v, P)) });
+                            }}
+                            className="w-full bg-[#111] border border-[#333] text-white text-[10px] rounded-md px-1 py-1.5 text-center outline-none"
+                          />
+                        </ToolbarField>
+                        <ToolbarField label="SATIR ARALIĞI">
+                          <input
+                            type="number"
+                            step="0.1"
+                            min="0.8"
+                            max="3"
+                            value={selectedObj.lineHeight ?? 1}
+                            onChange={(e) => {
+                              const v = parseFloat(e.target.value);
+                              if (isNaN(v)) return;
+                              updateObject(selectedId, { lineHeight: Math.max(0.8, Math.min(3, v)) }, true);
+                            }}
+                            onBlur={() => saveHistory()}
+                            className="w-full bg-[#111] border border-[#333] text-white text-[10px] rounded-md px-1 py-1.5 text-center outline-none"
+                          />
+                        </ToolbarField>
+                      </div>
                     </ToolbarSection>
                   )}
 
@@ -7079,8 +7204,10 @@ export const CanvasArea: React.FC = () => {
                   {/* Group 3: Label/Annotation (Available for everything that isn't raw text) */}
                   {selectedObj.type !== 'text' && selectedObj.symbolId !== 'ev-shooting-trajectory' && (
                     <ToolbarSection title="ETİKET" color="#60a5fa">
-                      <input
-                        type="text"
+                      {/* ÇOK SATIRLI ETİKET (kullanıcı isteği: satır ayarlama): Enter ile
+                          yeni satır eklenir; ekran ve PDF aynı satır kırılımını kullanır. */}
+                      <textarea
+                        rows={2}
                         placeholder="Açıklama..."
                         value={selectedObj.distance || ''}
                         onChange={(e) => {
@@ -7100,9 +7227,9 @@ export const CanvasArea: React.FC = () => {
                         }}
                         onBlur={() => saveHistory()}
                         onKeyDown={(e) => e.stopPropagation()}
-                        className="w-full border border-[#333] bg-[#111] rounded-md px-2 py-1.5 text-[11px] text-gray-200 focus:ring-1 focus:ring-[#F5C518]/40 outline-none"
+                        className="w-full border border-[#333] bg-[#111] rounded-md px-2 py-1.5 text-[11px] text-gray-200 focus:ring-1 focus:ring-[#F5C518]/40 outline-none resize-none leading-snug"
                       />
-                      <div className="mt-2 w-20">
+                      <div className="grid grid-cols-2 gap-2 mt-2">
                         <ToolbarField label="YAZI BOYU">
                           <input
                             type="number"
@@ -7112,7 +7239,63 @@ export const CanvasArea: React.FC = () => {
                             className="w-full bg-[#111] border border-[#333] text-white text-[10px] rounded-md px-1 py-1.5 text-center outline-none"
                           />
                         </ToolbarField>
+                        <ToolbarField label="SATIR ARALIĞI">
+                          <input
+                            type="number"
+                            step="0.1"
+                            min="0.8"
+                            max="3"
+                            value={selectedObj.lineHeight ?? 1}
+                            onChange={(e) => {
+                              const v = parseFloat(e.target.value);
+                              if (isNaN(v)) return;
+                              updateObject(selectedId, { lineHeight: Math.max(0.8, Math.min(3, v)) }, true);
+                            }}
+                            onBlur={() => saveHistory()}
+                            className="w-full bg-[#111] border border-[#333] text-white text-[10px] rounded-md px-1 py-1.5 text-center outline-none"
+                          />
+                        </ToolbarField>
                       </div>
+                      {/* YAZI KONUMU (kullanıcı isteği): etiketin sembole göre konum ofseti.
+                          Etiket tuvalde sürüklenebilir; buradan da hassas sayısal değer
+                          girilir. PDF dışa aktarımı aynı ofseti kullanır. */}
+                      <div className="grid grid-cols-2 gap-2 mt-2">
+                        <ToolbarField label="ETİKET X">
+                          <input
+                            type="number"
+                            step="1"
+                            value={Math.round(selectedObj.labelOffset?.dx || 0)}
+                            onChange={(e) => {
+                              const v = parseFloat(e.target.value);
+                              if (isNaN(v)) return;
+                              updateObject(selectedId, { labelOffset: { dx: v, dy: selectedObj.labelOffset?.dy || 0 } }, true);
+                            }}
+                            onBlur={() => saveHistory()}
+                            className="w-full bg-[#111] border border-[#333] text-white text-[10px] rounded-md px-1 py-1.5 text-center outline-none"
+                          />
+                        </ToolbarField>
+                        <ToolbarField label="ETİKET Y">
+                          <input
+                            type="number"
+                            step="1"
+                            value={Math.round(selectedObj.labelOffset?.dy || 0)}
+                            onChange={(e) => {
+                              const v = parseFloat(e.target.value);
+                              if (isNaN(v)) return;
+                              updateObject(selectedId, { labelOffset: { dx: selectedObj.labelOffset?.dx || 0, dy: v } }, true);
+                            }}
+                            onBlur={() => saveHistory()}
+                            className="w-full bg-[#111] border border-[#333] text-white text-[10px] rounded-md px-1 py-1.5 text-center outline-none"
+                          />
+                        </ToolbarField>
+                      </div>
+                      <button
+                        onClick={() => updateObject(selectedId, { labelOffset: { dx: 0, dy: 0 } })}
+                        className="w-full mt-2 px-2 py-1.5 bg-[#111] border border-[#333] rounded-md text-[9px] font-bold text-gray-400 hover:border-[#60a5fa]/50 hover:text-[#60a5fa] transition-colors"
+                        title="Etiketi otomatik konumuna geri getir"
+                      >
+                        ETİKET KONUMUNU SIFIRLA
+                      </button>
                       {/* RAKAM KONUMU BUTONLARI (kullanıcı isteği): mesafe oku rakamını
                           sürüklemek yerine tek tıkla çizginin üstüne/ortasına/altına
                           yerleştir. Ofset nesne-yerel uzaydadır (labelOffset) — ekran,

@@ -86,6 +86,12 @@ export interface CanvasObject {
   /** Mesafe etiketi (rakam) konum ofseti — otomatik konuma göre nesne-yerel dx/dy.
    *  Kullanıcı etiketi sürükleyince güncellenir; ekran ve PDF dışa aktarımı aynı ofseti kullanır. */
   labelOffset?: { dx: number; dy: number };
+  /** SATIR ARALIĞI (kullanıcı isteği: satır ayarlama) — çok satırlı metin/etiketlerde
+   *  satırlar arası boşluk çarpanı (1 = normal). Ekran ve PDF aynı kuralı izler. */
+  lineHeight?: number;
+  /** YAZI KONUMU (kullanıcı isteği) — metin kutusunda yazının dikey hizalaması:
+   *  üst / orta / alt. Ekran (Konva verticalAlign) ve PDF aynı kuralı izler. */
+  vAlign?: 'top' | 'middle' | 'bottom';
   /** Açıklama oku çerçevesi (ev-arrow-desc / -ellipse) — tutamakla büyütülüp küçültülür */
   frameWidth?: number;
   frameHeight?: number;
