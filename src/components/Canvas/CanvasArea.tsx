@@ -1772,6 +1772,7 @@ const IndividualObject = ({
   const groupRef = useRef<any>(null);
   const imgRef = useRef<any>(null);
   const trRef = useRef<any>(null);
+  const labelRef = useRef<any>(null);
   const transformAnchorRef = useRef<string | null>(null);
   const manualResizeRef = useRef<any>(null);
   const image = useSmartImage(shapeProps?.src);
@@ -1915,6 +1916,24 @@ const IndividualObject = ({
     };
   };
 
+  // ═══ CANLI FORM KORUMASI (a-4 / a-5 — kutu tutamağı jesti) ═══
+  // Kullanıcı isteği: "büyüyüp küçülünce formu bozulmasın". Transformer tutamağı
+  // grubu ölçeklerken rakam etiketi de grupla birlikte esner (punto yatay/dikey
+  // uzar). Etikete grup ölçeğinin TERSİNİ uygularız: rakamın ekran boyutu jest
+  // boyunca sabit kalır, hiç esnemez. Jest bitince (handleTransformEnd) ters
+  // ölçek sıfırlanır; ok geometrisi uçlar/ok başı TEMİZ yeniden yazılır.
+  const handleTransform = () => {
+    const isArrow = shapeProps.isDistanceArrow || shapeProps.symbolId === 'a-4' || shapeProps.symbolId === 'a-5';
+    if (!isArrow) return;
+    const node = groupRef.current;
+    const lbl = labelRef.current;
+    if (!node || !lbl) return;
+    const sx = Math.abs(node.scaleX()) || 1;
+    const sy = Math.abs(node.scaleY()) || 1;
+    if (Math.abs(sx - 1) < 0.004 && Math.abs(sy - 1) < 0.004) return;
+    lbl.scale({ x: 1 / sx, y: 1 / sy });
+  };
+
   useEffect(() => {
     if (imgRef.current && image) {
       try {
@@ -2028,6 +2047,10 @@ const IndividualObject = ({
     
     node.scaleX(1);
     node.scaleY(1);
+
+    // Canlı etiket korumasının ters ölçeğini sıfırla (a-4/a-5 jesti bitti);
+    // commit sonrası etiket kendi doğal punto/boyuyla yeniden render edilir.
+    try { labelRef.current?.scale({ x: 1, y: 1 }); } catch { /* etiket yoksa önemsemiyoruz */ }
 
     // MANÜEL MOTOR (döndürülmüş nesneler): en/boy konum doğrudan node attr'larına
     // yazıldı (ölçek hep 1) — commit'i node'un gerçek durumundan oku.
@@ -2188,13 +2211,23 @@ const IndividualObject = ({
             updates.endX = updates.x + (lEx - mIdx);
             updates.endY = updates.y + (lEy - mIdy);
           }
-          // Baş ölçeği = ok EKSENİNDEKİ uzunluk değişimi (yön bağımlı doğru hesap;
-          // max(|sx|,|sy|) yatay küçültmede scaleY=1'den dolayı 1 çıkıp başı donuk
-          // bırakıyordu — kullanıcı testinde yakalandı).
+          // Baş ölçeği (OK MOTORU): uzunluk değiştiyse baş UZUNLUKLA orantılı
+          // büyür/küçülür (ok formu korunur); uzunluk aynı kalmışsa (yalnızca
+          // dikey yönde esnetme) baş dik esnemeye göre boyutlanır — yoksa jest
+          // sırasında esneyen kanatlar bırakınca eski boyutuna döner.
           const adx = shapeProps.endX - shapeProps.startX;
           const ady = shapeProps.endY - shapeProps.startY;
           const oldLen = Math.hypot(adx, ady) || 1;
-          headScale = Math.hypot(adx * scaleX, ady * scaleY) / oldLen;
+          const axisLenRatio = Math.hypot(adx * scaleX, ady * scaleY) / oldLen;
+          const perpRatio = Math.hypot(-ady * scaleX, adx * scaleY) / oldLen;
+          headScale = Math.abs(axisLenRatio - 1) > 0.02 ? axisLenRatio : perpRatio;
+          // RAKAM OKLA BİRLİKTE (uç sürüklemeyle aynı kural): kutu tutamağıyla
+          // uzatma/kısaltmada etiket sayısı da uzunluk oranıyla güncellenir.
+          const newLen = Math.hypot(adx * scaleX, ady * scaleY);
+          const ndDistance = rescaleDistanceText(shapeProps.distance, oldLen, newLen);
+          if (ndDistance !== undefined && ndDistance !== shapeProps.distance) {
+            updates.distance = ndDistance;
+          }
         } else {
           // Kütüphaneden gelen oklar lokal x ekseninde yataydır → uzunluk scaleX ile ölçeklenir
           headScale = Math.abs(scaleX);
@@ -2590,6 +2623,7 @@ const IndividualObject = ({
           onSelect();
         }}
         onTransformStart={handleTransformStart}
+        onTransform={handleTransform}
         onTransformEnd={(e) => {
           handleTransformEnd();
           e.target.getLayer()?.batchDraw();
@@ -2764,69 +2798,14 @@ const IndividualObject = ({
                     draggable={false}
                   />
                 )}
-                {/* ═══ UÇ TUTAMAÇLARI (MESAFE OKU) ═══
-                    Kullanıcı isteği: "oku uzatınca formu bozuluyor; çevirdiğim ve
-                    bıraktığım yerde dursun". Kutu tutamaçları yerine okun UÇLARI
-                    sürüklenerek uzatılır/kısaltılır: çizgi + chevron uçlar uç
-                    koordinatlarından yeniden hesaplandığı için form HİÇBOZULMAZ;
-                    rakam (etiket) orta noktaya bağlı kaldığından okla birlikte
-                    taşınır ve uzunluk oranıyla güncellenir (rescaleDistanceText).
-                    Döndürülmüş grupta da çalışır (Konva çocuğu mutlak konumda
-                    sürükler, x()/y() yerel koordinat verir). */}
-                {isSelected && isMeasurement && hasCoords && (() => {
-                  const emitEndpoint = (isStart: boolean, lx: number, ly: number, live: boolean) => {
-                    const nsx = isStart ? (shapeProps.x || 0) + lx : shapeProps.startX;
-                    const nsy = isStart ? (shapeProps.y || 0) + ly : shapeProps.startY;
-                    const nex = isStart ? shapeProps.endX : (shapeProps.x || 0) + lx;
-                    const ney = isStart ? shapeProps.endY : (shapeProps.y || 0) + ly;
-                    const oldLen = Math.hypot(shapeProps.endX - shapeProps.startX, shapeProps.endY - shapeProps.startY);
-                    const newLen = Math.hypot(nex - nsx, ney - nsy);
-                    const updates: any = {
-                      startX: nsx,
-                      startY: nsy,
-                      endX: nex,
-                      endY: ney,
-                      width: Math.abs(nex - nsx),
-                      height: Math.abs(ney - nsy),
-                    };
-                    // RAKAM OKLA BİRLİKTE: uzunluk oranıyla etiket sayısını güncelle
-                    const nd = rescaleDistanceText(shapeProps.distance, oldLen, newLen);
-                    if (nd !== shapeProps.distance) updates.distance = nd;
-                    onChange({ ...shapeProps, ...updates }, live);
-                  };
-                  const mkHandle = (isStart: boolean) => {
-                    const hx = isStart ? pts[0] : pts[2];
-                    const hy = isStart ? pts[1] : pts[3];
-                    return (
-                      <Circle
-                        key={isStart ? 'ep-start' : 'ep-end'}
-                        x={hx}
-                        y={hy}
-                        radius={10}
-                        fill="rgba(245,197,24,0.18)"
-                        stroke="#F5C518"
-                        strokeWidth={1.5}
-                        draggable
-                        onDragMove={(e: any) => emitEndpoint(isStart, e.target.x(), e.target.y(), true)}
-                        onDragEnd={(e: any) => emitEndpoint(isStart, e.target.x(), e.target.y(), false)}
-                        onMouseEnter={(e: any) => {
-                          const stg = e.target.getStage?.();
-                          if (stg) stg.container().style.cursor = 'crosshair';
-                        }}
-                        onMouseLeave={(e: any) => {
-                          const stg = e.target.getStage?.();
-                          if (stg) stg.container().style.cursor = 'default';
-                        }}
-                      />
-                    );
-                  };
-                  return (
-                    <Group>
-                      {mkHandle(true)}
-                      {mkHandle(false)}
-                    </Group>
-                  );
-                })()}
+                {/* ═══ UÇ TUTAMAÇLARI (MESAFE OKU) — KALDIRILDI ═══
+                    Kullanıcı isteği: "a-4 mesafe okunun kenarlarında da tutamaç olsun,
+                    st-5 oku gibi hareket etsin". Ok artık Transformer KÖŞE + KENAR
+                    tutamaçlarıyla boyutlanır (st-5 yol yön okundaki gibi). Eski sarı uç
+                    daireleri middle-left/right tutamaçlarıyla AYNI noktaya düşünce
+                    birbirini kapatıyordu — uzatma artık tutamaçlardan, serbest yön için
+                    döndürme jesti kullanılır. Form koruması: handleTransform (canlı etiket
+                    koruması) + handleTransformEnd (temiz geometri yeniden yazımı). */}
               </Group>
             );
           })()
@@ -4632,6 +4611,7 @@ const IndividualObject = ({
 
             return (
               <Group 
+                ref={(n: any) => { labelRef.current = n; }}
                 x={autoGX + lo.dx} 
                 y={autoGY + lo.dy}
                 rotation={labelRotation}
@@ -4773,14 +4753,19 @@ const IndividualObject = ({
             !['arch-1', 'arch-1v'].includes(shapeProps.symbolId || '')
           }
           enabledAnchors={
-            // MESAFE OKU (a-4 / isDistanceArrow): köşe/kenar KUTU tutamaçları YOK.
-            // Kutu uzatması ok çizgisiyle çerçeve uyuşmazlığına, bırakınca formun
-            // kaymasına/bozulmasına yol açıyordu (kullanıcı raporu). Uzatma artık
-            // okun UÇ TUTAMAÇLARINDAN (sarı daireler) yapılır — form bozulmaz,
-            // rakam okla hareket eder. DÖNDÜRME JESTİ (rotater) serbest kalır:
-            // kullanıcı oku istediği açıda çevirir, bıraktığı yerde durur.
+            // MESAFE OKU (a-4 / isDistanceArrow): ARTIK KÖŞE + KENAR TUTAMAÇLI
+            // (kullanıcı isteği: "kenarlarında da tutamaç olsun, st-5 oku gibi hareket
+            // etsin, büyüyüp küçülünce formu bozulmasın"). middle-left/right UÇTAN
+            // UCA uzatır/kısaltır (karşı uç sabit), köşeler oku ORANTILI büyütür/
+            // küçültür. patchArrowInkBounds çerçeveyi çizgi kutusuna indirdiği için
+            // Konva delta matematiği birebir oturur; jest sonunda ok geometrisi
+            // TEMİZ yeniden yazılır (uçlar simetrik, ok başı orantılı, rakam punto
+            // korunur + sayı uzunluk oranıyla güncellenir — handleTransformEnd).
+            // NOT: top-center/bottom-center bilinçli olarak YOK — dar ok çerçevesinde
+            // (~18px) çizginin üzerine otururlar, oku taşımak isterken yanlışlıkla
+            // boyutlandırma tetiklenirdi.
             (shapeProps.isDistanceArrow || shapeProps.symbolId === 'a-4')
-              ? []
+              ? ['top-left', 'top-right', 'middle-left', 'middle-right', 'bottom-left', 'bottom-right']
               : // TÜM nesnelerde (metin kutuları dahil) köşe + kenar (orta) tutamaçları aktif
               // (kullanıcı isteği: tüm sembollerin çerçevesinde köşe ve kenar tutamaçları olsun).
               // Metinde punto tutamaçla değişmez: kutu boyutlanır, yazı aynı puntoyla yeniden sarılır.
