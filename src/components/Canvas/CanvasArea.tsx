@@ -1659,11 +1659,40 @@ export const drawExportObject = (ctx: CanvasRenderingContext2D, obj: any, img: H
   }
 };
 
+/** MUTLAK↔SAYFA UZAY DÖNÜŞÜMÜ — Transformer boundBoxFunc kutuyu SAHNE mutlak
+ *  piksel uzayında verir; sayfa sınırı (paperArea) ve grid/snap mantığı ise SAYFA
+ *  birimleriyledir. %100 zoom'da ikisi çakışır; SIĞDIR/zoom'da çakışmaz — eski kod
+ *  doğrudan kıyaslıyordu: %39 zoom'da sınır 2.56× geniş görünüyordu (dikey mesafe
+ *  oku sayfa sonunu aşıyordu), %100 üstünde aşırı kısılıyordu. Bu yardımcı, düğümün
+ *  ebeveyn mutlak transformunu (sayfa yerleşimi + stage zoom'u) kullanarak noktayı
+ *  iki yönlü çevirir. Sayfa grubu döndürülmediği için düzgün ölçek+kaydırma yeterlidir. */
+function makeAbsToPageMapper(node: any) {
+  const parent = node?.getParent?.();
+  if (!parent || typeof parent.getAbsoluteTransform !== 'function') return null;
+  let m: number[];
+  try { m = parent.getAbsoluteTransform().m; } catch { return null; }
+  // Konva matrisi: x' = m[0]·x + m[2]·y + m[4]; y' = m[1]·x + m[3]·y + m[5]
+  const kx = Math.abs(m[0]) || 1;
+  const ky = Math.abs(m[3]) || 1;
+  const ox = m[4], oy = m[5];
+  return {
+    kx,
+    ky,
+    toPage: (ax: number, ay: number) => ({ x: (ax - ox) / kx, y: (ay - oy) / ky }),
+    toAbs: (px: number, py: number) => ({ x: px * kx + ox, y: py * ky + oy }),
+  };
+}
+
 /** Döndürülmüş kutuyu sayfa sınırına göre orantılı kırpar (AABB taşma testi).
  *  Yerel kutunun 4 köşesi sayfa uzayına proje edilir; taşma varsa kutu orijin
  *  etrafında s oranıyla küçültülür. Döndürmemiş kutuda (0°) eski davranış birebir
  *  korunur (Sağ/Taşma = (P.w - x)/w). Manuel boyutlandırma motoru ile
- *  Transformer boundBoxFunc bu tek yardımcıyı paylaşır. */
+ *  Transformer boundBoxFunc bu tek yardımcıyı paylaşır.
+ *  KRİTİK: Taşma testi ORİJİNE GÖRE OFSETLERLE yapılır (maxX − x); dünya
+ *  koordinatı doğrudan kullanılmaz. Eski formül dünya koordinatını ofset sanıp
+ *  'P.w − x' ile kıyaslıyordu: kutu orijinin SOLUNDA/ÜSTÜNDE uzanıyorsa (dikey
+ *  mesafe oku rot=90 gibi) sağ/alt kenar hiç taşmadığı halde kutu küçültülüyor
+ *  ve nesne sayfa sonuna kadar uzatılamıyordu (kullanıcı raporu). */
 function clampRotatedDims(
   x: number, y: number, w: number, h: number,
   rotationDeg: number, P: { w: number; h: number }
@@ -1678,11 +1707,13 @@ function clampRotatedDims(
   const maxX = Math.max(...corners.map(c => c[0]));
   const minY = Math.min(...corners.map(c => c[1]));
   const maxY = Math.max(...corners.map(c => c[1]));
+  const offMaxX = maxX - x, offMinX = minX - x;
+  const offMaxY = maxY - y, offMinY = minY - y;
   let s = 1;
-  if (maxX > 0 && x < P.w && maxX > P.w - x) s = Math.min(s, (P.w - x) / maxX);
-  if (minX < 0 && x > 0 && -minX > x) s = Math.min(s, x / -minX);
-  if (maxY > 0 && y < P.h && maxY > P.h - y) s = Math.min(s, (P.h - y) / maxY);
-  if (minY < 0 && y > 0 && -minY > y) s = Math.min(s, y / -minY);
+  if (offMaxX > 0 && x + offMaxX > P.w) s = Math.min(s, (P.w - x) / offMaxX);
+  if (offMinX < 0 && x + offMinX < 0) s = Math.min(s, x / -offMinX);
+  if (offMaxY > 0 && y + offMaxY > P.h) s = Math.min(s, (P.h - y) / offMaxY);
+  if (offMinY < 0 && y + offMinY < 0) s = Math.min(s, y / -offMinY);
   if (s < 1) return { w: Math.max(5, w * s), h: Math.max(5, h * s) };
   return { w, h };
 }
@@ -1702,9 +1733,14 @@ function manualResizeStep(tr: any, mr: any, evt: any) {
   if (!pp) return;
   const dx = pp.x - mr.startPointer.x;
   const dy = pp.y - mr.startPointer.y;
-  // Sayfa deltasını nesnenin yerel eksenine döndür (rotasyonu geri al)
-  const ldx = dx * mr.cos + dy * mr.sin;
-  const ldy = -dx * mr.sin + dy * mr.cos;
+  // Sayfa deltasını nesnenin yerel eksenine döndür (rotasyonu geri al).
+  // ZOOM-DUYARLI: pointer deltası SAHNE pikselidir, node boyutu SAYFA birimidir —
+  // yakınlaştırma %100 dışındaysa (SIĞDIR vb.) ölçek oranına bölünmezse ok
+  // pointer'dan hızlı/yavaş uzar, sayfa sınırı yanlış yerde kelepçelenir.
+  const kx = mr.kx || 1;
+  const ky = mr.ky || 1;
+  const ldx = (dx * mr.cos + dy * mr.sin) / kx;
+  const ldy = (-dx * mr.sin + dy * mr.cos) / ky;
   const an: string = mr.anchorName || '';
   let w: number;
   let h: number;
@@ -1906,6 +1942,8 @@ const IndividualObject = ({
       isEdge: anchorName === 'middle-left' || anchorName === 'middle-right' ||
               anchorName === 'top-center' || anchorName === 'bottom-center',
       paper: paperArea || { w: 1000, h: 1400 },
+      // ZOOM-DUYARLI: pointer (sahne px) ↔ node (sayfa birimi) ölçek oranı
+      ...(makeAbsToPageMapper(node) || { kx: 1, ky: 1 }),
       // JEST İÇİ STORE COMMITİ: manuel motor node'a DOĞRUDAN yazar; React bir
       // sebeple yeniden render olursa applyNodeProps nesneyi ESKİ store değeriyle
       // ezer → sürükleme tabanı kayar, kutu küçülür (oklarda yakalanan hata).
@@ -2126,12 +2164,22 @@ const IndividualObject = ({
         scaleY: 1,
       });
     } else {
+      // OK + KENAR TUTAMAĞI = yalnızca UZUNLUK jesti: kalınlık (yükseklik) asla
+      // değişmez — sayfa sınırı kelepçesi jest sırasında kutuyu iki ekseni birden
+      // küçültse bile bırakınca form eski kalınlığına döner (kullanıcı isteği:
+      // uzatsın da formu bozulmasın).
+      const endAnchor = transformAnchorRef.current;
+      const endIsEdge = endAnchor === 'middle-left' || endAnchor === 'middle-right' ||
+                        endAnchor === 'top-center' || endAnchor === 'bottom-center';
+      const endIsArrow = shapeProps.isDistanceArrow || shapeProps.symbolId === 'a-4' || shapeProps.symbolId === 'a-5';
       const updates: any = {
         x: node.x(),
         y: node.y(),
         rotation: node.rotation(),
         width: Math.max(1, shapeProps.width * scaleX),
-        height: Math.max(1, shapeProps.height * scaleY),
+        height: (endIsArrow && endIsEdge)
+          ? Math.max(1, shapeProps.height)
+          : Math.max(1, shapeProps.height * scaleY),
       };
 
       // OTO ŞERİT GEÇİŞİ — görsel tabanlı sembol KENAR (orta) tutamağıyla belirgin
@@ -2463,8 +2511,13 @@ const IndividualObject = ({
         clipWidth={!shapeProps.isTemplate && !isSelected ? (paperArea?.w || 1000) : undefined}
         clipHeight={!shapeProps.isTemplate && !isSelected ? (paperArea?.h || 1400) : undefined}
         dragBoundFunc={(pos) => {
-          let newX = pos.x;
-          let newY = pos.y;
+          // ZOOM-DUYARLI UZAY: pos SAHNE mutlak piksellerindedir; grid/snap/sınır
+          // mantığı SAYFA birimleriyledir. Önce sayfa uzayına indir, işle, sonda
+          // mutlak uzaya geri taşı (SIĞDIR/zoomda sınır ve grid kaymıyordu artık).
+          const mapD = makeAbsToPageMapper(groupRef.current);
+          const inPage = mapD ? mapD.toPage(pos.x, pos.y) : { x: pos.x, y: pos.y };
+          let newX = inPage.x;
+          let newY = inPage.y;
 
           if (drawingArea && !shapeProps.isTemplate) {
             // Grid Snapping (20px) - Önce grid'e oturt
@@ -2614,7 +2667,9 @@ const IndividualObject = ({
             }
           }
           
-          return { x: newX, y: newY };
+          // Sayfa uzayında hesaplanan sınır/snap sonucunu mutlak uzaya geri taşı
+          const outD = mapD ? mapD.toAbs(newX, newY) : { x: newX, y: newY };
+          return { x: outD.x, y: outD.y };
         }}
         onClick={() => {
           onSelect();
@@ -4794,7 +4849,6 @@ const IndividualObject = ({
             if (Math.abs((newBox.rotation || 0) - (oldBox.rotation || 0)) > 0.001) {
               return newBox;
             }
-            
             // KÂĞIT SINIRI — DÖNDÜRME FARKINDALIKLI: Transformer kutusu nesnenin YEREL
             // çerçevesindedir; döndürülmüş nesnede bu çerçeve sayfa düzlemiyle çakışmaz.
             // Eski kod yerel kutuyu doğrudan P.w/P.h ile kıyaslıyordu: 90° döndürülmüş
@@ -4807,44 +4861,91 @@ const IndividualObject = ({
             // birebir korunur (orijin kenara çekilir, kenar sayfada kalır).
             if (!shapeProps.isTemplate) {
               const P = paperArea || { w: 1000, h: 1400 };
-              const rotNorm = ((newBox.rotation || 0) % 180 + 180) % 180;
+              // KONVA 10.2.5 BİRİM TUZAĞI: _getNodeRect() kutu rotasyonunu RADYAN döner
+              // (Transform iç ünitesi). Derece sanıp köşe projeksiyonu yapılırsa 90°'lik
+              // nesne ~1.57°'lik kutuyla projekte edilir — tüm döndürülmüş kelepçe
+              // matematiği (AABB, çeyrek dönüş) çöker. Önce dereceye normalize et.
+              const rotDegBox = (newBox.rotation || 0) * 180 / Math.PI;
+              // ZOOM-DUYARLI UZAY DÖNÜŞÜMÜ: newBox sahne mutlak piksellerindedir,
+              // sayfa sınırı (P) sayfa birimindedir. Kutuyu önce sayfa uzayına indir;
+              // kırpma oranı s birimsiz olduğundan doğrudan mutlak kutuya uygulanır.
+              const mapB = makeAbsToPageMapper(groupRef.current);
+              const kx = mapB ? mapB.kx : 1;
+              const ky = mapB ? mapB.ky : 1;
+              const bp = mapB ? mapB.toPage(newBox.x, newBox.y) : { x: newBox.x, y: newBox.y };
+              let bw = newBox.width / kx;
+              const bh = newBox.height / ky;
+              const rotNorm = ((rotDegBox % 180) + 180) % 180;
               const axisAligned = rotNorm < 0.5 || rotNorm > 179.5;
               if (axisAligned) {
-                if (newBox.x < 0) {
-                  newBox.width += newBox.x;
-                  newBox.x = 0;
-                }
-                if (newBox.y < 0) {
-                  newBox.height += newBox.y;
-                  newBox.y = 0;
-                }
-                if (newBox.x + newBox.width > P.w) {
-                  newBox.width = P.w - newBox.x;
-                }
-                if (newBox.y + newBox.height > P.h) {
-                  newBox.height = P.h - newBox.y;
-                }
+                // Eksen hizalı (0°/180°): origin kenara çekilir, kenar sayfada kalır
+                // (eski davranış birebir; yalnızca artık SAYFA uzayında).
+                let nx = bp.x, ny = bp.y, nw = bw, nh = bh;
+                if (nx < 0) { nw += nx; nx = 0; }
+                if (ny < 0) { nh += ny; ny = 0; }
+                if (nx + nw > P.w) nw = P.w - nx;
+                if (ny + nh > P.h) nh = P.h - ny;
+                const back = mapB ? mapB.toAbs(nx, ny) : { x: nx, y: ny };
+                newBox.x = back.x;
+                newBox.y = back.y;
+                newBox.width = nw * kx;
+                newBox.height = nh * ky;
               } else {
-                // Döndürülmüş: köşeleri sayfa uzayına projecte et, AABB taşmasını ölç
-                const rad = ((newBox.rotation || 0) * Math.PI) / 180;
+                // Döndürülmüş: köşeleri SAYFA uzayına projekte et, AABB taşmasını ölç.
+                const rad = (rotDegBox * Math.PI) / 180;
                 const cos = Math.cos(rad), sin = Math.sin(rad);
                 const corners = [
-                  [0, 0], [newBox.width, 0], [0, newBox.height], [newBox.width, newBox.height],
-                ].map(([lx, ly]) => [newBox.x + lx * cos - ly * sin, newBox.y + lx * sin + ly * cos]);
+                  [0, 0], [bw, 0], [0, bh], [bw, bh],
+                ].map(([lx, ly]) => [bp.x + lx * cos - ly * sin, bp.y + lx * sin + ly * cos]);
                 const minX = Math.min(...corners.map(c => c[0]));
                 const maxX = Math.max(...corners.map(c => c[0]));
                 const minY = Math.min(...corners.map(c => c[1]));
                 const maxY = Math.max(...corners.map(c => c[1]));
                 // Oran s ile kutu orijin etrafında küçülünce köşe ofsetleri de s ile ölçeklenir;
-                // her taşan kenar için izin veren en büyük s bulunur.
+                // her taşan kenar için izin veren en büyük s bulunur. KRİTİK: taşma testi
+                // ORİJİNE GÖRE OFSETLE (maxX − x) yapılır, dünya koordinatıyla DEĞİL — eski
+                // formül dünya koordinatını ofset sanıyordu: kutu orijinin solunda/üstünde
+                // uzanıyorsa (dikey mesafe oku rot=90 gibi) sağ/alt kenar taşmadığı halde
+                // kutu küçültülüyor, ok sayfa sonuna kadar uzatılamıyordu (kullanıcı raporu:
+                // a-4-dikey sayfa sonuna kadar uzamıyor).
+                const offMaxX = maxX - bp.x, offMinX = minX - bp.x;
+                const offMaxY = maxY - bp.y, offMinY = minY - bp.y;
+                // TAM ÇEYREK DÖNÜŞ (90/270): her dünya ekseni tam olarak TEK yerel eksene
+                // maplenir → taşan eksen TEK BAŞINA kırılır: uzunluk taşarsa yalnızca
+                // uzunluk kısalır (orijin sabit), kalınlık taşarsa orijin kayar (boyut
+                // değişmez). Eski uniform-s her iki ekseni birden küçültüyordu: uzatma
+                // sayfa dibine geldiğinde ok KALINLIĞI da kalıcı inceliyordu (kullanıcı
+                // raporu: formu bozulmasın).
+                const quarterTurn = Math.abs(Math.abs(sin) - 1) < 0.001;
+                if (quarterTurn) {
+                  if (sin > 0) {
+                    // rot 90: dünya Y = bp.y + yerel x (uzunluk); dünya X = bp.x − yerel y (kalınlık)
+                    if (bp.y + offMaxY > P.h) bw = Math.min(bw, Math.max(5, P.h - bp.y));
+                    if (bp.y < 0) bp.y = 0;
+                    if (bp.x - bh < 0) bp.x = bh;
+                    if (bp.x > P.w) bp.x = P.w;
+                  } else {
+                    // rot 270: dünya Y = bp.y − yerel x; dünya X = bp.x + yerel y
+                    if (bp.y - offMaxY < 0) bw = Math.min(bw, Math.max(5, bp.y));
+                    if (bp.y > P.h) bp.y = P.h;
+                    if (bp.x < 0) bp.x = 0;
+                    if (bp.x + bh > P.w) bp.x = P.w - bh;
+                  }
+                  const backQ = mapB ? mapB.toAbs(bp.x, bp.y) : { x: bp.x, y: bp.y };
+                  newBox.x = backQ.x;
+                  newBox.y = backQ.y;
+                  newBox.width = bw * kx;
+                  newBox.height = bh * ky;
+                } else {
                 let s = 1;
-                if (maxX > 0 && newBox.x < P.w && maxX > P.w - newBox.x) s = Math.min(s, (P.w - newBox.x) / maxX);
-                if (minX < 0 && newBox.x > 0 && -minX > newBox.x) s = Math.min(s, newBox.x / -minX);
-                if (maxY > 0 && newBox.y < P.h && maxY > P.h - newBox.y) s = Math.min(s, (P.h - newBox.y) / maxY);
-                if (minY < 0 && newBox.y > 0 && -minY > newBox.y) s = Math.min(s, newBox.y / -minY);
+                if (offMaxX > 0 && bp.x + offMaxX > P.w) s = Math.min(s, (P.w - bp.x) / offMaxX);
+                if (offMinX < 0 && bp.x + offMinX < 0) s = Math.min(s, bp.x / -offMinX);
+                if (offMaxY > 0 && bp.y + offMaxY > P.h) s = Math.min(s, (P.h - bp.y) / offMaxY);
+                if (offMinY < 0 && bp.y + offMinY < 0) s = Math.min(s, bp.y / -offMinY);
                 if (s < 1) {
                   newBox.width = Math.max(5, newBox.width * s);
                   newBox.height = Math.max(5, newBox.height * s);
+                }
                 }
               }
 
