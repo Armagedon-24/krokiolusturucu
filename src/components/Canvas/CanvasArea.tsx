@@ -6133,18 +6133,26 @@ export const CanvasArea: React.FC = () => {
             if (input) {
               const w = symbol.width || 100;
               const h = symbol.height || 100;
+              // DİKEY MESAFE OKU (a-4-dikey): sembolün başlangıç dönüşü korunur
+              // (rotation: 90). Konva origin üst-sol köşededir; 90° dönüşte görsel
+              // kutu (x-h, y)..(x, y+w) olur — bırakma noktasına GÖRSEL MERKEZİ
+              // otursun, yoksa ok imlecin yanına düşer.
+              const initRot = (symbol as any).rotation || 0;
+              const quarter = Math.abs(initRot) === 90 || Math.abs(initRot) === 270;
+              const px = quarter ? pos.x + h / 2 : pos.x - w / 2;
+              const py = quarter ? pos.y - w / 2 : pos.y - h / 2;
               addObject({
                 ...symbol,
                 symbolId: symbol.id,
                 categoryId: symbol.categoryId,
                 id: uuidv4(),
-                x: pos.x - w / 2,
-                y: pos.y - h / 2,
+                x: px,
+                y: py,
                 distance: input,
                 distanceColor: '#000000',
                 width: w,
                 height: h,
-                rotation: 0,
+                rotation: initRot,
                 scaleX: 1,
                 scaleY: 1
               });

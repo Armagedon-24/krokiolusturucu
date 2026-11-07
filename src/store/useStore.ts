@@ -635,9 +635,24 @@ export const useStore = create<StoreState>()(
           newObj.x = Math.round((newObj.x - drawingArea.x) / gridSize) * gridSize + drawingArea.x;
           newObj.y = Math.round((newObj.y - drawingArea.y) / gridSize) * gridSize + drawingArea.y;
 
-          // Katı sınır: sembol tam olarak çizim alanı içine yerleştir
-          newObj.x = Math.max(drawingArea.x, Math.min(newObj.x, drawingArea.x + drawingArea.width - w));
-          newObj.y = Math.max(drawingArea.y, Math.min(newObj.y, drawingArea.y + drawingArea.height - h));
+          // Katı sınır: sembol tam olarak çizim alanı içine yerleştir.
+          // 90°/270° döndürülmüş nesnelerde (dikey mesafe oku a-4-dikey) sınır
+          // GÖRSEL AABB'ye göre uygulanır — yatay w/h ile kıyaslanırsa dikey ok
+          // sayfa dışına taşar veya yanlış yere itilir.
+          //   rot  90: AABB (x-h, y)..(x, y+w)   rot 270: AABB (x, y-w)..(x+h, y)
+          const rotNorm = (((newObj.rotation || 0) % 360) + 360) % 360;
+          if (rotNorm === 90 || rotNorm === 270) {
+            let ax: number, ay: number;
+            if (rotNorm === 90) { ax = newObj.x - h; ay = newObj.y; }
+            else { ax = newObj.x; ay = newObj.y - w; }
+            ax = Math.max(drawingArea.x, Math.min(ax, drawingArea.x + drawingArea.width - h));
+            ay = Math.max(drawingArea.y, Math.min(ay, drawingArea.y + drawingArea.height - w));
+            newObj.x = rotNorm === 90 ? ax + h : ax;
+            newObj.y = rotNorm === 90 ? ay : ay + w;
+          } else {
+            newObj.x = Math.max(drawingArea.x, Math.min(newObj.x, drawingArea.x + drawingArea.width - w));
+            newObj.y = Math.max(drawingArea.y, Math.min(newObj.y, drawingArea.y + drawingArea.height - h));
+          }
         }
 
         set((state) => ({
@@ -701,6 +716,12 @@ export const useStore = create<StoreState>()(
             const cleanName = img.name || 'gorsel';
             const publicUrl = await cloud.upload(img.src, cleanName, img.category, get().adminPassword || '');
             finalSrc = publicUrl;
+            // Kullanıcı isteği: görsel buluta yüklendiğinde MESAJLA bildir
+            get().addNotification({
+              type: 'success',
+              message: 'Görsel Buluta Yüklendi',
+              description: `"${img.name || 'Görsel'}" bulut kütüphanesine başarıyla eklendi.`
+            });
           } catch (error: unknown) {
             console.error('Bulut yükleme hatası:', error);
             get().addNotification({
@@ -1422,6 +1443,12 @@ export const useStore = create<StoreState>()(
           );
           
           if (!silent) {
+            // Kullanıcı isteği: YÜKLE olumlu sonuçlandığında MESAJLA bildir
+            get().addNotification({
+              type: 'success',
+              message: 'Buluta Yüklendi',
+              description: `Tüm veriler buluta başarıyla yedeklendi (${objects.length} nesne, ${finalArchiveToSync.length} sayfa, ${cleanUploads.length} görsel).`
+            });
           }
           // Bulut artık güncel: yerel yerleşim damgasıyla aynı tazelikte.
           // Bundan sonra çakışmada bulut yerleşimi öncelik kazanır.
@@ -1463,6 +1490,12 @@ export const useStore = create<StoreState>()(
           
           if (!data) {
             if (!silent) {
+              // Manuel İNDİR'de bulut boşsa kullanıcıyı boşta bırakma
+              get().addNotification({
+                type: 'warning',
+                message: 'Bulutta Kayıt Bulunamadı',
+                description: 'Bulutta henüz kayıtlı yedek yok. Önce YÜKLE ile verilerinizi buluta gönderin.'
+              });
             }
             return false;
           }
@@ -1629,6 +1662,15 @@ export const useStore = create<StoreState>()(
           set({ allSymbolsSyncedAt: Date.now() });
 
           if (!silent) {
+            // Kullanıcı isteği: İNDİR olumlu sonuçlandığında MESAJLA bildir
+            const restoredPages = (updates.scenes || []).length;
+            const restoredObjects = (updates.objects || get().objects || []).length;
+            const restoredImages = (updates.uploadedImages || get().uploadedImages || []).length;
+            get().addNotification({
+              type: 'success',
+              message: 'Buluttan İndirildi',
+              description: `Bulut yedeği başarıyla uygulandı (${restoredPages} sayfa, ${restoredObjects} nesne, ${restoredImages} görsel).`
+            });
           }
           
           return true;

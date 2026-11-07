@@ -399,6 +399,12 @@ export const SYMBOL_CATEGORIES = [
     symbols: [
       { id: 'a-4', name: 'Mesafe Oku', src: '/assets/symbols/distance_arrow.svg',
         thumbnail: '/assets/symbols/karakalem/distance_arrow.png', type: 'symbol', isDistanceArrow: true, width: 150, height: 40, stroke: '#000000', fill: '#000000' },
+      { id: 'a-4-dikey', name: 'Mesafe Oku (Dikey)', src: '/assets/symbols/distance_arrow.svg',
+        thumbnail: '/assets/symbols/karakalem/distance_arrow_vertical.png', type: 'symbol', isDistanceArrow: true, width: 150, height: 40, stroke: '#000000', fill: '#000000',
+        // DİKEY VARYANT: motor oku yerel eksende YATAY çizer; dikeylik 90° başlangıç
+        // dönüşüdür. Böylece a-4'ün TÜM motoru (köşe+kenar tutamaçlar, uçtan uca
+        // uzatma, rakam okla birlikte, form koruması) birebir aynı şekilde çalışır.
+        rotation: 90 },
       { id: 'a-5', name: 'Ok', src: '/assets/symbols/arrow_single.svg',
         thumbnail: '/assets/symbols/karakalem/arrow_single.png', type: 'symbol', width: 150, height: 40 },
       { id: 'st-5', name: 'Yol Yön Oku (Düz)', src: '/assets/symbols/road_arrow_up.svg',
