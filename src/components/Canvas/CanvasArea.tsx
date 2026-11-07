@@ -289,8 +289,10 @@ function patchArrowInkBounds(g: any, propsRef: { current: any }) {
     const p = propsRef.current || {};
     const isNative = p.isDistanceArrow || p.symbolId === 'a-4' || p.symbolId === 'a-5';
     if (!isNative) return g.__origGetClientRect.call(g, config);
-    const isMeasurement = p.isDistanceArrow || p.symbolId === 'a-4';
-    const sw = isMeasurement ? 5 : (p.strokeWidth || 5);
+    // KALINLIK SÜRGÜSÜ (kullanıcı isteği): düzenleme kartındaki OK KALINLIĞI
+    // strokeWidth'ı yazar; ölçüm oku dahil TÜM oklar okur (önce ölçüm okunda
+    // 5'e sabitleniyordu — sürgü oynarken hiçbir şey değişmiyordu).
+    const sw = p.strokeWidth || 5;
     const head = p.arrowHead || ARROW_HEAD_DEFAULT;
     // Ok başı kanatları çizgiye dik yönde head·sin(spread) taşar
     const lateral = sw / 2 + head * Math.sin(ARROW_CHEVRON_SPREAD) + 1;
@@ -1278,7 +1280,8 @@ export const drawExportObject = (ctx: CanvasRenderingContext2D, obj: any, img: H
     const isMeasurement = obj.isDistanceArrow || symbolId === 'a-4';
     ctx.strokeStyle = isMeasurement ? '#000000' : (obj.fill || obj.stroke || '#000000');
     ctx.fillStyle = ctx.strokeStyle;
-    ctx.lineWidth = isMeasurement ? 5 : (obj.strokeWidth || 5);
+    // KALINLIK SÜRGÜSÜ: ölçüm oku da strokeWidth okur (ekranla birebir).
+    ctx.lineWidth = obj.strokeWidth || 5;
     ctx.lineCap = 'round';
     ctx.beginPath(); ctx.moveTo(pts[0], pts[1]); ctx.lineTo(pts[2], pts[3]); ctx.stroke();
     ctx.lineJoin = 'round';
@@ -2811,7 +2814,10 @@ const IndividualObject = ({
 
             const headLen = shapeProps.arrowHead || ARROW_HEAD_DEFAULT;
             const arrowColor = isMeasurement ? '#000000' : (shapeProps.stroke || shapeProps.fill || '#000000');
-            const arrowWidth = isMeasurement ? 5 : (shapeProps.strokeWidth || 5);
+            // KALINLIK SÜRGÜSÜ (kullanıcı isteği): isMeasurement sabiti kaldırıldı —
+            // ölçüm okunda strokeWidth 5'e zorlanıyordu, sürgü ölüydü. Artık tüm
+            // oklar strokeWidth okur (eski kayıtlarda alan yoksa || 5 aynı görünüm).
+            const arrowWidth = shapeProps.strokeWidth || 5;
             return (
               <Group>
                 {/* Gövde çizgisi — strokeScaleEnabled=false: jest sırasında node
@@ -4981,6 +4987,51 @@ const ToolbarField = ({ label, accent, children }: { label: string; accent?: str
     {children}
   </label>
 );
+
+/** OK UZUNLUK ALANI (kullanıcı isteği: "ok sembollerinin düzenleme kartlarında
+ *  uzunluklarını girebileceğim bir alan olsun"). Uzunluk KALİBRE BİRİMLE (cm/m —
+ *  ScaleCalibration) girilir, sayfa pikseline çevrilip uygulanır. Kontrollü
+ *  inputta her tuşvuruşunda okun kısalıp uzamasını önlemek için yazılan değer
+ *  yerel taslakta tutulur; Enter/odak kaybında uygulanır, Esc iptal eder.
+ *  Mevcut uzunluk: koordinatlı okta uç vektörü, kütüphane okunda width. */
+const ArrowLengthField = ({ obj, pxPerUnit, unit, onApply }: {
+  obj: any;
+  pxPerUnit: number; // 1 gerçek birim = kaç sayfa pikseli
+  unit: string;
+  onApply: (newLenPx: number) => void;
+}) => {
+  const [draft, setDraft] = useState<string | null>(null);
+  const curPx = obj.startX !== undefined && obj.endX !== undefined
+    ? Math.hypot(obj.endX - obj.startX, obj.endY - obj.startY)
+    : Math.abs((obj.width || 0) * Math.abs(obj.scaleX || 1));
+  const curReal = Math.round((curPx / (pxPerUnit || 1)) * 10) / 10;
+  const shown = draft !== null ? draft : String(curReal);
+  const commit = () => {
+    if (draft === null) return;
+    const v = parseFloat(draft.replace(',', '.'));
+    setDraft(null);
+    if (!isFinite(v) || v <= 0) return;
+    // 10px alt sınır: ok başı görünür kalsın; üst sınır patolojik girişlere karşı.
+    onApply(Math.max(10, Math.min(50000, v * (pxPerUnit || 1))));
+  };
+  return (
+    <input
+      type="number"
+      step="0.1"
+      min="1"
+      value={shown}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        e.stopPropagation();
+        if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+        if (e.key === 'Escape') setDraft(null);
+      }}
+      className="w-full bg-[#111] border border-[#333] rounded-md px-1 py-1.5 text-[10px] text-gray-200 text-center outline-none focus:border-[#F5C518]/50"
+      title={`Okun sayfadaki uzunluğu (${unit} cinsinden) — Enter ile uygulanır`}
+    />
+  );
+};
 
 const ChipToggle = ({ id, label, checked, onChange, activeClass = 'border-purple-500/50 bg-purple-500/10 text-purple-300' }: {
   id: string; label: string; checked: boolean; onChange: (e: React.ChangeEvent<HTMLInputElement>) => void; activeClass?: string;
@@ -8124,13 +8175,91 @@ export const CanvasArea: React.FC = () => {
                     </ToolbarSection>
                   )}
 
+                  {/* OK BOYUTU (kullanıcı isteği): okun UZUNLUĞU klavyeden kalibre
+                      birimle (cm/m) girilir; OK BAŞI (chevron kanat boyu) sürgüyle
+                      ayarlanır. a-4/a-4-dikey/a-5 ok motoru ailesi. */}
+                  {(selectedObj.isDistanceArrow || ['a-4', 'a-5'].includes(selectedObj.symbolId || '')) && (
+                    <ToolbarSection title="OK BOYUTU" color="#fb923c">
+                      <ToolbarField label={`UZUNLUK (${scaleCalibration.unit})`} accent="#fb923c">
+                        <ArrowLengthField
+                          obj={selectedObj}
+                          pxPerUnit={scaleCalibration.realDistance > 0 ? scaleCalibration.pixelDistance / scaleCalibration.realDistance : 1}
+                          unit={scaleCalibration.unit}
+                          onApply={(newLenPx) => {
+                            const o = selectedObj;
+                            const sx0 = o.startX, sy0 = o.startY, ex0 = o.endX, ey0 = o.endY;
+                            const isCoord = sx0 !== undefined && sy0 !== undefined && ex0 !== undefined && ey0 !== undefined;
+                            const curLen = isCoord
+                              ? Math.hypot(ex0! - sx0!, ey0! - sy0!)
+                              : Math.abs(o.width || 0) * Math.abs(o.scaleX || 1);
+                            if (!(curLen > 0) || !(newLenPx > 0) || Math.abs(newLenPx - curLen) < 0.5) return;
+                            const ratio = newLenPx / curLen;
+                            const upd: any = {};
+                            if (isCoord) {
+                              // YEREL UZAYDA UZATMA (90° düzeltmesi): koordinatlar
+                              // 'origin + yerel vektör' olarak saklanır — rotasyonu
+                              // GRUP taşır. Başlangıç ucunun yerel vektörü sabit
+                              // kalır, uç yerel çizgi ekseninde yeni uzunluğa taşınır;
+                              // origin (x/y) ve rotation HİÇ dokunulmaz. Böylece
+                              // döndürülmüş okta (a-4-dikey, rot=90) ok görsel
+                              // yerinde KENDİ yönünde uzar — eski dünya-orta-nokta
+                              // matematiği origin'i kaydırıp oku yana atlıyordu.
+                              const lsx = sx0! - o.x, lsy = sy0! - o.y;
+                              const lex = ex0! - o.x, ley = ey0! - o.y;
+                              const ux = (lex - lsx) / curLen, uy = (ley - lsy) / curLen;
+                              upd.endX = o.x + lsx + ux * newLenPx;
+                              upd.endY = o.y + lsy + uy * newLenPx;
+                              upd.width = newLenPx; // yerel kutu = çizgi uzunluğu
+                            } else {
+                              // Kütüphane oku (drop ile gelen a-4/a-4-dikey/a-5): çizgi
+                              // yerel x ekseninde (0..w); origin (başlangıç ucu) sabit,
+                              // ok +x yönünde uzar. Döndürülmüş okta (a-4-dikey, rot=90)
+                              // yerel +x görsel aşağıdır → aşağı doğru uzar.
+                              upd.width = newLenPx;
+                            }
+                            // FORM KORUMA: uzunluk oranıyla ok başı da ölçeklenir
+                            // (tutamaç jestiyle aynı kural — ARROW_HEAD_MIN/MAX kelepçeli).
+                            const baseHead = o.arrowHead || ARROW_HEAD_DEFAULT;
+                            upd.arrowHead = Math.min(ARROW_HEAD_MAX, Math.max(ARROW_HEAD_MIN, baseHead * ratio));
+                            // RAKAM OKLA BİRLİKTE: uç sürükleme kuralının aynısı —
+                            // etiket sayısı uzunluk oranıyla güncellenir.
+                            const nd = rescaleDistanceText(o.distance, curLen, newLenPx);
+                            if (nd !== undefined && nd !== o.distance) upd.distance = nd;
+                            updateObject(selectedId, upd);
+                            saveHistory();
+                          }}
+                        />
+                      </ToolbarField>
+                      {/* OK BAŞI SÜRGÜSÜ (kullanıcı isteği: "ok başlıklarının
+                          büyüklüğünü ayarlayan sürgü çalışsın"): chevron kanat boyu
+                          (arrowHead) 5..120 px. Yazarken geçmiş kirlenmesin: değişiklik
+                          skipHistory, bırakınca tek kayıt. */}
+                      <div className="flex items-center gap-2 mt-2">
+                        <span className="text-[8px] font-black text-[#fb923c] uppercase shrink-0">OK BAŞI</span>
+                        <input
+                          type="range"
+                          min={ARROW_HEAD_MIN}
+                          max={ARROW_HEAD_MAX}
+                          step="1"
+                          value={selectedObj.arrowHead || ARROW_HEAD_DEFAULT}
+                          onChange={(e) => updateObject(selectedId, { arrowHead: parseInt(e.target.value) }, true)}
+                          onPointerUp={() => saveHistory()}
+                          onKeyUp={() => saveHistory()}
+                          onBlur={() => saveHistory()}
+                          className="flex-1 h-1 rounded-lg appearance-none bg-[#333] cursor-pointer accent-[#fb923c]"
+                        />
+                        <span className="text-[9px] font-bold text-gray-400 w-5 text-right">{Math.round(selectedObj.arrowHead || ARROW_HEAD_DEFAULT)}</span>
+                      </div>
+                    </ToolbarSection>
+                  )}
+
                   {/* Group 5: Arrows Specifics */}
-                  {(selectedObj.isDistanceArrow || selectedObj.symbolId?.startsWith('a-5')) && (
+                  {(selectedObj.isDistanceArrow || ['a-4', 'a-5'].includes(selectedObj.symbolId || '')) && (
                     <ToolbarSection title="OK KALINLIĞI" color="#F5C518">
                       <input
                         type="range"
                         min="1" max="15"
-                        value={selectedObj.strokeWidth || 4}
+                        value={selectedObj.strokeWidth || 5}
                         onChange={(e) => updateObject(selectedId, { strokeWidth: parseInt(e.target.value) })}
                         className="w-full h-1 rounded-lg appearance-none bg-[#333] cursor-pointer accent-[#F5C518]"
                       />
