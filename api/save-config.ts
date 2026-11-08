@@ -32,6 +32,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'Config verisi eksik.' });
     }
 
+    // SUNUCU YAZIM DAMGASI (_revAt): bayatlık kontrolü istemci saatine değil SUNUCU
+    // saatine göre yapılır. İstemciler (farklı cihazlar) saat kayması taşıyabildiği
+    // için timestamp alanı yeterli değildi; _revAt her kayıtta sunucu tarafından
+    // yazılır ve tek gerçek kaynak olur. İstemci cloudRevAt ile karşılaştırarak
+    // CDN'in döndürdüğü bayat kopyayı REDDEDER (kategori kayması düzeltmesi).
+    const revAt = Date.now();
+    (config as { _revAt?: number })._revAt = revAt;
+
     const timestamp = Math.round(new Date().getTime() / 1000);
     const publicId = 'kroki_config_v2';
 
@@ -70,6 +78,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       secure_url: d.secure_url,
       bytes: d.bytes,
       timestamp: timestamp * 1000,
+      // Sunucu yazım damgası: istemci cloudRevAt'i bununla günceller
+      _revAt: revAt,
     });
   } catch (error: unknown) {
     console.error('Config Save Error:', error);

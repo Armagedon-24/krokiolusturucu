@@ -176,17 +176,32 @@ export const cloudinary = {
   },
 
   // Verileri geri yükle
-  load: async (): Promise<any> => {
+  load: async (authToken?: string): Promise<any> => {
     // Zaman aşımı: CDN yanıtsız kalırsa uygulama açılışı sonsuza dek spinner'da kalmasın
     const fetchWithTimeout = (url: string, ms = 12000): Promise<Response> => {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), ms);
       return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(timer));
     };
+    // 1) YETKİLİ YOL (tercih edilen): /api/load-config, Cloudinary Admin API üzerinden
+    //    kaydın SÜRÜMLÜ adresini alır ve içeriği sunucu tarafında çeker. Sürümlü URL
+    //    önbellek anahtarı benzersiz olduğu için invalidate=true gecikmesinden ETKİLENMEZ —
+    //    bayat kopya riski kalmaz. Yetki yoksa / API yoksa (electron) CDN'e düşer.
+    if (authToken) {
+      try {
+        const apiRes = await fetchWithTimeout('/api/load-config');
+        if (apiRes.ok) {
+          const apiData = await apiRes.json();
+          if (apiData && apiData.config) return apiData.config;
+        }
+      } catch {
+        // Aşağıdaki CDN yollarına düş
+      }
+    }
     try {
       // Hem .json uzantılı hem uzantısız deniyoruz (Cloudinary raw dosyaları bazen otomatik uzantı ekler)
       // Not: '?v=' sorgusu Cloudinary CDN önbellek anahtarına dahil DEĞİLDİR; gerçek tazelik
-      // invalidate=true ile sağlanır. Bayat kopyalara karşı store tarafında timestamp kontrolü var.
+      // store tarafındaki _revAt/timestamp kontrolü ile sağlanır.
       const urls = [
         `https://res.cloudinary.com/${CLOUD_NAME}/raw/upload/kroki_config_v2`,
         `https://res.cloudinary.com/${CLOUD_NAME}/raw/upload/kroki_config_v2.json`

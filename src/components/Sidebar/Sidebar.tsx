@@ -107,7 +107,9 @@ export const Sidebar: React.FC = () => {
   } = useStore();
 
   useEffect(() => {
-    refreshSymbols();
+    // Panel mount: açılış normalizasyonu — kalıcı yerleşim haritasını temel al
+    // (trustLocalPlacements) ki semboller her açılışta varsayılan kategorilere kaymasın.
+    refreshSymbols({ trustLocalPlacements: true });
   }, [refreshSymbols]);
 
   const [draggedItem, setDraggedItem] = useState<{ id: string, catId: string, isUpload?: boolean } | null>(null);

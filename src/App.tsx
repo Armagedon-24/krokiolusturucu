@@ -25,7 +25,10 @@ function App() {
   useEffect(() => {
     const init = async () => {
       try {
-        refreshSymbols();
+        // KRİTİK (kategori kayması düzeltmesi): açılışta kütüphane hardcoded varsayılanlara
+        // sıfırlanır. Kalıcı yerleşim haritası temel alınmazsa, bulut yanıtı gelmeden/bayat
+        // kopya reddedilince semboller HER yenilemede eski (varsayılan) kategorilerine kayardı.
+        refreshSymbols({ trustLocalPlacements: true });
         // Always restore cloud symbols/settings, but start with a blank canvas.
         // Sessiz mod: her sayfa açılışında "Geri Yükleme Başarılı" bildirimi basılmasın.
         await restoreFromCloud(true);

@@ -84,6 +84,10 @@ interface StoreState extends CanvasState {
   /** allSymbols'ın bulutla son eşleşme zamanı — bulutla başarılı senkron/geri yüklemede güncellenir.
    *  savedAt > allSymbolsSyncedAt ise yerel yerleşim buluttan daha tazedir ve öncelik kazanır. */
   allSymbolsSyncedAt: number;
+  /** Bulut kopyasının sunucu tarafı yazım damgası (save-config'in _revAt'ı — sunucu saati).
+   *  CDN önbelleği bayat bir kopya döndürüyorsa (revAt < cloudRevAt) geri yükleme REDDEDİLİR;
+   *  böylece İNDİR/YÜKLE sırasında adminin belirlediği kategori düzeni asla geriye sarılmaz. */
+  cloudRevAt: number;
   isAdmin: boolean;
   setIsAdmin: (isAdmin: boolean, password?: string) => void;
   syncToCloud: (silent?: boolean) => void;
@@ -103,7 +107,10 @@ interface StoreState extends CanvasState {
     deletedSceneIds?: string[];
   };
   updateAdminSettings: (settings: Partial<{ logoConfig?: { x: number; y: number; width: number; height: number; rotation: number; scaleX: number; scaleY: number }; hiddenSymbolIds?: string[]; deletedAssetIds?: string[]; deletedSceneIds?: string[] }>) => void;
-  refreshSymbols: () => void;
+  /** Sembol kütüphanesini (hardcoded + bulut + yerel yerleşim haritası) normalize eder.
+   *  trustLocalPlacements: açılışta henüz bulut verisi yokken localStorage'daki kalıcı
+   *  kategori düzenini temel al (hardcoded varsayılanlara ASLA geri dönme). */
+  refreshSymbols: (opts?: { trustLocalPlacements?: boolean }) => void;
   global3DDefaults: Record<string, { height: number, wallThickness?: number, textures?: Record<string, string> }>;
   updateGlobal3DDefault: (symbolId: string, data: { height: number, wallThickness?: number, textures?: Record<string, string> }) => void;
 
@@ -337,15 +344,18 @@ const sanitizeConfigForSync = async (config: any, authToken: string) => {
 
 // Bulut adminSettings önbelleği (60 sn) — her senkronda tam config indirmeyi önler
 let _cloudAdminCache: { at: number; admin: any } | null = null;
-const fetchCloudAdminSettings = async (): Promise<any> => {
+const fetchCloudAdminSettings = async (authToken?: string): Promise<any> => {
   if (_cloudAdminCache && Date.now() - _cloudAdminCache.at < 60000) {
     return _cloudAdminCache.admin;
   }
-  const data = await cloud.load();
+  const data = await cloud.load(authToken);
   const admin = data?.projectState?.adminSettings || {};
   _cloudAdminCache = { at: Date.now(), admin };
   return admin;
 };
+
+// Sessiz senkron hataları için kısılmış uyarı (spam engelleme)
+let _lastSilentSyncWarn = 0;
 
 export const useStore = create<StoreState>()(
   persist(
@@ -355,6 +365,7 @@ export const useStore = create<StoreState>()(
       symbolPlacements: { savedAt: 0, cats: {} },
       _placementsSavedAt: 0,
       allSymbolsSyncedAt: 0,
+      cloudRevAt: 0,
       uploadedImages: [],
       backgroundImage: null,
       backgroundOpacity: 1,
@@ -809,6 +820,15 @@ export const useStore = create<StoreState>()(
       },
 
       updateUploadedImage: (id, category, group, name) => {
+        // Gerçekten bir değişiklik var mı? (yoksa gereksiz senkron/damga tetiklenmesin)
+        const current = get().uploadedImages.find(img => img.id === id);
+        if (!current) return;
+        const changed =
+          (category !== undefined && category !== current.category) ||
+          (group !== undefined && (group || '') !== (current.group || '')) ||
+          (name !== undefined && name !== current.name);
+        if (!changed) return;
+
         set((state) => ({
           uploadedImages: state.uploadedImages.map((img) =>
             img.id === id ? { 
@@ -817,7 +837,12 @@ export const useStore = create<StoreState>()(
               group: group !== undefined ? group : img.group,
               name: name !== undefined ? name : img.name
             } : img
-          )
+          ),
+          // KRİTİK (kategori kayması düzeltmesi): Yüklenen görselin kategori/grup/isim
+          // değişikliği de bir YERLEŞİM değişikliğidir. Tazelik damgası yükseltilmezse
+          // restoreFromCloud 'yerel bayat' sanıp buluttaki ESKİ kategoriyi geri yazar
+          // ve kullanıcının taşıdığı görsel eski kategorisine geri kayardı.
+          _placementsSavedAt: Date.now(),
         }));
         if (get().isAdmin) {
           get().syncToCloud(true);
@@ -1368,7 +1393,7 @@ export const useStore = create<StoreState>()(
           // kaydedilirse buluttaki silme kayıtları silinir ve silinen SVG görseller geri gelir.
           let adminSettings = get().adminSettings;
           try {
-            const cloudAdmin = await fetchCloudAdminSettings();
+            const cloudAdmin = await fetchCloudAdminSettings(get().adminPassword || '');
             adminSettings = {
               ...adminSettings,
               hiddenSymbolIds: Array.from(new Set([...(adminSettings.hiddenSymbolIds || []), ...(cloudAdmin.hiddenSymbolIds || [])])),
@@ -1432,7 +1457,7 @@ export const useStore = create<StoreState>()(
           }
           configPayload.uploadedImages = (configPayload.uploadedImages || []).filter((img: any) => img.src);
 
-          await cloud.save(
+          const saveRes = await cloud.save(
             configPayload.uploadedImages,
             configPayload.allSymbols,
             configPayload.projectState,
@@ -1452,7 +1477,12 @@ export const useStore = create<StoreState>()(
           }
           // Bulut artık güncel: yerel yerleşim damgasıyla aynı tazelikte.
           // Bundan sonra çakışmada bulut yerleşimi öncelik kazanır.
-          set({ allSymbolsSyncedAt: Date.now() });
+          // cloudRevAt: sunucu tarafı yazım damgası (_revAt) — bayat CDN kopyalarına karşı
+          // kullanılır. Sunucu damgası yoksa (eski API) mevcut değer korunur.
+          set({
+            allSymbolsSyncedAt: Date.now(),
+            cloudRevAt: Number((saveRes as any)?._revAt || 0) || get().cloudRevAt || 0,
+          });
         } catch (error: unknown) {
           console.error('Sync Error:', error);
           if (!silent) {
@@ -1462,6 +1492,18 @@ export const useStore = create<StoreState>()(
               message: 'Bulut Senkronizasyon Hatası',
               description: errMsg ? `Veriler buluta aktarılamadı: ${errMsg}` : 'Veriler buluta aktarılamadı.'
             });
+          } else if (get().isAdmin) {
+            // Sessiz (otomatik) senkron başarısız: kullanıcıya YERELDE güvende olduğunu,
+            // ancak bulutun eski kaldığını bildir (45 sn'de en fazla bir kez).
+            const now = Date.now();
+            if (now - _lastSilentSyncWarn > 45000) {
+              _lastSilentSyncWarn = now;
+              get().addNotification({
+                type: 'warning',
+                message: 'Bulut Güncellenemedi',
+                description: 'Son değişiklikler bu cihaza kaydedildi; buluta yazma başarısız oldu. Bağlantı sağlandığında YÜKLE ile tekrar deneyin — kategori düzeniniz yerelde güvende.'
+              });
+            }
           }
         } finally {
           _syncBusy = false;
@@ -1486,7 +1528,7 @@ export const useStore = create<StoreState>()(
           return false;
         }
         try {
-          const data = await cloud.load();
+          const data = await cloud.load(get().adminPassword || '');
           
           if (!data) {
             if (!silent) {
@@ -1510,26 +1552,38 @@ export const useStore = create<StoreState>()(
             deletedSceneIds: Array.from(new Set([...(get().adminSettings.deletedSceneIds || []), ...(cloudAdminSettings.deletedSceneIds || [])])),
           };
 
-          // BAYAT YAPILANDIRMA KORUMASI: Cloud.save her kayıtta timestamp yazar.
-          // Bulut ts, bu cihazın son başarılı senkronundan daha ESKİ ise büyük olasılıkla
-          // Cloudinary CDN'inin önbelleklenmiş (bayat) kopyası okunuyor demektir —
-          // yeni veriyi ezmesin. Otomatik (sessiz) açılışta uygulanmaz; manuel İNDİR'de
-          // kullanıcı uyarılır ve yine de uygulanır.
+          // BAYAT YAPILANDIRMA KORUMASI (kategori kaymasının ana kök nedenlerinden biri):
+          // Cloudinary CDN'i invalidate=true komutuna rağmen dakikalarca/hatta saatlerce ESKİ
+          // kopyayı servis edebilir. Bayat kopya uygulanırsa adminin son taşıdığı kategoriler
+          // geriye sarılır ve silinen semboller dirilir. İki bağımsız kontrol:
+          //  1) _revAt (tercih edilen): save-config'in yazdığı SUNUCU saati damgası — saat
+          //     kayması ve cihaz farkı sorununa tamamen bağışıklıdır. cloudRevAt (bu cihazın
+          //     son başarılı yazımı) bulut damgasından YENİyse kopya bayattır → UYGulanmaz.
+          //  2) timestamp (eski kayıtlar için yedek): istemci saati, 60 sn tolerans.
+          // Bayat kopya hem sessiz açılışta hem MANUEL İNDİR'de reddedilir — İNDİR asla
+          // kullanıcının daha yeni yerel düzenini ezmez.
           const cloudTs = Number(data.timestamp || 0);
+          const cloudRevAt = Number(data._revAt || 0);
+          const localRevAt = Number(get().cloudRevAt || 0);
           const localSyncedAt = get().allSymbolsSyncedAt || 0;
-          if (cloudTs > 0 && localSyncedAt > 0 && cloudTs < localSyncedAt - 60000) {
-            console.warn('Bulut yapılandırması bayat görünüyor (CDN önbelleği):', { cloudTs, localSyncedAt });
-            if (silent) {
-              return false;
+          const staleByRev = cloudRevAt > 0 && localRevAt > 0 && cloudRevAt < localRevAt - 1000; // 1sn tolerans
+          const staleByTs = cloudRevAt === 0 && cloudTs > 0 && localSyncedAt > 0 && cloudTs < localSyncedAt - 60000;
+          if (staleByRev || staleByTs) {
+            console.warn('Bulut yapılandırması bayat görünüyor (CDN önbelleği):', { cloudRevAt, localRevAt, cloudTs, localSyncedAt });
+            if (!silent) {
+              get().addNotification({
+                type: 'warning',
+                message: 'Bayat Bulut Verisi',
+                description: 'Buluttan gelen kopya, son YÜKLEmenizden daha eski (CDN önbelleği). Yerel kategori düzeniniz korundu — bulut güncellenene kadar birkaç dakika sonra tekrar deneyin.'
+              });
             }
-            get().addNotification({
-              type: 'warning',
-              message: 'Bayat Bulut Verisi',
-              description: 'Buluttan gelen yedek, son senkronunuzdan daha eski görünüyor (CDN önbelleği). Birkaç dakika sonra tekrar İNDİR demeyi deneyin. Veri yine de uygulanıyor.'
-            });
+            return false;
           }
           if (data.uploadedImages && Array.isArray(data.uploadedImages)) {
-            const blacklist = new Set(mergedAdminSettings.deletedAssetIds);
+            const blacklist = new Set([
+              ...(mergedAdminSettings.deletedAssetIds || []),
+              ...(mergedAdminSettings.hiddenSymbolIds || []),
+            ]);
             // TAM mezarlık filtresi: removeUploadedImage 4 anahtar yazar (id, public_id,
             // ham src, name:<küçük harf>). Yalnızca id filtresi, bulut kaydı farklı id
             // taşıdığında silinmiş görselin İNDİR ile geri gelmesine izin veriyordu.
@@ -1543,8 +1597,14 @@ export const useStore = create<StoreState>()(
               return false;
             };
             const cloudList = data.uploadedImages.filter((img: any) => !isTombstoned(img));
-            // YEREL + BULUT BİRLEŞTİRME (id / src / Cloudinary public_id bazlı; bulut kazanır).
-            // Yerel kategori düzenlemeleri ve henüz senkronlanmamış görseller kaybolmaz.
+            // YEREL + BULUT BİRLEŞTİRME (id / src / Cloudinary public_id bazlı).
+            // TAZELLİK KURALI (kategori kayması düzeltmesi): yerel yerleşim haritası
+            // (savedAt) son başarılı bulut yazımından (allSymbolsSyncedAt) daha taze ise
+            // bu cihazda henüz buluta yazılamamış düzenlemeler var demektir — kategori/
+            // grup/isim dahil YEREL kayıt kazanır. Aksi halde bulut (başka cihazın
+            // güncellemeleri dahil) kazanır.
+            const localPlacementWins =
+              (get().symbolPlacements?.savedAt || 0) > (get().allSymbolsSyncedAt || 0);
             const mergedMap = new Map<string, any>();
             const pidToId = new Map<string, string>();
             const srcSeen = new Set<string>();
@@ -1559,7 +1619,13 @@ export const useStore = create<StoreState>()(
               const existingId = (pid && pidToId.get(pid)) || (srcSeen.has(img.src) ? img.id : null) || (mergedMap.has(img.id) ? img.id : null);
               if (existingId) {
                 const existing = mergedMap.get(existingId);
-                if (existing) mergedMap.set(existingId, { ...existing, ...img, category: img.category || existing.category });
+                if (existing) {
+                  mergedMap.set(existingId, localPlacementWins
+                    // Yerel daha taze: kullanıcının atadığı kategori/grup/isim KORUNUR
+                    ? { ...img, ...existing, category: existing.category || img.category, group: existing.group || img.group, name: existing.name || img.name }
+                    // Bulut daha taze: bulut kaydı esastır (başka cihaz düzenlemeleri dahil)
+                    : { ...existing, ...img, category: img.category || existing.category });
+                }
                 return;
               }
               mergedMap.set(img.id, img);
@@ -1570,7 +1636,10 @@ export const useStore = create<StoreState>()(
           }
 
           if (data.allSymbols && Array.isArray(data.allSymbols)) {
-            const blacklist = new Set(mergedAdminSettings.hiddenSymbolIds);
+            const blacklist = new Set([
+              ...(mergedAdminSettings.hiddenSymbolIds || []),
+              ...(mergedAdminSettings.deletedAssetIds || []),
+            ]);
             // Bozuk/eski bulut kayıtlarına karşı normalizasyon: symbols dizisi yoksa boş liste.
             updates.allSymbols = data.allSymbols.map((cat: any) => ({
               ...cat,
@@ -1659,7 +1728,12 @@ export const useStore = create<StoreState>()(
 
           // Bulut verisi uygulandı: bulut yerleşimi artık güncel sayılır.
           // (Çakışma kuralı: savedAt > allSymbolsSyncedAt ise yerel yerleşim kazanır)
-          set({ allSymbolsSyncedAt: Date.now() });
+          // cloudRevAt da bulut damgasına çekilir — aynı kopyanın sonraki okunuşları
+          // 'bayat' olarak yanlışlıkla reddedilmesin.
+          set({
+            allSymbolsSyncedAt: Date.now(),
+            cloudRevAt: Math.max(cloudRevAt, Number(get().cloudRevAt || 0)),
+          });
 
           if (!silent) {
             // Kullanıcı isteği: İNDİR olumlu sonuçlandığında MESAJLA bildir
@@ -1688,7 +1762,7 @@ export const useStore = create<StoreState>()(
         }
       },
 
-      refreshSymbols: () => {
+      refreshSymbols: (opts?: { trustLocalPlacements?: boolean }) => {
         set((state) => {
           // Bozuk/eski bulut kayıtlarına karşı normalizasyon: her kategorinin symbols
           // dizisi garanti edilir (yoksa boş liste) — aksi halde forEach çöker.
@@ -1726,9 +1800,16 @@ export const useStore = create<StoreState>()(
           // sembol adminin atadığı kategoride kalır.
           const localSavedAt = state.symbolPlacements?.savedAt || 0;
           const syncedAt = state.allSymbolsSyncedAt || 0;
+          // trustLocalPlacements: açılış anında (bulut verisi henüz okunmadan) allSymbols
+          // hardcoded varsayılanlardan ibarettir. localStorage'daki yerleşim haritası ise
+          // kullanıcının SON bilinen düzenidir — onun yerine varsayılanlara dönmek,
+          // sembollerin her yenilemede eski kategorilerine "kaymasına" yol açıyordu.
+          // Bu bayrakla kalıcı harita temel alınır; bulut verisi geldikten sonra yapılan
+          // normal refreshSymbols çağrısında ise tazelik karşılaştırması (aşağıda) geçerlidir.
+          const trustLocalPlacements = opts?.trustLocalPlacements === true;
           // Yerel yerleşim buluttan daha taze ise (ör. taşıma sonrası senkron başarısızsa)
           // yerel kategori düzeni öncelik kazanır; aksi halde bulut/mevcut durum esastır.
-          const localPlacementWins = localSavedAt > syncedAt;
+          const localPlacementWins = trustLocalPlacements || localSavedAt > syncedAt;
           const persistedCats: Record<string, string[]> = state.symbolPlacements?.cats || {};
 
           // 'Delil İşaretleri' + 'Delil Nesneleri' birleştirildi (delil-isaretleri):
@@ -1769,8 +1850,9 @@ export const useStore = create<StoreState>()(
           });
 
           // localStorage'daki kalıcı yerleşimler: bulut geri yüklemesi başarısız olsa
-          // bile (çevrimdışı, 401 vb.) adminin kategori düzeni bozulmaz.
-          // Hedef kategori gerçekten varsa geçerlidir; bulut yerleşimi her zaman önceliklidir.
+          // bile (çevrimdışı, 401, bayat kopya reddi vb.) adminin kategori düzeni bozulmaz.
+          // trustLocalPlacements modunda (açılış) haritadaki TÜM kimlikler temel alınır;
+          // normal modda yalnızca eksik kimlikler tamamlanır (bulut/varsayılan kazanır).
           Object.entries(persistedCats).forEach(([cid, ids]) => {
             if (!categoryMap.has(cid)) return; // hedef kategori artık yok → yoksay
             (ids || []).forEach(sid => {
@@ -1856,7 +1938,8 @@ export const useStore = create<StoreState>()(
             cat.symbols = kept;
           });
 
-          // 6. Kategori içi sıra: yerel yerleşim daha tazese adminin sıralaması uygulanır.
+          // 6. Kategori içi sıra: yerel yerleşim daha tazese (veya açılışta temel alınıyorsa)
+          //    adminin sıralaması uygulanır.
           //    (Bulut daha tazese bulutun sıralaması zaten merge ile korunmuştur.)
           if (localPlacementWins) {
             categoryMap.forEach((cat: any) => {
@@ -1997,7 +2080,7 @@ export const useStore = create<StoreState>()(
           onConfirm: async () => {
             try {
               // Overwrite cloud with initial state
-              await cloud.save([], SYMBOL_CATEGORIES, { 
+              const clearRes = await cloud.save([], SYMBOL_CATEGORIES, { 
                 objects: [], 
                 backgroundImage: null, 
                 projectInfo: { ...get().projectInfo }, 
@@ -2007,6 +2090,10 @@ export const useStore = create<StoreState>()(
               set({
                 uploadedImages: [],
                 allSymbols: SYMBOL_CATEGORIES,
+                symbolPlacements: { savedAt: Date.now(), cats: {} },
+                _placementsSavedAt: Date.now(),
+                allSymbolsSyncedAt: Date.now(),
+                cloudRevAt: Number((clearRes as any)?._revAt || 0) || get().cloudRevAt || 0,
                 adminSettings: {
                   logoConfig: undefined,
                   hiddenSymbolIds: [],
@@ -2450,6 +2537,8 @@ export const useStore = create<StoreState>()(
         },
         _placementsSavedAt: state._placementsSavedAt || 0,
         allSymbolsSyncedAt: state.allSymbolsSyncedAt || 0,
+        // Bulut yazım damgası (sunucu saati) — bayat CDN kopyalarına karşı kalıcı olmalı
+        cloudRevAt: state.cloudRevAt || 0,
         // Yüklenen görseller: yalnızca bulut URL referansları (hacimli base64'ler hariç).
         // Kategori atamaları sayfa yenilense dahi yerelde korunur.
         uploadedImages: (state.uploadedImages || []).filter((img: any) => img.src && /^https?:\/\//i.test(img.src)),
