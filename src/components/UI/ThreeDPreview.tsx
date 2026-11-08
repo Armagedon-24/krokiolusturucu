@@ -66,7 +66,7 @@ const getEffectiveSize = (obj: any) => {
  */
 const NON_3D_OBJECT_TYPES = ['text', 'rect', 'line', 'finding-list'];
 const NON_3D_SYMBOL_IDS = [
-  'a-4', 'a-5',                    // ölçü / yön okları (2D ölçüm şeması)
+  'a-5',                           // yön oku (2D şema) — mesafe oku (a-4) artık 3B'de havada gösterilir
   'ev-callout',                    // açıklama balonu
   'ev-arrow-desc',                 // açıklama oku (çerçeveli)
   'ev-arrow-desc-ellipse',
@@ -74,10 +74,12 @@ const NON_3D_SYMBOL_IDS = [
   'ev-north-arrow',                // kuzey oku (kağıt işareti)
   'ev-camera-link',
 ];
-interface Non3DCheckable { hidden?: boolean; type?: string; symbolId?: string }
+interface Non3DCheckable { hidden?: boolean; type?: string; symbolId?: string; isDistanceArrow?: boolean }
 const isNon3DObject = (o?: Non3DCheckable | null): boolean => {
   if (!o) return true;
   if (o.hidden) return true;
+  // Mesafe oku (isDistanceArrow) 3B sahneye alınır: ok + mesafe etiketi havada süzülür.
+  if (o.isDistanceArrow) return false;
   if (NON_3D_OBJECT_TYPES.includes(o.type || '')) return true;
   const s = (o.symbolId || '').toLowerCase();
   if (!s) return true; // symbolId taşımayan her nesne kağıt/form öğesidir
@@ -1300,56 +1302,76 @@ if (allWalls) checkIntersections(allWalls, false);
   );
 };
 
-/** Numaratör (ev-circle / ev-square) yüzey dokusu: sarı zemin + bulgu numarası.
- *  2D tuvalde numara Konva ile üstte çizilir; 3B'de aynı görünüm canvas dokusuyla üretilir. */
-const useMarkerTexture = (no?: string, square?: boolean) => {
+/** Bulgu numarası tenti için dikdörtgen yüz dokusu (sarı zemin + siyah çerçeve + numara). */
+const useTentTexture = (no?: string) => {
   return React.useMemo(() => {
     const c = document.createElement('canvas');
-    c.width = c.height = 128;
+    c.width = 256; c.height = 192;
     const ctx = c.getContext('2d');
     if (!ctx) return null;
-    ctx.clearRect(0, 0, 128, 128);
     ctx.fillStyle = '#F5C518';
+    ctx.fillRect(0, 0, 256, 192);
     ctx.strokeStyle = '#1a1a1a';
-    ctx.lineWidth = 7;
-    if (square) {
-      ctx.fillRect(10, 10, 108, 108);
-      ctx.strokeRect(10, 10, 108, 108);
-    } else {
-      ctx.beginPath();
-      ctx.arc(64, 64, 56, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-    }
+    ctx.lineWidth = 10;
+    ctx.strokeRect(5, 5, 246, 182);
     ctx.fillStyle = '#111111';
-    ctx.font = 'bold 68px Arial, sans-serif';
+    ctx.font = `800 ${String(no || '').length > 2 ? 88 : 120}px Inter, Arial, sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(no || '•', 64, 70);
+    ctx.fillText(no || '•', 128, 104);
     const tex = new THREE.CanvasTexture(c);
     tex.anisotropy = 4;
+    tex.colorSpace = THREE.SRGBColorSpace;
     return tex;
-  }, [no, square]);
+  }, [no]);
 };
 
+/**
+ * Bulgu numaratörü (ev-circle / ev-square) — 3B çadır işaretçi.
+ * Klasik olay yeri delil tenti gibi yerde durur; numara her iki eğik yüzde de okunur.
+ */
 const FindingMarker3D = ({ no, width, height, rad, square }: { no?: string; width: number; height: number; rad: number; square?: boolean }) => {
-  const tex = useMarkerTexture(no, square);
-  const r = Math.max(2, Math.min(width, height) / 2);
-  const discH = 1.2 * SCALE;
+  const tex = useTentTexture(no);
+  useEffect(() => () => { tex?.dispose(); }, [tex]);
+  const baseW = Math.max(width, 12 * SCALE);
+  const baseD = Math.max(height, 12 * SCALE);
+  const ridgeH = Math.min(Math.max(0.55 * Math.min(baseW, baseD), 10 * SCALE), 24 * SCALE);
+  const slopeLen = Math.sqrt((baseD / 2) ** 2 + ridgeH ** 2);
+  const slopeAng = Math.atan2(baseD / 2, ridgeH);
+  const capGeo = React.useMemo(() => {
+    const s = new THREE.Shape([
+      new THREE.Vector2(-baseD / 2, 0),
+      new THREE.Vector2(baseD / 2, 0),
+      new THREE.Vector2(0, ridgeH),
+    ]);
+    const g = new THREE.ShapeGeometry(s);
+    g.rotateY(Math.PI / 2); // YZ düzlemine dik
+    return g;
+  }, [baseD, ridgeH]);
+  useEffect(() => () => { capGeo?.dispose(); }, [capGeo]);
+  const slopeMat = React.useMemo(() => (
+    <meshStandardMaterial map={tex || undefined} side={THREE.DoubleSide} roughness={0.55} metalness={0.02} />
+  ), [tex]);
   return (
-    <group position={[0, discH / 2, 0]} rotation={[0, rad, 0]}>
-      <mesh castShadow receiveShadow>
-        {square
-          ? <boxGeometry args={[width, discH, height]} />
-          : <cylinderGeometry args={[r, r, discH, 32]} />}
-        <meshStandardMaterial color="#F5C518" roughness={0.5} metalness={0.05} />
+    <group position={[0, 0, 0]} rotation={[0, rad, 0]}>
+      {/* ön eğik yüz */}
+      <mesh position={[0, ridgeH / 2, baseD / 4]} rotation={[-slopeAng, 0, 0]} castShadow>
+        <planeGeometry args={[baseW, slopeLen]} />
+        {slopeMat}
       </mesh>
-      {/* Üst yüz — numaralı kapak */}
-      <mesh position={[0, discH / 2 + 0.05, 0]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={5}>
-        {square
-          ? <planeGeometry args={[width * 0.96, height * 0.96]} />
-          : <circleGeometry args={[r * 0.96, 32]} />}
-        <meshBasicMaterial map={tex || undefined} transparent={false} />
+      {/* arka eğik yüz (yarım tur döndürülmüş grup — numara aynalanmaz) */}
+      <group rotation={[0, Math.PI, 0]}>
+        <mesh position={[0, ridgeH / 2, baseD / 4]} rotation={[-slopeAng, 0, 0]} castShadow>
+          <planeGeometry args={[baseW, slopeLen]} />
+          {slopeMat}
+        </mesh>
+      </group>
+      {/* yan üçgen kapaklar */}
+      <mesh geometry={capGeo} position={[baseW / 2, 0, 0]}>
+        <meshStandardMaterial color={square ? '#F5C518' : '#e8b90f'} side={THREE.DoubleSide} roughness={0.6} />
+      </mesh>
+      <mesh geometry={capGeo} position={[-baseW / 2, 0, 0]}>
+        <meshStandardMaterial color={square ? '#F5C518' : '#e8b90f'} side={THREE.DoubleSide} roughness={0.6} />
       </mesh>
     </group>
   );
@@ -1378,6 +1400,192 @@ const getStandardHeight = (symbolId: string): number => {
   else if (s.includes('bench') || s.includes('bank') || s.startsWith('out-bench')) h = 80;
   _stdHeightCache.set(s, h);
   return h;
+};
+
+/* ------------------------------------------------------------------ */
+/* ALFA EKSTRÜZYON MOTORU                                              */
+/* Sembol PNG'sinin şeffaf silueti kontur çıkarımıyla 3B hacme         */
+/* dönüştürülür: üst yüz orijinal dokuyu taşır, yanlar nötr gövde.     */
+/* Böylece elde, yerde yatan ama gerçekten 3 boyutlu nesneler olur.    */
+/* ------------------------------------------------------------------ */
+
+const MAX_EXTRACT_SIDE = 128;   // kontur çıkarımı için çözünürlük sınırı
+const ALPHA_THRESHOLD = 64;
+
+const _alphaMaskCache = new Map<string, { w: number; h: number; mask: Uint8Array } | null>();
+const _extrudeGeoCache = new Map<string, THREE.BufferGeometry>();
+
+/** Görselin alfa kanalından ikili maske çıkarır (kenarCors yazma hatalarına karşı null). */
+function extractAlphaMask(img: HTMLImageElement): { w: number; h: number; mask: Uint8Array } | null {
+  try {
+    const iw = (img as any).naturalWidth || img.width;
+    const ih = (img as any).naturalHeight || img.height;
+    if (!iw || !ih) return null;
+    const k = Math.min(1, MAX_EXTRACT_SIDE / Math.max(iw, ih));
+    const w = Math.max(2, Math.round(iw * k));
+    const h = Math.max(2, Math.round(ih * k));
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    const ctx = c.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return null;
+    ctx.drawImage(img, 0, 0, w, h);
+    const data = ctx.getImageData(0, 0, w, h).data;
+    const mask = new Uint8Array(w * h);
+    for (let i = 0; i < w * h; i++) mask[i] = data[i * 4 + 3] > ALPHA_THRESHOLD ? 1 : 0;
+    return { w, h, mask };
+  } catch {
+    return null; // tainted canvas / CORS
+  }
+}
+
+/** İkili maskeden sınır takibi ile kapalı kontur halkaları çıkarır (saat yönü, ızgara düğümleri). */
+function traceContourLoops(mask: Uint8Array, w: number, h: number): Array<Array<[number, number]>> {
+  const next = new Map<number, number>();
+  const key = (x: number, y: number) => y * (w + 1) + x;
+  const at = (x: number, y: number) => (x < 0 || y < 0 || x >= w || y >= h) ? 0 : mask[y * w + x];
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (!at(x, y)) continue;
+      // Dolu hücrenin boş komşularına bakan kenarları tutarlı yönlendir (içerik solda)
+      if (!at(x, y - 1)) next.set(key(x, y), key(x + 1, y));
+      if (!at(x + 1, y)) next.set(key(x + 1, y), key(x + 1, y + 1));
+      if (!at(x, y + 1)) next.set(key(x + 1, y + 1), key(x, y + 1));
+      if (!at(x - 1, y)) next.set(key(x, y + 1), key(x, y));
+    }
+  }
+  const loops: Array<Array<[number, number]>> = [];
+  const visited = new Set<number>();
+  for (const [start] of next) {
+    if (visited.has(start)) continue;
+    const loop: Array<[number, number]> = [];
+    let cur: number | undefined = start;
+    while (cur !== undefined && next.has(cur) && !visited.has(cur)) {
+      visited.add(cur);
+      loop.push([cur % (w + 1), Math.floor(cur / (w + 1))]);
+      cur = next.get(cur);
+    }
+    if (loop.length >= 8) loops.push(loop);
+  }
+  loops.sort((a, b) => b.length - a.length);
+  return loops;
+}
+
+/** Düz devam eden ızgara noktalarını atarak konturu sadeleştirir. */
+function decimateLoop(loop: Array<[number, number]>): Array<[number, number]> {
+  if (loop.length < 6) return loop;
+  const out: Array<[number, number]> = [];
+  const n = loop.length;
+  for (let i = 0; i < n; i++) {
+    const p = loop[(i - 1 + n) % n], c = loop[i], q = loop[(i + 1) % n];
+    const cross = (c[0] - p[0]) * (q[1] - p[1]) - (c[1] - p[1]) * (q[0] - p[0]);
+    const dot = (c[0] - p[0]) * (q[0] - p[0]) + (c[1] - p[1]) * (q[1] - p[1]);
+    if (cross === 0 && dot > 0) continue; // aynı doğru üzerinde
+    out.push(c);
+  }
+  return out.length >= 3 ? out : loop;
+}
+
+/** Maskeden ekstrüzyon geometrisi üretir; çok karmaşık/asılsız maskelerde null döner. */
+function buildExtrudedGeometry(
+  maskData: { w: number; h: number; mask: Uint8Array },
+  worldW: number, worldH: number, depthWorld: number,
+): THREE.BufferGeometry | null {
+  const { w, h, mask } = maskData;
+  const loops = traceContourLoops(mask, w, h);
+  if (!loops.length) return null;
+  const totalPts = loops.reduce((s, l) => s + l.length, 0);
+  if (totalPts > 2600 || loops.length > 24) return null; // aşırı karmaşık → kutu düşüşü
+  const sx = worldW / w, sy = worldH / h;
+  const toVec = ([gx, gy]: [number, number]) => new THREE.Vector2((gx - w / 2) * sx, -(gy - h / 2) * sy);
+  const main = decimateLoop(loops[0]);
+  if (main.length < 3) return null;
+  const shape = new THREE.Shape(main.map(toVec));
+  for (let i = 1; i < Math.min(loops.length, 7); i++) {
+    const l = decimateLoop(loops[i]);
+    if (l.length < 3) continue;
+    shape.holes.push(new THREE.Path(l.map(toVec)));
+  }
+  const geo = new THREE.ExtrudeGeometry(shape, {
+    depth: depthWorld,
+    bevelEnabled: true,
+    bevelThickness: depthWorld * 0.18,
+    bevelSize: Math.max(0.15, Math.min(worldW, worldH) * 0.015),
+    bevelSegments: 1,
+    curveSegments: 1,
+  });
+  geo.rotateX(-Math.PI / 2); // XY düzlemi → XZ, ekstrüzyon +Y (yukarı)
+  geo.translate(0, depthWorld * 0.18, 0); // pah payı: taban yerde kalsın
+  return geo;
+}
+
+/** Fiziksel nesnelerin 3B yüksekliği (cm) — kategori bazlı gerçekçi kalınlık. */
+const getExtrudeHeightCm = (sId: string): number => {
+  if (sId.startsWith('ht-')) return 9;                       // el aletleri
+  if (sId.startsWith('w-')) return 7;                        // silahlar
+  if (sId.startsWith('an-')) return (sId.includes('chicken') || sId.includes('tavuk') || sId.includes('bird')) ? 25 : 40; // hayvanlar
+  if (sId.startsWith('tr-casing')) return 2.5;               // fişek kovanı
+  if (sId === 'tr-bullet-deformed') return 2;                // deforme mermi
+  if (sId === 'tr-magazine') return 6;                       // şarjör
+  if (sId.startsWith('ei-')) return (sId.includes('card') || sId.includes('paper') || sId.includes('zarf') || sId.includes('kağıt')) ? 2 : 11; // delil nesneleri
+  return 12;
+};
+
+/**
+ * Alfa siluetinden ekstrüde edilmiş 3B sembol.
+ * Geometri üretilemezse (karmaşık maske, CORS, boş doku) `fallback`'a düşer.
+ */
+const ExtrudedSymbol3D = ({ x, y, rad, width, height, textureSrc, heightCm, zOffset, fallback }: any) => {
+  const tMain = useTexture(textureSrc) as THREE.Texture;
+  const hWorld = Math.max(1.5, (heightCm || 10) * SCALE);
+
+  const geo = React.useMemo(() => {
+    const img: HTMLImageElement | undefined = (tMain as any).image;
+    if (!img || !width || !height) return null;
+    const geoKey = `${textureSrc}|${width.toFixed(2)}|${height.toFixed(2)}|${hWorld.toFixed(2)}`;
+    const cached = _extrudeGeoCache.get(geoKey);
+    if (cached !== undefined) return cached;
+    const maskKey = textureSrc;
+    if (!_alphaMaskCache.has(maskKey)) {
+      _alphaMaskCache.set(maskKey, extractAlphaMask(img));
+    }
+    const m = _alphaMaskCache.get(maskKey) || null;
+    let g: THREE.BufferGeometry | null = null;
+    if (m && m.w >= 2 && m.h >= 2) g = buildExtrudedGeometry(m, width, height, hWorld);
+    // Önbellek sınırı: en eski girdiyi bırak
+    if (_extrudeGeoCache.size > 120) {
+      const oldest = _extrudeGeoCache.keys().next().value as string | undefined;
+      if (oldest !== undefined) {
+        _extrudeGeoCache.get(oldest)?.dispose();
+        _extrudeGeoCache.delete(oldest);
+      }
+    }
+    _extrudeGeoCache.set(geoKey, g as THREE.BufferGeometry);
+    return g;
+  }, [tMain, textureSrc, width, height, hWorld]);
+
+  // Üst yüz dokusu: şekil koordinatları (−w/2..w/2) → UV 0..1
+  const topTex = React.useMemo(() => {
+    const t = tMain.clone();
+    t.needsUpdate = true;
+    t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+    t.repeat.set(1 / Math.max(width, 0.01), 1 / Math.max(height, 0.01));
+    t.offset.set(0.5, 0.5);
+    return t;
+  }, [tMain, width, height]);
+  useEffect(() => () => { topTex.dispose(); }, [topTex]);
+
+  const materials = React.useMemo(() => ([
+    new THREE.MeshStandardMaterial({ map: topTex, transparent: true, alphaTest: 0.15, roughness: 0.75, metalness: 0.05 }),
+    new THREE.MeshStandardMaterial({ color: '#62676e', roughness: 0.85, metalness: 0.05 }),
+  ]), [topTex]);
+  useEffect(() => () => { materials.forEach((m: THREE.Material) => m.dispose()); }, [materials]);
+
+  if (!geo) return fallback;
+  return (
+    <group position={[x, zOffset || 0, y]} rotation={[0, rad, 0]}>
+      <mesh geometry={geo} material={materials} castShadow receiveShadow />
+    </group>
+  );
 };
 
 /* ------------------------------------------------------------------ */
@@ -1501,9 +1709,27 @@ const ArrowDecal3D = ({ obj, stageWidth, stageHeight }: any) => {
   const wWorld = len2d * scale;
   const hWorld = bandWorld * scale;
 
+  // HIZ (kullanıcı): ölçü oku zeminde değil, ~120 cm yükseklikte havada süzülür;
+  // iki ucundan yere ince kılavuz çizgileri iner (ölçümün hangi noktalar
+  // arasında olduğu 3B perspektifte de okunur).
+  const FLOAT_ELEV = 120 * SCALE;
+  const headWorld = Math.min(len2d * 0.22, 13) * scale;
+  const tipInset = Math.max(0, wWorld / 2 - headWorld * 0.45);
   return (
-    <group position={[localX, 0, localY]} rotation={[0, innerRot, 0]}>
-      <FlatDecal3D x={0} y={0} rad={0} wWorld={wWorld} hWorld={hWorld} texture={tex} elev={0.10} />
+    <group position={[localX, FLOAT_ELEV, localY]} rotation={[0, innerRot, 0]}>
+      <FlatDecal3D x={0} y={0} rad={0} wWorld={wWorld} hWorld={hWorld} texture={tex} elev={0} />
+      {[tipInset, -tipInset].map((lx, i) => (
+        <group key={i}>
+          <mesh position={[lx, -FLOAT_ELEV / 2, 0]}>
+            <cylinderGeometry args={[0.18, 0.18, FLOAT_ELEV, 6]} />
+            <meshStandardMaterial color={color} transparent opacity={0.55} roughness={0.6} />
+          </mesh>
+          <mesh position={[lx, -FLOAT_ELEV + 0.08, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+            <circleGeometry args={[1.1, 16]} />
+            <meshBasicMaterial color={color} transparent opacity={0.65} toneMapped={false} />
+          </mesh>
+        </group>
+      ))}
     </group>
   );
 };
@@ -1620,37 +1846,6 @@ const CalloutDecal3D = ({ obj }: any) => {
   return <FlatDecal3D x={0} y={0} rad={0} wWorld={w2d * scale} hWorld={h2d * scale} texture={tex} elev={0.14 + stableHash01(obj.id) * 0.04} />;
 };
 
-/** Numaratör (ev-circle / ev-square) — bulgu numarası zemin işareti olarak. */
-const MarkerDecal3D = ({ obj, size }: any) => {
-  const scale = SCALE;
-  const no = String(obj.findingNo ?? '');
-  const isSquare = String(obj.symbolId || '').toLowerCase() === 'ev-square';
-  const s2d = Math.max(16, size || 34);
-  const cPx = 256;
-  const tex = useCanvasTexture((ctx) => {
-    ctx.clearRect(0, 0, cPx, cPx);
-    const m = 6;
-    const r = (cPx - m * 2) / 2;
-    ctx.beginPath();
-    if (isSquare) ctx.rect(m, m, r * 2, r * 2);
-    else ctx.arc(cPx / 2, cPx / 2, r, 0, Math.PI * 2);
-    ctx.fillStyle = '#F5C518';
-    ctx.fill();
-    ctx.lineWidth = 10;
-    ctx.strokeStyle = '#1a1a1a';
-    ctx.stroke();
-    if (no) {
-      ctx.fillStyle = '#111111';
-      ctx.font = `800 ${no.length > 1 ? 120 : 150}px Inter, Arial, sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(no, cPx / 2, cPx / 2 + 6);
-    }
-  }, cPx, cPx, [no, isSquare]);
-
-  return <FlatDecal3D x={0} y={0} rad={0} wWorld={s2d * scale} hWorld={s2d * scale} texture={tex} elev={0.16} />;
-};
-
 const Symbol3D = ({ obj, wallThickness, realObj, allWalls, visualObjects, uploadedImages, stageWidth, stageHeight }: any) => {
   const actualObj = realObj || obj;
   const { x, y, rotation, symbolId, src, fill } = obj;
@@ -1758,7 +1953,8 @@ const Symbol3D = ({ obj, wallThickness, realObj, allWalls, visualObjects, upload
     return <CalloutDecal3D obj={{ ...actualObj, width: width / SCALE, height: height / SCALE }} />;
   }
   if (isMarkerAnn) {
-    return <MarkerDecal3D obj={actualObj} size={width / SCALE} />;
+    // Bulgu numaratörü: klasik 3B çadır delil işaretçisi (numara iki yüzde de okunur)
+    return <FindingMarker3D no={String(actualObj.findingNo || '')} width={width} height={height} rad={rad} square={sIdLower === 'ev-square'} />;
   }
 
   // 5. Texture Prep
@@ -1843,23 +2039,33 @@ const Symbol3D = ({ obj, wallThickness, realObj, allWalls, visualObjects, upload
   if (isBench) return <Bench3D x={posX} y={posZ} width={finalW} height={finalH} rad={rad} zOffset={yOff} />;
   if (isTrafficSign) return <TrafficSign3D x={posX} y={posZ} width={finalW} height={finalH} rad={rad} type={sIdLower} textureSrc={textureSrc} zOffset={yOff} />;
 
+  // Fiziksel nesneler (el aletleri, silahlar, delil nesneleri, hayvanlar, kovan/şarjör)
+  // yerde yatan düz decal yerine alfa siluetinden ekstrüde edilmiş GERÇEK 3B hacim:
+  // üst yüz orijinal çizimi taşar, yanlar katı gövdedir (kullanıcı isteği).
+  const isPhysicalEvidence = sIdLower.startsWith('ei-') || sIdLower.startsWith('an-')
+    || sIdLower.startsWith('ht-') || sIdLower.startsWith('w-')
+    || sIdLower.startsWith('tr-casing') || sIdLower === 'tr-magazine' || sIdLower === 'tr-bullet-deformed';
+
+  if (isPhysicalEvidence) {
+    return (
+      <ExtrudedSymbol3D
+        x={posX}
+        y={posZ}
+        rad={rad}
+        width={finalW}
+        height={finalH}
+        textureSrc={textureSrc}
+        heightCm={getExtrudeHeightCm(sIdLower)}
+        zOffset={totalOffset}
+        fallback={<FloorItem3D x={posX} y={posZ} width={finalW} height={finalH} rad={rad} textureSrc={textureSrc} zOffset={totalOffset} />}
+      />
+    );
+  }
+
   if (isFloorItem || isFlatEvAnn || isFlatEvidence) return <FloorItem3D x={posX} y={posZ} width={finalW} height={finalH} rad={rad} textureSrc={textureSrc} zOffset={totalOffset} />;
   if (isBuilding) {
     const floors = sIdLower === 'arch-house' ? 1 : parseInt(sIdLower.replace('arch-b', ''), 10) || 1;
     return <Building3D x={posX} y={posZ} width={finalW} height={finalH} rad={rad} floors={floors} textureSrc={textureSrc} />;
-  }
-
-  // Numaratörler (bulgu işaretleyicileri): numaralı, zeminde ince disk/kafe olarak çizilir
-  if (sIdLower === 'ev-circle' || sIdLower === 'ev-square') {
-    return (
-      <FindingMarker3D
-        no={String(actualObj.findingNo || '')}
-        width={finalW}
-        height={finalH}
-        rad={rad}
-        square={sIdLower === 'ev-square'}
-      />
-    );
   }
 
   // İz / delil / işaret sembolleri zeminde ince decal olarak çizilir (2D konumla birebir)
