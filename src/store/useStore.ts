@@ -1731,6 +1731,16 @@ export const useStore = create<StoreState>()(
           const localPlacementWins = localSavedAt > syncedAt;
           const persistedCats: Record<string, string[]> = state.symbolPlacements?.cats || {};
 
+          // 'Delil İşaretleri' + 'Delil Nesneleri' birleştirildi (delil-isaretleri):
+          // eski yerleşim anahtarlarındaki admin sıralamasını yeni kategoriye taşı.
+          if (!persistedCats['delil-isaretleri']) {
+            const legacyOrder = [
+              ...(persistedCats['evidence'] || []),
+              ...(persistedCats['evidence-items'] || []),
+            ];
+            if (legacyOrder.length > 0) persistedCats['delil-isaretleri'] = legacyOrder;
+          }
+
           // Varsayılan (hardcoded) kategori haritası — admin taşmalarını tanımlamak için
           const originCat = new Map<string, string>();
           SYMBOL_CATEGORIES.forEach(cat => cat.symbols.forEach(s => {

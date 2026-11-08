@@ -235,7 +235,7 @@ export function buildScenarioObjects(
       const size = calculateCalloutSize(p.callout, p.size ?? 12);
       out.push({
         id: uuidv4(), type: 'symbol', name: 'Açıklama Balonu',
-        symbolId: 'ev-callout', categoryId: 'evidence',
+        symbolId: 'ev-callout', categoryId: 'delil-isaretleri',
         src: SYMBOL_INDEX['ev-callout']?.src || '',
         x: ox + (p.x ?? 0) - size.w / 2, y: oy + (p.y ?? 0) - size.h / 2,
         width: size.w, height: size.h,

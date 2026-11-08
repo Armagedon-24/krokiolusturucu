@@ -1,6 +1,6 @@
 export const SYMBOL_CATEGORIES = [
   {
-    id: 'evidence',
+    id: 'delil-isaretleri',
     name: 'Delil İşaretleri',
     symbols: [
       { 
@@ -45,12 +45,7 @@ export const SYMBOL_CATEGORIES = [
         thumbnail: '/assets/symbols/karakalem/evidence/abfo_scale.png', type: 'symbol', width: 90, height: 90, description: 'Delil yakın çekim fotoğraflarında kullanılan L harfli fotogrametrik ölçek (ABFO No.2).' },
       { id: 'ev-north-arrow', name: 'Kuzey Oku', src: '/assets/symbols/karakalem/evidence/ev_north_arrow.png',
         thumbnail: '/assets/symbols/karakalem/evidence/ev_north_arrow.png', type: 'symbol', width: 120, height: 120, description: 'Krokide yön göstergesi (pusula iğnesi + K harfi). Her krokide bulunması zorunlu elemandır.' },
-    ]
-  },
-  {
-    id: 'evidence-items',
-    name: 'Delil Nesneleri',
-    symbols: [
+      // NOT: 'Delil Nesneleri' kategorisi 'Delil İşaretleri' ile birleştirildi (id: delil-isaretleri).
       { id: 'ei-syringe', name: 'Şırınga', src: '/assets/symbols/evidence/ei_syringe.webp',
         thumbnail: '/assets/symbols/karakalem/evidence/ei_syringe.png', type: 'symbol', width: 145, height: 70, description: 'Uyuşturucu/tıbbi olaylarında delil olarak bulunan şırınga.' },
       { id: 'ei-drug-bag', name: 'Uyuşturucu Poşeti', src: '/assets/symbols/evidence/ei_drug_bag.webp',
@@ -101,6 +96,14 @@ export const SYMBOL_CATEGORIES = [
         type: 'symbol', width: 140, height: 100, description: 'Kablolu harici disk (HDD) — dijital delil kopyalama/arşiv cihazı.' },
       { id: 'ei-sd-card', name: 'SD Bellek Kartı', src: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="80" height="110" viewBox="0 0 80 110"><path d="M14 6 L66 6 L66 82 L50 104 L14 104 Z" fill="none" stroke="%23333" stroke-width="3"/><rect x="18" y="11" width="5" height="9" fill="none" stroke="%23333" stroke-width="1.5"/><rect x="26" y="11" width="5" height="9" fill="none" stroke="%23333" stroke-width="1.5"/><rect x="34" y="11" width="5" height="9" fill="none" stroke="%23333" stroke-width="1.5"/><rect x="42" y="11" width="5" height="9" fill="none" stroke="%23333" stroke-width="1.5"/><rect x="50" y="11" width="5" height="9" fill="none" stroke="%23333" stroke-width="1.5"/><rect x="58" y="11" width="4" height="9" fill="none" stroke="%23333" stroke-width="1.5"/><rect x="20" y="34" width="40" height="46" rx="3" fill="none" stroke="%23333" stroke-width="2"/><line x1="26" y1="48" x2="54" y2="48" stroke="%23444" stroke-width="2.5"/><line x1="26" y1="58" x2="48" y2="58" stroke="%23444" stroke-width="2.5"/><line x1="26" y1="68" x2="52" y2="68" stroke="%23444" stroke-width="2.5"/><g stroke="%23555" stroke-width="1.2" opacity="0.5"><line x1="17" y1="86" x2="22" y2="100"/><line x1="23" y1="86" x2="28" y2="100"/></g></svg>',
         type: 'symbol', width: 80, height: 110, description: 'Kamera/telefondan çıkarılmış SD bellek kartı — görüntü delili.' },
+      { id: 'ei-sim-card', name: 'SIM Kart', src: '/assets/symbols/karakalem/evidence/ei_sim_card.png',
+        thumbnail: '/assets/symbols/karakalem/evidence/ei_sim_card.png', type: 'symbol', width: 120, height: 110, description: 'SIM kart — telefon abonelik/şebeke bilgisi içeren dijital delil.' },
+      { id: 'ei-bank-card', name: 'Kredi / Banka Kartı', src: '/assets/symbols/karakalem/evidence/ei_bank_card.png',
+        thumbnail: '/assets/symbols/karakalem/evidence/ei_bank_card.png', type: 'symbol', width: 170, height: 95, description: 'Kredi/banka kartı (EMV çipli) — finansal delil ve kimlik tespiti.' },
+      { id: 'ei-medicine-box', name: 'İlaç Kutusu / Blister', src: '/assets/symbols/karakalem/evidence/ei_medicine_box.png',
+        thumbnail: '/assets/symbols/karakalem/evidence/ei_medicine_box.png', type: 'symbol', width: 130, height: 123, description: 'İlaç kutusu ve blister takımı — zehirlenme/ilaç olaylarında delil.' },
+      { id: 'ei-dna-tube', name: 'DNA Numune Tüpü', src: '/assets/symbols/karakalem/evidence/ei_dna_tube.png',
+        thumbnail: '/assets/symbols/karakalem/evidence/ei_dna_tube.png', type: 'symbol', width: 100, height: 137, description: 'DNA numune tüpü ve pamuklu çubuk (swab) — biyolojik delil toplama.' },
     ]
   },
   {
@@ -153,6 +156,8 @@ export const SYMBOL_CATEGORIES = [
         thumbnail: '/assets/symbols/karakalem/figures/p_elderly_cane.png', type: 'symbol', width: 70, height: 170, description: 'Bastonuna yaslanmış, kambur duruşlu yaşlı kişi silueti.' },
       { id: 'p-merakli-kalabalik', name: 'Meraklı Kalabalık', src: '/assets/symbols/karakalem/figures/p_onlooker.png',
         thumbnail: '/assets/symbols/karakalem/figures/p_onlooker.png', type: 'symbol', width: 150, height: 120, description: 'Olay yerini saran meraklı kalabalık silueti; telefonda görüntü alan kişi dahil.' },
+      { id: 'p-swimmer', name: 'Yüzen Kişi (Yüzücü)', src: '/assets/symbols/karakalem/figures/p_swimmer.png',
+        thumbnail: '/assets/symbols/karakalem/figures/p_swimmer.png', type: 'symbol', width: 180, height: 96, description: 'Yüzen kişi (yüzücü) — boğulma/su olaylarında kurban konumu.' },
     ]
   },
   {
@@ -263,6 +268,12 @@ export const SYMBOL_CATEGORIES = [
         thumbnail: '/assets/symbols/karakalem/vehicles/v_bicyclist.png', type: 'symbol', width: 135, height: 125, description: 'Kasklı bisiklet kullanan kişi (yandan).' },
       { id: 'v-trailer-only', name: 'Dorse (Ayrı)', src: '/assets/symbols/vehicles/v_trailer.png',
         thumbnail: '/assets/symbols/karakalem/vehicles/v_trailer.png', type: 'symbol', width: 200, height: 225, description: 'Çekiciden ayrılmış yarı römork/dorse (yandan).' },
+      { id: 'v-rowboat', name: 'Kayık / Sandal', src: '/assets/symbols/karakalem/vehicles/v_rowboat.png',
+        thumbnail: '/assets/symbols/karakalem/vehicles/v_rowboat.png', type: 'symbol', width: 200, height: 115, description: 'Kürekli kayık/sandal — göl ve nehir su olayları (yandan).' },
+      { id: 'v-motorboat', name: 'Motorlu Tekne', src: '/assets/symbols/karakalem/vehicles/v_motorboat.png',
+        thumbnail: '/assets/symbols/karakalem/vehicles/v_motorboat.png', type: 'symbol', width: 200, height: 115, description: 'Dıştan takma motorlu tekne — deniz/göl olayları (yandan).' },
+      { id: 'v-jetski', name: 'Deniz Motosikleti (Jet-Ski)', src: '/assets/symbols/karakalem/vehicles/v_jetski.png',
+        thumbnail: '/assets/symbols/karakalem/vehicles/v_jetski.png', type: 'symbol', width: 180, height: 103, description: 'Deniz motosikleti (jet-ski) — su sporu kazaları (yandan).' },
     ]
   },
   {
@@ -654,6 +665,10 @@ export const SYMBOL_CATEGORIES = [
         thumbnail: '/assets/symbols/karakalem/roads/st_pothole.png', type: 'symbol', width: 185, height: 125, description: 'Hasarlı asfalt üzerinde yol çukuru.' },
       { id: 'st-fog', name: 'Sis Bandı', src: '/assets/symbols/roads/st_fog.png',
         thumbnail: '/assets/symbols/karakalem/roads/st_fog.png', type: 'symbol', width: 225, height: 167, description: 'Görüşü düşüren sis bandı (koşul işareti).' },
+      { id: 'st-tunnel', name: 'Yol Tüneli', src: '/assets/symbols/karakalem/roads/st_tunnel.png',
+        thumbnail: '/assets/symbols/karakalem/roads/st_tunnel.png', type: 'symbol', width: 200, height: 112, description: 'Yol tüneli kesiti — tünel içi trafik kazaları ve olayları.' },
+      { id: 'st-ditch', name: 'Hendek / Şarampol', src: '/assets/symbols/karakalem/roads/st_ditch.png',
+        thumbnail: '/assets/symbols/karakalem/roads/st_ditch.png', type: 'symbol', width: 200, height: 104, description: 'Yol kenarı hendek/şarampol kesiti — araç yoldan çıkma/takla olayları.' },
     ]
   },
   {
@@ -708,6 +723,10 @@ export const SYMBOL_CATEGORIES = [
         thumbnail: '/assets/symbols/karakalem/f_market_shelf.png', type: 'symbol', width: 170, height: 170, description: 'Ürün dizili market rafı / reyon ünitesi.' },
       { id: 'f-vitrin', name: 'Vitrin Camı', src: '/assets/symbols/karakalem/f_vitrin.png',
         thumbnail: '/assets/symbols/karakalem/f_vitrin.png', type: 'symbol', width: 180, height: 180, description: 'İşyeri vitrin camı — giriş noktası ve kırılma bölgesi gösterimi.' },
+      { id: 'f-cradle', name: 'Beşik / Kundak', src: '/assets/symbols/karakalem/f_cradle.png',
+        thumbnail: '/assets/symbols/karakalem/f_cradle.png', type: 'symbol', width: 160, height: 150, description: 'Beşik ve kundaklı bebek — bebek uyku/ölüm olaylarında konum.' },
+      { id: 'f-stroller', name: 'Bebek Arabası (Puset)', src: '/assets/symbols/karakalem/f_stroller.png',
+        thumbnail: '/assets/symbols/karakalem/f_stroller.png', type: 'symbol', width: 200, height: 109, description: 'Bebek arabası (puset) — çocuk olaylarında konum gösterimi.' },
     ]
   },
   {
@@ -804,6 +823,8 @@ export const SYMBOL_CATEGORIES = [
         thumbnail: '/assets/symbols/karakalem/out_field.png', type: 'symbol', width: 140, height: 101, description: 'Sıra ekili tarla alanı (kırsal olay yerleri).' },
       { id: 'out-ramp', name: 'Engelli Rampası', src: '/assets/symbols/out_ramp.webp',
         thumbnail: '/assets/symbols/karakalem/out_ramp.png', type: 'symbol', width: 100, height: 100, description: 'Eğimli engelli rampası ve erişim ikonu.' },
+      { id: 'out-fuel-station', name: 'Akaryakıt İstasyonu', src: '/assets/symbols/karakalem/out_fuel_station.png',
+        thumbnail: '/assets/symbols/karakalem/out_fuel_station.png', type: 'symbol', width: 150, height: 130, description: 'Akaryakıt istasyonu (kanopi + pompa) — trafik/yanın olaylarında yer gösterimi.' },
     ]
   },
   {
@@ -956,6 +977,14 @@ export const SYMBOL_CATEGORIES = [
         type: 'symbol', width: 150, height: 150, description: 'Yangın çıkış/odak noktası işareti: alev sembolü + çift kesikli tespit halkası.' },
       { id: 'ex-burn-perimeter', name: 'Yanmış Alan Sınır Çizgisi', src: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="220" height="180" viewBox="0 0 220 180"><path d="M34 92 C 24 52 62 20 112 18 C 162 16 202 42 206 82 C 210 122 180 158 122 160 C 72 162 44 132 34 92 Z" fill="none" stroke="%23333" stroke-width="4" stroke-dasharray="13,9"/><path d="M48 94 C 42 62 72 36 112 34 C 152 32 188 52 192 84 C 196 116 170 144 120 146 C 82 148 54 124 48 94 Z" fill="none" stroke="%23555" stroke-width="2.5" stroke-dasharray="5,7"/><ellipse cx="100" cy="80" rx="14" ry="9" fill="%23333" opacity="0.15"/><ellipse cx="140" cy="105" rx="10" ry="7" fill="%23333" opacity="0.13"/><ellipse cx="85" cy="115" rx="8" ry="5" fill="%23333" opacity="0.13"/></svg>',
         type: 'symbol', width: 220, height: 180, description: 'Yanmış/hasar görmüş alanın sınır çizgisi (kesikli çift perimetre + kömürleşme lekeleri).' },
+      { id: 'ex-melted-socket', name: 'Eriyen Priz / Fiş', src: '/assets/symbols/karakalem/ex_melted_socket.png',
+        thumbnail: '/assets/symbols/karakalem/ex_melted_socket.png', type: 'symbol', width: 140, height: 140, description: 'Eriyen/kömürleşen priz ve fiş — elektrik yangını başlangıç noktası.' },
+      { id: 'ex-smoke-detector', name: 'Duman Dedektörü', src: '/assets/symbols/karakalem/ex_smoke_detector.png',
+        thumbnail: '/assets/symbols/karakalem/ex_smoke_detector.png', type: 'symbol', width: 150, height: 126, description: 'Tavan tipi duman dedektörü — yangın uyarı ekipmanı durumu.' },
+      { id: 'ex-fire-extinguisher', name: 'Yangın Söndürücü', src: '/assets/symbols/karakalem/ex_fire_extinguisher.png',
+        thumbnail: '/assets/symbols/karakalem/ex_fire_extinguisher.png', type: 'symbol', width: 90, height: 150, description: 'Yangın söndürücü — olay yerindeki güvenlik ekipmanı mevcudiyeti.' },
+      { id: 'ex-collapsed-ceiling', name: 'Çökmüş Tavan', src: '/assets/symbols/karakalem/ex_collapsed_ceiling.png',
+        thumbnail: '/assets/symbols/karakalem/ex_collapsed_ceiling.png', type: 'symbol', width: 200, height: 115, description: 'Çökmüş tavan ve dökülen sıva/enkaz — yapısal çökme/iş kazaları.' },
     ]
   },
   {

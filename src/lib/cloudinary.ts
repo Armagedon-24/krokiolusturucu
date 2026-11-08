@@ -27,8 +27,22 @@ export const normKey = (s?: string): string =>
     .replace(/\s+/g, ' ');
 
 /**
+ * Birleştirilen/eski kategori kimlik ve adları → yeni kategori kimliği.
+ * 'Delil İşaretleri' (evidence) ile 'Delil Nesneleri' (evidence-items) tek sekmede
+ * birleştirildi (id: delil-isaretleri). Bulutta eski klasörlere ('evidence',
+ * 'evidence-items', 'Delil Nesneleri') yüklenmiş görseller kaybolmasın diye
+ * hepsi yeni kategoriye eşlenir; yeni yüklemeler 'delil-isaretleri' klasörüne gider.
+ */
+const LEGACY_CATEGORY_ALIASES: Record<string, string> = {
+  'evidence': 'delil-isaretleri',
+  'evidence items': 'delil-isaretleri',
+  'delil nesneleri': 'delil-isaretleri',
+  'delil isaretleri': 'delil-isaretleri',
+};
+
+/**
  * Bulut klasör/kategori adını uygulamadaki kategori kimliğine (cat.id) eşler.
- * Örn: 'ARAÇLAR' -> 'vehicles', 'Delil İşaretleri' -> 'evidence', 'vehicles' -> 'vehicles'.
+ * Örn: 'ARAÇLAR' -> 'vehicles', 'Delil İşaretleri' -> 'delil-isaretleri', 'vehicles' -> 'vehicles'.
  * Eşleşme yoksa 'uncategorized' döner — böylece buluttan yüklenen görseller
  * hayalet/uydurma kategorilere düşmez, kategori sistemi bozulmaz.
  */
@@ -38,6 +52,8 @@ export const mapCloudCategoryToId = (
 ): string => {
   const key = normKey(raw);
   if (!key || key === 'uncategorized' || key === 'kroki olusturucu') return 'uncategorized';
+  const alias = LEGACY_CATEGORY_ALIASES[key];
+  if (alias) return alias;
   const hit = allSymbols.find((c) => normKey(c.name) === key || normKey(c.id) === key);
   return hit ? hit.id : 'uncategorized';
 };
