@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="150" height="70" viewBox="0 0 150 70">
+<defs><filter id="kk" x="-12%" y="-12%" width="124%" height="124%">
+<feTurbulence type="fractalNoise" baseFrequency="0.045" numOctaves="2" seed="100" result="wob"/>
+<feDisplacementMap in="SourceGraphic" in2="wob" scale="2.2" result="d1"/>
+<feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="252" result="grain"/>
+<feDisplacementMap in="d1" in2="grain" scale="1.1"/>
+</filter></defs>
+<g filter="url(#kk)" fill="none" stroke="#2b2723" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+<g stroke-width="4.6" opacity="0.13" transform="translate(1.2 1)"><rect x="10" y="18" width="74" height="34" rx="6"/></g>
+<rect x="10" y="18" width="74" height="34" rx="6"/><circle cx="74" cy="35" r="4"/><path d="M84 24 Q102 20 116 26 L120 30 Q122 34 118 38 L110 42 Q96 46 84 44"/><path d="M16 52 Q14.5 57.5 17.5 63"/><path d="M21 52 Q19.5 57.5 22.5 63"/><path d="M26 52 Q24.5 57.5 27.5 63"/><path d="M31 52 Q29.5 57.5 32.5 63"/><path d="M36 52 Q34.5 57.5 37.5 63"/><path d="M41 52 Q39.5 57.5 42.5 63"/><path d="M46 52 Q44.5 57.5 47.5 63"/><path d="M51 52 Q49.5 57.5 52.5 63"/><path d="M56 52 Q54.5 57.5 57.5 63"/><path d="M61 52 Q59.5 57.5 62.5 63"/><path d="M66 52 Q64.5 57.5 67.5 63"/><path d="M71 52 Q69.5 57.5 72.5 63"/><path d="M76 52 Q74.5 57.5 77.5 63"/>
+<g stroke="#3e3831" stroke-width="1.4" opacity="0.8"><line x1="16" y1="22" x2="22" y2="48"/><line x1="25" y1="22" x2="31" y2="48"/><line x1="34" y1="22" x2="40" y2="48"/><line x1="43" y1="22" x2="49" y2="48"/><line x1="52" y1="22" x2="58" y2="48"/><line x1="61" y1="22" x2="67" y2="48"/><line x1="88" y1="30" x2="112" y2="34" stroke-width="1" opacity="0.6"/></g>
+<g stroke="#4c453c" stroke-width="1.05" opacity="0.55"></g>
+</g>
+</svg>

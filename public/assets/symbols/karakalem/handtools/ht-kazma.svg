@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="140" height="112" viewBox="0 0 140 112">
+<defs><filter id="kk" x="-12%" y="-12%" width="124%" height="124%">
+<feTurbulence type="fractalNoise" baseFrequency="0.045" numOctaves="2" seed="174" result="wob"/>
+<feDisplacementMap in="SourceGraphic" in2="wob" scale="2.2" result="d1"/>
+<feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="687" result="grain"/>
+<feDisplacementMap in="d1" in2="grain" scale="1.1"/>
+</filter></defs>
+<g filter="url(#kk)" fill="none" stroke="#2b2723" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+<g stroke-width="4.6" opacity="0.13" transform="translate(1.2 1)"><path d="M58 50 Q84 22 112 44"/><path d="M34 104 L80 46"/></g>
+<path d="M54 52 Q84 16 116 42"/><path d="M59 60 Q86 30 110 51"/><path d="M54 52 Q54 57 59 60"/><path d="M116 42 Q116 47 110 51"/><path d="M34 104 L80 46"/><path d="M43 105 L89 48"/><line x1="34" y1="104" x2="43" y2="105"/>
+<g stroke="#3e3831" stroke-width="1.4" opacity="0.8"><line x1="76" y1="55" x2="93" y2="43" stroke-width="1.2"/><line x1="70" y1="61" x2="87" y2="49" stroke-width="1.2"/></g>
+<g stroke="#4c453c" stroke-width="1.05" opacity="0.55"></g>
+</g>
+</svg>

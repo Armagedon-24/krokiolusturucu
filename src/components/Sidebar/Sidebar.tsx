@@ -377,6 +377,7 @@ export const Sidebar: React.FC = () => {
     'wounds',        // YARA VE YARALANMALAR
     'clothing',      // GİYSİ EŞYA
     'weapons',       // SİLAHLAR VE PARÇALARI
+    'hand-tools',    // EL ALETLERİ
     'traces',        // İZLER
     'explosions',    // PATLAMA VE HASAR
     'outdoor',       // AÇIK ALAN SEMBOLLERİ
