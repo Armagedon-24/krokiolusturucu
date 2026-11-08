@@ -2,7 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './offline-fonts.css' // Yerel Inter/Roboto (Google Fonts yerine — offline)
 import './index.css'
-import 'leaflet/dist/leaflet.css'
+// Not: leaflet CSS'i main'den çıkarıldı — MapPickerModal ile tembel yüklenir (hız)
 import App from './App.tsx'
 import { useStore } from './store/useStore'
 

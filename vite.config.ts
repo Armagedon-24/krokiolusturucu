@@ -151,24 +151,27 @@ export default defineConfig({
     chunkSizeWarningLimit: 2000,
     rollupOptions: {
       output: {
-        manualChunks(id) {
-          if (!id.includes('node_modules')) return undefined;
-          // React core
-          if (id.includes('/react/') || id.includes('/react-dom/') || id.includes('/react-is/')) return 'vendor-react';
-          // Three.js ecosystem (heavy, only used in 3D preview modal)
-          if (id.includes('/three/') || id.includes('@react-three') || id.includes('@react-spring') || id.includes('/troika-') || id.includes('/maath/') || id.includes('/detect-gpu/') || id.includes('/utility-types/')) return 'vendor-three';
-          // Konva canvas
-          if (id.includes('/konva/') || id.includes('/react-konva/')) return 'vendor-konva';
-          // Map
-          if (id.includes('/leaflet/') || id.includes('/react-leaflet/') || id.includes('/@react-leaflet/')) return 'vendor-map';
-          // PDF export
-          if (id.includes('/jspdf/') || id.includes('/html2canvas/')) return 'vendor-export';
-          // State management
-          if (id.includes('/zustand/')) return 'vendor-state';
-          // UI utilities
-          if (id.includes('/lucide-react/') || id.includes('/clsx/') || id.includes('/class-variance-authority/')) return 'vendor-ui';
-          // Catch-all
-          return 'vendor';
+        // HIZ (Rolldown): native advancedChunks kullanılır — function-form manualChunks
+        // Rolldown'da three.core.js gibi modülleri catch-all vendor'a düşürebiliyor ve
+        // 1.2MB'lık three.js açılışta yükleniyordu. Aşağıdaki gruplarla ağır bağımlılıklar
+        // yalnızca kullanıldıklarında indirilir:
+        //   - vendor-three  : yalnızca 3D önizleme modalı (lazy)
+        //   - vendor-map    : yalnızca harita seçici (lazy)
+        //   - vendor-export : yalnızca PDF/HTML dışa aktarma (lazy)
+        // react-reconciler bilinçli olarak vendor-react'te (react-konva açılışta gerekir).
+        advancedChunks: {
+          groups: [
+            // Paylaşımlı runtime parçaları HER ZAMAN eager chunk'ta olmalı; aksi halde
+            // Rolldown bunları lazy vendor chunk'larına indirip açılışı ona bağlayabiliyor.
+            { name: 'vendor-runtime', test: /(core-js|preload-helper|[\\/]node_modules[\\/]raf[\\/])/ },
+            { name: 'vendor-react', test: /[\\/]node_modules[\\/](react|react-dom|react-is|scheduler|react-reconciler|use-sync-external-store)[\\/]/ },
+            { name: 'vendor-three', test: /[\\/]node_modules[\\/](@react-three|three|three-stdlib|troika-|maath|detect-gpu|utility-types)[\\/]/ },
+            { name: 'vendor-konva', test: /[\\/]node_modules[\\/](konva|react-konva|canvas)[\\/]/ },
+            { name: 'vendor-map', test: /[\\/]node_modules[\\/](leaflet|react-leaflet|@react-leaflet|@mapbox|h3-js|proj4)[\\/]/ },
+            { name: 'vendor-export', test: /[\\/]node_modules[\\/](jspdf|html2canvas|canvg|pako|dompurify|fflate)[\\/]/ },
+            { name: 'vendor-state', test: /[\\/]node_modules[\\/](zustand|uuid|use-image)[\\/]/ },
+            { name: 'vendor-ui', test: /[\\/]node_modules[\\/](lucide-react|clsx|class-variance-authority)[\\/]/ },
+          ],
         }
       }
     }

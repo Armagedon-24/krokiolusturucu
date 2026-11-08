@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import 'leaflet/dist/leaflet.css'; // Bu modül tembel yüklendiği için CSS de burada (başlangıç bundle'ı hafif kalır)
 import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import { X, Search, Map as MapIcon, Navigation, Check, Loader2, Globe } from 'lucide-react';

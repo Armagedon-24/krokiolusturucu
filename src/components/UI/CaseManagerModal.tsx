@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { lazy, Suspense, useState } from 'react';
 import { X, FolderPlus, FileText, ChevronRight, Trash2, Edit3, Save, Info, FileDown, Search, MapPin } from 'lucide-react';
 import { useStore } from '../../store/useStore';
-import { MapPickerModal } from './MapPickerModal';
+// HIZ: leaflet yalnızca harita seçici açıldığında yüklenir (başlangıç bundle'ından çıkar)
+const MapPickerModal = lazy(() => import('./MapPickerModal').then(m => ({ default: m.MapPickerModal })));
 import { v4 as uuidv4 } from 'uuid';
 
 interface CaseManagerModalProps {
@@ -447,18 +448,20 @@ export const CaseManagerModal: React.FC<CaseManagerModalProps> = ({ isOpen, onCl
            </button>
         </div>
       </div>
-      <MapPickerModal
-        isOpen={isMapPickerOpen}
-        onClose={() => setIsMapPickerOpen(false)}
-        initialAddress={projectInfo.address}
-        onConfirm={(data) => {
-          updateProjectInfo({ address: data.address });
-          if (projectInfo.type === 'kroki') {
-             useStore.getState().setBackgroundImage(data.staticMapUrl);
-             useStore.getState().setBackgroundOpacity(0.7);
-          }
-        }}
-      />
+      <Suspense fallback={null}>
+        <MapPickerModal
+          isOpen={isMapPickerOpen}
+          onClose={() => setIsMapPickerOpen(false)}
+          initialAddress={projectInfo.address}
+          onConfirm={(data) => {
+            updateProjectInfo({ address: data.address });
+            if (projectInfo.type === 'kroki') {
+               useStore.getState().setBackgroundImage(data.staticMapUrl);
+               useStore.getState().setBackgroundOpacity(0.7);
+            }
+          }}
+        />
+      </Suspense>
     </div>
   );
 };
