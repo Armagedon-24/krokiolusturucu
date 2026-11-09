@@ -88,6 +88,11 @@ interface StoreState extends CanvasState {
   /** Kalıcı sembol yerleşim haritası (kategori ID -> sıralı sembol ID listesi) + tazelik damgası.
    *  Adminin taşıdığı kategori düzeni sayfa yenilense ve bulut erişilemese dahi korunur. */
   symbolPlacements: { savedAt: number, cats: Record<string, string[]> };
+  /** Kalıcı ALT KATEGORİ (grup) haritası (sembol ID -> grup adı; '' = kaldırıldı kaydı/tombstone).
+   *  allSymbols localStorage kotası yüzünden kalıcıya YAZILMADIĞINDAN grup etiketleri her
+   *  sayfa yenilemesinde kayboluyordu; bu hafif harita yerleşim haritasıyla birlikte kalıcıdır
+   *  ve refreshSymbols tarafından yeniden uygulanır. */
+  symbolGroups: { savedAt: number, groups: Record<string, string> };
   /** Sembol yerleşiminin yerel olarak son değiştirilme zamanı (sürükleme vb.) */
   _placementsSavedAt: number;
   /** allSymbols'ın bulutla son eşleşme zamanı — bulutla başarılı senkron/geri yüklemede güncellenir.
@@ -438,6 +443,7 @@ export const useStore = create<StoreState>()(
       objects: [],
       allSymbols: SYMBOL_CATEGORIES,
       symbolPlacements: { savedAt: 0, cats: {} },
+      symbolGroups: { savedAt: 0, groups: {} },
       _placementsSavedAt: 0,
       allSymbolsSyncedAt: 0,
       cloudRevAt: 0,
@@ -1480,6 +1486,14 @@ export const useStore = create<StoreState>()(
           uploadedImages: state.uploadedImages.map((img) =>
             img.id === symbolId ? { ...img, group: g } : img
           ),
+          // KALICI ALT KATEGORİ HARİTASI: allSymbols kalıcıya yazılmadığından grup
+          // etiketi burada ayrıca saklanır; refreshSymbols yenilemede geri uygular.
+          // Boş değer tombstone ('') olarak yazılır — kaldırılan grubun yenilemede
+          // dirilmesi engellenir.
+          symbolGroups: {
+            savedAt: Date.now(),
+            groups: { ...(state.symbolGroups?.groups || {}), [symbolId]: g },
+          },
         }));
 
         if (get().isAdmin) {
@@ -1902,6 +1916,22 @@ export const useStore = create<StoreState>()(
             diagramInfo: { ...get().diagramInfo, corporateLogo: syncedInfo.corporateLogo, corporateLogoConfig: syncedInfo.corporateLogoConfig },
           });
           
+          // Bulut verisi uygulandı: kalıcı ALT KATEGORİ (grup) haritasını bulutun taze
+          // verisiyle EŞİTLE (reseed). Böylece başka bir cihazda yapılan grup atamaları
+          // VE kaldırmaları yerel haritaya da işlenir; haritanın eski kayıtları grubu
+          // yanlışlıkla diriltmez. allSymbols localStorage'a yazılmadığından bu harita
+          // yenilemelerdeki tek grup kaynağıdır.
+          (() => {
+            const reseeded: Record<string, string> = {};
+            ((updates.allSymbols || get().allSymbols) as any[]).forEach((cat: any) =>
+              (cat.symbols || []).forEach((s: any) => {
+                const sg = (s?.group || '').trim();
+                if (sg) reseeded[s.id] = sg;
+              })
+            );
+            set({ symbolGroups: { savedAt: Date.now(), groups: reseeded } });
+          })();
+
           get().refreshSymbols();
 
           // Bulut verisi uygulandı: bulut yerleşimi artık güncel sayılır.
@@ -2145,6 +2175,33 @@ export const useStore = create<StoreState>()(
             const mapped = mapCloudCategoryToId(cur, allCats as any);
             if (mapped !== cur) img.category = mapped;
           });
+
+          // 8. ALT KATEGORİ (GRUP) KORUMASI: allSymbols localStorage kotası nedeniyle
+          //    kalıcıya yazılmaz; grup etiketleri kalıcı symbolGroups haritasından geri
+          //    uygulanır. Böylece sayfa yenilemesinde (ve bulut okuması bayat/başarısız
+          //    olduğunda) adminin oluşturduğu alt kategoriler KAYBOLMAZ.
+          //    Tazelik kuralı yerleşim haritasıyla aynıdır:
+          //    - trustLocalPlacements (açılış) veya harita buluttan tazeyse → harita ESASTır
+          //      ('' tombstone kaydı grubu kaldırır);
+          //    - bulut daha tazese → yalnızca grupsuz kalan semboller haritadan tamamlanır
+          //      (başka cihazdaki kaldırma işlemi geri alınmaz).
+          const persistedGroups: Record<string, string> = state.symbolGroups?.groups || {};
+          if (Object.keys(persistedGroups).length > 0) {
+            const groupsLocalWins = trustLocalPlacements ||
+              (state.symbolGroups?.savedAt || 0) > (state.allSymbolsSyncedAt || 0);
+            categoryMap.forEach((cat: any) => {
+              cat.symbols.forEach((s: any) => {
+                if (!(s.id in persistedGroups)) return;
+                const pg = persistedGroups[s.id];
+                if (groupsLocalWins) {
+                  if (pg) s.group = pg;
+                  else if ('group' in s) delete s.group; // tombstone: kaldırılan grup
+                } else if (!s.group && pg) {
+                  s.group = pg; // bulut taze: yalnızca eksikleri tamamla
+                }
+              });
+            });
+          }
 
           return {
             allSymbols: Array.from(categoryMap.values()),
@@ -2736,6 +2793,13 @@ export const useStore = create<StoreState>()(
           ),
         },
         _placementsSavedAt: state._placementsSavedAt || 0,
+        // KALICI ALT KATEGORİ HARİTASI: allSymbols kalıcıya yazılamadığından (kota)
+        // grup etiketleri bu hafif harita üzerinden korunur — sayfa yenilense dahi
+        // adminin oluşturduğu alt kategoriler kaybolmaz (refreshSymbols geri uygular).
+        symbolGroups: {
+          savedAt: state.symbolGroups?.savedAt || 0,
+          groups: state.symbolGroups?.groups || {},
+        },
         allSymbolsSyncedAt: state.allSymbolsSyncedAt || 0,
         // Bulut yazım damgası (sunucu saati) — bayat CDN kopyalarına karşı kalıcı olmalı
         cloudRevAt: state.cloudRevAt || 0,

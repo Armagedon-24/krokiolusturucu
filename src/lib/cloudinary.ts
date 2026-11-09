@@ -333,18 +333,26 @@ export const cloudinary = {
   // Verileri geri yükle
   load: async (authToken?: string): Promise<any> => {
     // Zaman aşımı: CDN yanıtsız kalırsa uygulama açılışı sonsuza dek spinner'da kalmasın
-    const fetchWithTimeout = (url: string, ms = 12000): Promise<Response> => {
+    const fetchWithTimeout = (url: string, ms = 12000, init?: RequestInit): Promise<Response> => {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), ms);
-      return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(timer));
+      return fetch(url, { ...init, signal: controller.signal }).finally(() => clearTimeout(timer));
     };
     // 1) YETKİLİ YOL (tercih edilen): /api/load-config, Cloudinary Admin API üzerinden
     //    kaydın SÜRÜMLÜ adresini alır ve içeriği sunucu tarafında çeker. Sürümlü URL
     //    önbellek anahtarı benzersiz olduğu için invalidate=true gecikmesinden ETKİLENMEZ —
     //    bayat kopya riski kalmaz. Yetki yoksa / API yoksa (electron) CDN'e düşer.
+    //    KRİTİK DÜZELTME (alt kategori kaybolma hatasının kök nedeni): istek daha önce
+    //    x-auth-token başlığı OLMADAN atılıyordu → uç nokta HER ZAMAN 401 "Yetkisiz
+    //    erişim" döndürüyor, istemci sessizce sürümLENMEMİŞ CDN adresine düşüyor, CDN
+    //    bayat kopya servis ediyordu ve store'daki bayatlık koruması (_revAt) bu kopyayı
+    //    REDDEDİYORDU. Sonuç: restore hiç uygulanmıyor, alt kategori (grup) etiketleri
+    //    her sayfa yenilemesinde kayboluyordu. Başlık artık gönderilir.
     if (authToken) {
       try {
-        const apiRes = await fetchWithTimeout('/api/load-config');
+        const apiRes = await fetchWithTimeout('/api/load-config', 12000, {
+          headers: { 'x-auth-token': authToken },
+        });
         if (apiRes.ok) {
           const apiData = await apiRes.json();
           if (apiData && apiData.config) return apiData.config;
