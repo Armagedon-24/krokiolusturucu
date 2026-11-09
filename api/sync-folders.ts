@@ -61,6 +61,29 @@ function isValidPublicId(pid: string): boolean {
   return /^[\p{L}\p{N} _\-./]+$/u.test(pid);
 }
 
+/**
+ * KRİTİK: Cloudinary teslim adresi = kayıtlı public_id + '.' + biçim uzantısı.
+ * publicIdFromUrl bu ADRESTEN türettiği için sonuç her zaman GERÇEK kayıtlı
+ * id'nin BİR biçim uzantı fazlasıdır ('Merdivenli.png.png' adresi → kayıtlı id
+ * 'Merdivenli.png'). RENAME/DELETE/ karşılaştırma bu GERÇEK id ile yapılmalı;
+ * aksi halde rename 'bulunamadı' ile düşer, kopya yolu devreye girer ve eski
+ * kopyalar asla temizlenemez. (Kanıt: v1'li CDN istekleriyle doğrulandı.)
+ */
+const IMG_FORMAT_EXT = /\.(png|jpe?g|webp|gif|svg|avif|tiff?|bmp)$/i;
+function storedPid(deliveredPid: string): string {
+  return deliveredPid.replace(IMG_FORMAT_EXT, '');
+}
+
+/** Eşleştirme anahtarı: dosya adındaki TÜM ardışık biçim uzantıları atılır
+ *  ('X.png' ve 'X.png.png' → 'X') — eski kopya ile yeni kopyanın adı, uzantı
+ *  kalıntılarına takılmadan eşleşir. ('.png' ↔ '.jpg' çakışmaları 2 eşleşme
+ *  üretir → temizlik yerine koruma tercih edilir.) */
+function nameKey(basename: string): string {
+  let b = basename;
+  while (IMG_FORMAT_EXT.test(b)) b = b.replace(IMG_FORMAT_EXT, '');
+  return b;
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -119,7 +142,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const uploads = (config.uploadedImages || []) as { id?: string; src?: string; category?: string; group?: string }[];
     const seen = new Set<string>();
-    const queue: { idx: number; id: string; fromPid: string; toPid: string }[] = [];
+    const queue: { idx: number; id: string; fromPid: string; toPid: string; deliveredPid: string }[] = [];
     const claimedTargets = new Set<string>();
 
     uploads.forEach((im, idx) => {
@@ -134,15 +157,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const catId = im.category || 'uncategorized';
       const catFolder = safeFolder(nameById[catId] || catId);
       const grp = safeFolder(String(im.group || ''));
-      const fileName = pid.split('/').pop() || 'gorsel';
+      // GERÇEK depo id'leri: teslim adresindeki biçim uzantısı atılır (bkz. storedPid).
+      // Böylece RENAME gerçek kayıttan yapılır ve hedef adı orijinal dosya adı kalır;
+      // zaten taşınmış (uzantısı şişmiş) kayıtlar toPid==fromPid ile ATLANIR (idempotent).
+      const fromPid = storedPid(pid);
+      const fileName = storedPid(pid.split('/').pop() || '') || 'gorsel';
       const toPid = grp && grp !== 'uncategorized'
         ? `kroki-olusturucu/${catFolder}/${grp}/${fileName}`
         : `kroki-olusturucu/${catFolder}/${fileName}`;
-      if (toPid === pid) return; // zaten yerinde
+      if (toPid === fromPid) return; // zaten yerinde
       if (!isValidPublicId(toPid)) return; // geçersiz hedef adı — kayıt korunur
       if (claimedTargets.has(toPid)) return; // aynı hedefe iki kaynak: çakışmayı önle
       claimedTargets.add(toPid);
-      queue.push({ idx, id: String(im.id || pid), fromPid: pid, toPid });
+      queue.push({ idx, id: String(im.id || pid), fromPid, toPid, deliveredPid: pid });
     });
 
     const total = queue.length;
@@ -204,7 +231,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     };
 
-    const moveOne = async (item: { idx: number; id: string; fromPid: string; toPid: string }) => {
+    const moveOne = async (item: { idx: number; id: string; fromPid: string; toPid: string; deliveredPid: string }) => {
       // Önce RENAME (referans yoksa): anında, eski kopya kalmaz.
       if (!isReferencedElsewhere(item.fromPid)) {
         const r = await renameOnCloudinary(item);
@@ -212,7 +239,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // rename başarısızsa (ör. kaynak biçimi) kopya yoluyla dene
       }
       try {
-        const srcUrl = `https://res.cloudinary.com/${CLOUD_NAME}/image/upload/${item.fromPid}`;
+        // KAYNAK OKUMA teslim adresiyle (üretilmiş id) yapılır: depo id'si tek başına
+        // teslim adresi değildir (biçim uzantısı eksik → 404, bkz. storedPid notu).
+        const srcUrl = `https://res.cloudinary.com/${CLOUD_NAME}/image/upload/${item.deliveredPid}`;
         const fileResp = await fetch(srcUrl, { redirect: 'follow', signal: AbortSignal.timeout(8000) });
         if (!fileResp.ok) return { ok: false as const, error: `Kaynak okunamadı (HTTP ${fileResp.status})` };
         const buf = Buffer.from(await fileResp.arrayBuffer());
@@ -292,20 +321,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let orphansRemaining = 0;
     try {
       if (Date.now() < deadline) {
+        // GERÇEK kayıtlı id'ler: teslim adresinden türetilen id'den biçim uzantısı
+        // atılır (bkz. storedPid). Admin API listelemesi de GERÇEK id'leri döndürür —
+        // iki taraf ancak böyle eşleşir; aksi halde temizlik HİÇ çalışmaz.
         const referenced = new Set<string>();
         for (const u of uploads) {
           const p = publicIdFromUrl(String(u?.src || ''));
-          if (p) referenced.add(p);
+          if (p) referenced.add(storedPid(p));
         }
         for (const c of (config.allSymbols || []) as { symbols?: { src?: string }[] }[]) {
           for (const s of (c?.symbols || []) as { src?: string }[]) {
             const p = publicIdFromUrl(String(s?.src || ''));
-            if (p) referenced.add(p);
+            if (p) referenced.add(storedPid(p));
           }
         }
         const baseMap = new Map<string, string[]>();
         for (const p of referenced) {
-          const b = p.split('/').pop() || '';
+          const b = nameKey(p.split('/').pop() || '');
           if (!b) continue;
           if (!baseMap.has(b)) baseMap.set(b, []);
           baseMap.get(b)!.push(p);
@@ -337,7 +369,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         for (const p of listed) {
           if (!p.startsWith('kroki-olusturucu/') || p.startsWith('kroki-olusturucu/objects/')) continue;
           if (referenced.has(p) || scenesBlob.includes(p)) continue; // referanslı → kesinlikle korunur
-          const b = p.split('/').pop() || '';
+          const b = nameKey(p.split('/').pop() || '');
           const matches = baseMap.get(b) || [];
           if (matches.length === 1 && matches[0] !== p) orphans.push(p); // bilinen taşınmanın eski kopyası
         }
