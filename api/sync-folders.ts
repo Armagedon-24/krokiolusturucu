@@ -142,7 +142,62 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const deadline = Date.now() + 5000;
     let cursor = 0;
 
+    // REFERANS DENETİMİ: eski public_id sahne/verilerde geçiyorsa eski kopya
+    // SİLİNEMEZ-TAŞINAMAZ (tuval nesneleri o URL ile çizer) → KOPYA yolu kullanılır.
+    // Hiç referans yoksa Cloudinary RENAME (sunucu tarafı anında taşıma) kullanılır:
+    // eski kopya kalmaz (Cloudinary'de 'alakasız klasörde resim' kirliliği biter) ve
+    // indirme/yükleme yaplmadığı için çok hızlıdır.
+    const scenesBlob = JSON.stringify(config.scenes || []) + JSON.stringify(config.projectState || {});
+    const uploadsSrcBlob = JSON.stringify(uploads.map((u) => String(u?.src || '')));
+    const isReferencedElsewhere = (fromPid: string): boolean =>
+      scenesBlob.includes(fromPid) || uploadsSrcBlob.split(fromPid).length - 1 > 1;
+
+    const renameOnCloudinary = async (item: { fromPid: string; toPid: string }): Promise<{ ok: boolean; secureUrl?: string; error?: string }> => {
+      try {
+        const timestamp = Math.round(Date.now() / 1000);
+        const signParams: Record<string, string> = {
+          from_public_id: item.fromPid,
+          invalidate: 'true',
+          overwrite: 'true',
+          timestamp: String(timestamp),
+          to_public_id: item.toPid,
+        };
+        const toSign = Object.keys(signParams).sort().map((k) => `${k}=${signParams[k]}`).join('&');
+        const signature = crypto.createHash('sha1').update(toSign + API_SECRET).digest('hex');
+        const form = new URLSearchParams();
+        form.append('from_public_id', item.fromPid);
+        form.append('to_public_id', item.toPid);
+        form.append('overwrite', 'true');
+        form.append('invalidate', 'true');
+        form.append('api_key', API_KEY);
+        form.append('timestamp', String(timestamp));
+        form.append('signature', signature);
+        const resp = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/rename`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: form.toString(),
+          signal: AbortSignal.timeout(8000),
+        });
+        const data = await resp.json().catch(() => null);
+        if (!resp.ok || !data || (data as { error?: { message?: string } }).error) {
+          return { ok: false, error: (data as { error?: { message?: string } })?.error?.message || `HTTP ${resp.status}` };
+        }
+        const secureUrl = (data as { secure_url?: string }).secure_url;
+        return secureUrl
+          ? { ok: true, secureUrl }
+          : { ok: false, error: 'Rename yanıtı URL içermiyor' };
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : 'Rename hatası' };
+      }
+    };
+
     const moveOne = async (item: { idx: number; id: string; fromPid: string; toPid: string }) => {
+      // Önce RENAME (referans yoksa): anında, eski kopya kalmaz.
+      if (!isReferencedElsewhere(item.fromPid)) {
+        const r = await renameOnCloudinary(item);
+        if (r.ok && r.secureUrl) return { ok: true as const, secureUrl: r.secureUrl };
+        // rename başarısızsa (ör. kaynak biçimi) kopya yoluyla dene
+      }
       try {
         const srcUrl = `https://res.cloudinary.com/${CLOUD_NAME}/image/upload/${item.fromPid}`;
         const fileResp = await fetch(srcUrl, { redirect: 'follow', signal: AbortSignal.timeout(8000) });
@@ -210,6 +265,104 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
+    // 3b) ESKİ KOPYA TEMİZLİĞİ (orphan sweep): önceki kopya-yolu taşımalar eski
+    // klasörde GÖRSEL bırakıyordu — Cloudinary'de 'alakasız kategoride resim'
+    // kirliliğinin asıl kaynağı buydu. Kural son derece tutucudur:
+    //   - kroki-olusturucu/objects/ ve kroki_config_v2 HİÇ dokunulmaz,
+    //   - yapılandırmada (uploads/allSymbols src) veya sahne/proje verisinde
+    //     referansı olan her dosya KORUNUR,
+    //   - referansı olmayan bir dosya, yalnızca adı TEK bir referanslı dosyanın
+    //     adıyla birebir aynıysa (yani bilinen bir taşınmanın eski kopyasıysa) silinir,
+    //   - kökeni bilinmeyen dosyalara DOKUNULMAZ (kullanıcının elle yüklediği
+    //     olabilecek varlıklar güvenliktedir).
+    let cleaned = 0;
+    let orphansRemaining = 0;
+    try {
+      if (Date.now() < deadline) {
+        const referenced = new Set<string>();
+        for (const u of uploads) {
+          const p = publicIdFromUrl(String(u?.src || ''));
+          if (p) referenced.add(p);
+        }
+        for (const c of (config.allSymbols || []) as { symbols?: { src?: string }[] }[]) {
+          for (const s of (c?.symbols || []) as { src?: string }[]) {
+            const p = publicIdFromUrl(String(s?.src || ''));
+            if (p) referenced.add(p);
+          }
+        }
+        const baseMap = new Map<string, string[]>();
+        for (const p of referenced) {
+          const b = p.split('/').pop() || '';
+          if (!b) continue;
+          if (!baseMap.has(b)) baseMap.set(b, []);
+          baseMap.get(b)!.push(p);
+        }
+
+        // Bulut ağacını listele (en fazla 2 sayfa = 1000 varlık yeterli)
+        const listed: string[] = [];
+        let nextCursor: string | undefined = undefined;
+        for (let page = 0; page < 2 && Date.now() < deadline; page++) {
+          const listUrl = new URL(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/resources/image/upload`);
+          listUrl.searchParams.set('prefix', 'kroki-olusturucu/');
+          listUrl.searchParams.set('max_results', '500');
+          if (nextCursor) listUrl.searchParams.set('next_cursor', nextCursor);
+          const lr = await fetch(listUrl.toString(), {
+            headers: { Authorization: authHeader },
+            signal: AbortSignal.timeout(8000),
+          });
+          if (!lr.ok) break;
+          const ld = await lr.json().catch(() => null);
+          if (!ld || !Array.isArray(ld.resources)) break;
+          for (const r of ld.resources) listed.push(String(r.public_id));
+          nextCursor = ld.next_cursor;
+          if (!nextCursor) break;
+        }
+
+        const orphans: string[] = [];
+        for (const p of listed) {
+          if (!p.startsWith('kroki-olusturucu/') || p.startsWith('kroki-olusturucu/objects/')) continue;
+          if (referenced.has(p) || scenesBlob.includes(p)) continue; // referanslı → kesinlikle korunur
+          const b = p.split('/').pop() || '';
+          const matches = baseMap.get(b) || [];
+          if (matches.length === 1 && matches[0] !== p) orphans.push(p); // bilinen taşınmanın eski kopyası
+        }
+        orphansRemaining = orphans.length;
+
+        for (const p of orphans) {
+          if (Date.now() >= deadline) break;
+          const timestamp = Math.round(Date.now() / 1000);
+          const signParams: Record<string, string> = {
+            invalidate: 'true',
+            public_id: p,
+            timestamp: String(timestamp),
+          };
+          const toSign = Object.keys(signParams).sort().map((k) => `${k}=${signParams[k]}`).join('&');
+          const signature = crypto.createHash('sha1').update(toSign + API_SECRET).digest('hex');
+          const form = new URLSearchParams();
+          form.append('public_id', p);
+          form.append('invalidate', 'true');
+          form.append('api_key', API_KEY);
+          form.append('timestamp', String(timestamp));
+          form.append('signature', signature);
+          const dr = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/destroy`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: form.toString(),
+            signal: AbortSignal.timeout(8000),
+          });
+          const dd = await dr.json().catch(() => null);
+          if (dr.ok && dd && !dd.error) {
+            cleaned++;
+          } else {
+            break; // silme reddedildiyse kalanı sonraki çağrıya bırak
+          }
+        }
+        orphansRemaining = Math.max(0, orphans.length - cleaned);
+      }
+    } catch (sweepErr) {
+      console.warn('sync-folders: eski kopya temizliği atlandı:', sweepErr);
+    }
+
     // 4) Taşınanlar varsa yapılandırmayı geri yaz (save-config ile aynı format)
     let revAt = 0;
     if (movedEntries.length > 0) {
@@ -231,18 +384,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const writeResp = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/raw/upload`, {
         method: 'POST',
         body: formData,
+        signal: AbortSignal.timeout(8000),
       });
       const writeData = await writeResp.json().catch(() => null);
       if (!writeResp.ok || !writeData || (writeData as { error?: { message?: string } }).error) {
         // Yapılandırma yazılamadı: taşımalar fiziksel olarak yapıldı ama src işlenmedi.
-        // Sonraki çağrıda aynı taşımalar overwrite ile tekrarlanır (idempotent) — hata döndürmek yerine bildir.
+        // Sonraki çağrıda aynı taşımalar overwrite/rename ile tekrarlanır (idempotent).
         console.error('sync-folders: config geri yazılamadı:', (writeData as { error?: { message?: string } })?.error?.message);
       }
     }
 
     return res.status(200).json({
       moved: movedEntries.length,
+      cleaned,
       remaining: Math.max(0, total - movedEntries.length),
+      orphansRemaining,
       total,
       movedEntries,
       failed,

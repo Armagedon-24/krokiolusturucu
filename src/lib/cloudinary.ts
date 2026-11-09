@@ -339,7 +339,9 @@ export const cloudinary = {
    */
   syncFolders: async (authToken?: string): Promise<{
     moved: number;
+    cleaned: number;
     remaining: number;
+    orphansRemaining: number;
     total: number;
     movedEntries: { id: string; secureUrl: string }[];
     failed: { id: string; error: string }[];

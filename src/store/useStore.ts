@@ -1613,13 +1613,15 @@ export const useStore = create<StoreState>()(
           let folderMoved = 0;
           let folderFailed = 0;
           try {
-            for (let i = 0; i < 40; i++) {
+            for (let i = 0; i < 60; i++) {
               const heal = await cloud.syncFolders(get().adminPassword || '');
               if (!heal) break;
               folderMoved += heal.moved || 0;
               folderFailed += (heal.failed || []).length;
               applyMovedSrcs(set as unknown as (p: any) => void, heal.movedEntries);
-              if (!heal.remaining || !heal.moved) break; // bitti veya ilerleme yok
+              // Eski kopya temizliği (cleaned) ilerlemesi de döngüyü sürdürür.
+              if (!heal.remaining && !heal.orphansRemaining) break;
+              if (!heal.moved && !heal.cleaned) break; // ilerleme yok — sonraki senkronda denemeye devam
             }
           } catch (healErr) {
             console.warn('Bulut klasör eşitleme başarısız (yedek güvende):', healErr);
@@ -1691,13 +1693,14 @@ export const useStore = create<StoreState>()(
         if (_syncBusy) return; // sürmekte olan senkrondaki eşitleme işi tamamlayacak
         let moved = 0;
         try {
-          for (let i = 0; i < 40; i++) {
+          for (let i = 0; i < 60; i++) {
             if (_syncBusy) break; // senkron başladıysa eşitlemeyi ona bırak (çakışma yok)
             const heal = await cloud.syncFolders(get().adminPassword || '');
             if (!heal) return;
             moved += heal.moved || 0;
             applyMovedSrcs(set as unknown as (p: any) => void, heal.movedEntries);
-            if (!heal.remaining || !heal.moved) break;
+            if (!heal.remaining && !heal.orphansRemaining) break;
+            if (!heal.moved && !heal.cleaned) break;
           }
         } catch (err) {
           console.warn('Klasör eşitlemesi başarısız:', err);
