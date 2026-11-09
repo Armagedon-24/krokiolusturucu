@@ -1613,16 +1613,20 @@ export const useStore = create<StoreState>()(
           // taşınanların yeni adreslerini yapılandırmaya da işler (döngü sellemesi yok).
           let folderMoved = 0;
           let folderFailed = 0;
+          let folderPruned = 0;
           try {
             for (let i = 0; i < 60; i++) {
               const heal = await cloud.syncFolders(get().adminPassword || '');
               if (!heal) break;
               folderMoved += heal.moved || 0;
+              folderPruned += heal.prunedFolders || 0;
               folderFailed += (heal.failed || []).length;
               applyMovedSrcs(set as unknown as (p: any) => void, heal.movedEntries);
-              // Eski kopya temizliği (cleaned) ilerlemesi de döngüyü sürdürür.
-              if (!heal.remaining && !heal.orphansRemaining) break;
-              if (!heal.moved && !heal.cleaned) break; // ilerleme yok — sonraki senkronda denemeye devam
+              // Eski kopya temizliği (cleaned) ve boş klasör budaması (prunedFolders)
+              // ilerlemesi de döngüyü sürdürür.
+              const foldersPending = (heal.emptyFoldersRemaining || 0) > 0;
+              if (!heal.remaining && !heal.orphansRemaining && !foldersPending) break;
+              if (!heal.moved && !heal.cleaned && !heal.prunedFolders) break; // ilerleme yok — sonraki senkronda denemeye devam
             }
           } catch (healErr) {
             console.warn('Bulut klasör eşitleme başarısız (yedek güvende):', healErr);
@@ -1696,6 +1700,7 @@ export const useStore = create<StoreState>()(
         _healBusy = true;
         let moved = 0;
         let cleaned = 0;
+        let pruned = 0;
         let failedCount = 0;
         let noProgress = 0;
         let lastError = '';
@@ -1721,13 +1726,15 @@ export const useStore = create<StoreState>()(
             }
             moved += heal.moved || 0;
             cleaned += heal.cleaned || 0;
+            pruned += heal.prunedFolders || 0;
             failedCount += (heal.failed || []).length;
             if (failedCount > 0 && !lastError) {
               lastError = `${failedCount} görsel taşınamadı: ${(heal.failed || [])[0]?.error || 'bilinmeyen hata'}`;
             }
             applyMovedSrcs(set as unknown as (p: any) => void, heal.movedEntries);
-            if (!heal.remaining && !heal.orphansRemaining) { noProgress = 0; break; }
-            if (!heal.moved && !heal.cleaned) {
+            const foldersPending = (heal.emptyFoldersRemaining || 0) > 0;
+            if (!heal.remaining && !heal.orphansRemaining && !foldersPending) { noProgress = 0; break; }
+            if (!heal.moved && !heal.cleaned && !heal.prunedFolders) {
               noProgress++;
               if (noProgress >= 3) break;
               await sleep(1500);
@@ -1740,13 +1747,14 @@ export const useStore = create<StoreState>()(
         } finally {
           _healBusy = false;
         }
-        if (moved > 0) {
+        if (moved > 0 || pruned > 0) {
           get().addNotification({
             type: 'success',
             force: true,
             message: 'Bulut Klasörleri Eşitlendi',
             description: `${moved} görsel uygulamadaki kategori/alt kategori düzenine göre doğru klasöre taşındı` +
               (cleaned > 0 ? `, ${cleaned} eski kopya temizlendi` : '') +
+              (pruned > 0 ? `, ${pruned} boş klasör silindi` : '') +
               (failedCount > 0 ? `; ${failedCount} görsel şu an taşınamadı (tekrar EŞİTLE'ye basın)` : '') +
               '. Cloudinary klasör ağacını yenileyerek görebilirsiniz.'
           });

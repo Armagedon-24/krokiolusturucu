@@ -364,6 +364,11 @@ export const cloudinary = {
     total: number;
     movedEntries: { id: string; secureUrl: string }[];
     failed: { id: string; error: string }[];
+    /** Boş klasör budaması: bu çağrıda silinen klasör sayısı + silinen yollar. */
+    prunedFolders?: number;
+    prunedFolderList?: string[];
+    /** Hâlâ boş klasör kaldıysa >0; listeleme yapılamadıysa -1 (bilinmiyor). */
+    emptyFoldersRemaining?: number;
     /** Sunucu/HTTP hatası durumunda dolu gelir — istemci kullanıcıya gösterebilir. */
     error?: string;
   } | null> => {

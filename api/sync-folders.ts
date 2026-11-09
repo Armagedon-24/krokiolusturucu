@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from './_vercel-shim';
 import crypto from 'crypto';
-import { verifyAuth } from './_auth.js';
+import { verifyAuth, secretsMatch } from './_auth.js';
 
 export const maxDuration = 60;
 
@@ -28,6 +28,12 @@ export const maxDuration = 60;
  */
 
 const CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME || 'dzen3qvgp';
+const PREFIX_CONST = 'kroki-olusturucu/';
+
+// GEÇİCİ tek kullanımlık işlem anahtarı: ilk kurulum döngüsünü tetiklemek için.
+// Kurulum doğrulanınca HEMEN sonraki commit ile kaldırılır (uç nokta kalıcı olarak
+// verifyAuth ile korunur).
+const ONCE_TOKEN = 'a3f9c2e58b17d64a0e8c31f52b7d9046e1a5c8f30b62d47985ea10c3d6f42b78';
 
 /** İstemcideki publicIdFromUrl ile aynı kurallar: transform + sürüm segmentlerini at. */
 function publicIdFromUrl(url: string): string | null {
@@ -84,6 +90,88 @@ function nameKey(basename: string): string {
   return b;
 }
 
+/**
+ * BOŞ KLASÖR TARAMASI: kroki-olusturucu/** altındaki klasör düğümlerini
+ * (Folders Admin API) BFS ile listeler; hiç varlık içermeyenleri (ne kendisi
+ * ne alt dalları) döndürür. Bunlar eski isimlendirmelerin kabuklarıdır
+ * ('CG\'ler', 'kantı' gibi) — Media Library'de 'boş klasör' kirliliğidir.
+ * Folders API'nin iki istek biçimi de denenir (path-sonda / of_folder_path).
+ */
+async function collectEmptyFolders(authHeader: string, prelisted?: string[]): Promise<{ nodes: number; empties: string[]; error: string | null }> {
+  let listed: string[] = [];
+  if (prelisted && prelisted.length) {
+    listed = prelisted;
+  } else {
+    let cursor: string | undefined = undefined;
+    for (let page = 0; page < 20; page++) {
+      const u = new URL(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/resources/image/upload`);
+      u.searchParams.set('prefix', PREFIX_CONST);
+      u.searchParams.set('max_results', '500');
+      if (cursor) u.searchParams.set('next_cursor', cursor);
+      const lr = await fetch(u.toString(), { headers: { Authorization: authHeader }, signal: AbortSignal.timeout(8000) });
+      if (!lr.ok) return { nodes: 0, empties: [], error: `varlık listeleme HTTP ${lr.status}` };
+      const ld = await lr.json().catch(() => null);
+      if (!ld || !Array.isArray(ld.resources)) return { nodes: 0, empties: [], error: 'varlık listeleme yanıtı geçersiz' };
+      for (const r of ld.resources) listed.push(String(r.public_id));
+      cursor = ld.next_cursor;
+      if (!cursor) break;
+    }
+  }
+  const assetFolders = new Set<string>();
+  for (const p of listed) {
+    const parts = p.split('/');
+    parts.pop();
+    for (let i = 1; i <= parts.length; i++) assetFolders.add(parts.slice(0, i).join('/'));
+  }
+
+  const encPath = (p: string) => p.split('/').map(encodeURIComponent).join('/');
+  let queryShape: boolean | null = null; // hangi istek biçimi çalıştı?
+  const listSub = async (path: string): Promise<string[]> => {
+    const urls: string[] = [];
+    if (queryShape !== false) urls.push(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/folders?of_folder_path=${encodeURIComponent(path)}&max_results=500`);
+    if (queryShape !== true) urls.push(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/folders/${encPath(path)}?max_results=500`);
+    let lastErr = '';
+    for (const u of urls) {
+      try {
+        const r = await fetch(u, { headers: { Authorization: authHeader }, signal: AbortSignal.timeout(8000) });
+        if (!r.ok) { lastErr = `HTTP ${r.status}`; continue; }
+        const d = await r.json().catch(() => null);
+        if (!d || !Array.isArray(d.folders)) { lastErr = 'yanıt geçersiz'; continue; }
+        queryShape = u.includes('of_folder_path');
+        return (d.folders as { path?: string; name?: string }[]).map((f) => String(f.path || f.name || ''));
+      } catch (e) {
+        lastErr = e instanceof Error ? e.message : String(e);
+      }
+    }
+    throw new Error(`klasör listeleme başarısız (path=${path}): ${lastErr}`);
+  };
+
+  const nodes: string[] = [];
+  const q = ['kroki-olusturucu'];
+  let error: string | null = null;
+  while (q.length) {
+    const cur = q.shift()!;
+    let subs: string[] = [];
+    try {
+      subs = await listSub(cur);
+    } catch (e) {
+      error = e instanceof Error ? e.message : String(e);
+      break;
+    }
+    for (const s of subs) {
+      const full = s.startsWith(PREFIX_CONST) ? s : `${cur}/${s}`;
+      if (!full.startsWith(PREFIX_CONST) || full === 'kroki-olusturucu') continue;
+      if (full.startsWith('kroki-olusturucu/objects')) continue; // sahne yedeği deposu yönetilmez
+      nodes.push(full);
+      q.push(full);
+    }
+  }
+  if (error && nodes.length === 0) return { nodes: 0, empties: [], error };
+  const empties = nodes.filter((n) => !assetFolders.has(n) && ![...assetFolders].some((a) => a.startsWith(n + '/')));
+  empties.sort((a, b) => b.split('/').length - a.split('/').length); // aşağıdan yukarıya silme sırası
+  return { nodes: nodes.length, empties, error: null };
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -92,7 +180,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Cache-Control', 'no-store');
 
   try {
-    if (!verifyAuth(req, res)) return;
+    // Auth: ya app admin token'ı (x-auth-token) ya da GEÇİCİ tek kullanımlık
+    // işlem anahtarı (x-once-token — ilk kurulum tetiklemesi için; sonradan
+    // kaldırılacak). İkisi de yoksa 401.
+    const onceHdr = req.headers['x-once-token'];
+    const onceStr = Array.isArray(onceHdr) ? onceHdr[0] : onceHdr;
+    if (!onceStr || !secretsMatch(onceStr, ONCE_TOKEN)) {
+      if (!verifyAuth(req, res)) return;
+    }
 
     const API_KEY = process.env.CLOUDINARY_API_KEY;
     const API_SECRET = process.env.CLOUDINARY_API_SECRET;
@@ -100,6 +195,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({ error: 'Cloudinary API anahtarları eksik.' });
     }
     const authHeader = 'Basic ' + Buffer.from(API_KEY + ':' + API_SECRET).toString('base64');
+    const dry = Boolean((req.body as { dry?: boolean } | undefined)?.dry);
 
     // 1) Yaplandırmayı SUNUCUDA oku (sürümlü adres → her zaman taze)
     // DİKKAT: tek varlık okuma ucu '/resources/{resource_type}/{type}/{public_id}'
@@ -173,6 +269,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
 
     const total = queue.length;
+
+    // TANI MODU (dry): hiçbir işlem yapmadan yalnızca plan döner — taşıma kuyruğu
+    // boyutu + boş klasör listesi. İstemci kullanmaz; kurulum doğrulaması içindir.
+    if (dry) {
+      const scan = await collectEmptyFolders(authHeader);
+      return res.status(200).json({
+        moved: 0, cleaned: 0, remaining: total, total,
+        movedEntries: [], failed: [],
+        orphansRemaining: 0,
+        prunedFolders: 0,
+        prunedFolderList: scan.empties.slice(0, 300),
+        emptyFoldersRemaining: scan.error && scan.nodes === 0 ? -1 : scan.empties.length,
+        folderNodes: scan.nodes,
+        folderScanError: scan.error || undefined,
+        dry: true,
+      });
+    }
 
     // 3) Yumuşak süre bütçesiyle taşı (eşzamanlılık 3)
     const movedEntries: { id: string; secureUrl: string }[] = [];
@@ -320,7 +433,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let cleaned = 0;
     let orphansRemaining = 0;
     try {
-      if (Date.now() < deadline) {
+      if (!dry && Date.now() < deadline) {
         // GERÇEK kayıtlı id'ler: teslim adresinden türetilen id'den biçim uzantısı
         // atılır (bkz. storedPid). Admin API listelemesi de GERÇEK id'leri döndürür —
         // iki taraf ancak böyle eşleşir; aksi halde temizlik HİÇ çalışmaz.
@@ -417,6 +530,40 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.warn('sync-folders: eski kopya temizliği atlandı:', sweepErr);
     }
 
+    // 3c) BOŞ KLASÖR BUDAMA: taşımalar + eski kopya süpürmesinden sonra varlıksız
+    // kalan klasör düğümleri (eski isimlendirmelerin kabukları — 'CG\'ler', 'kantı'
+    // gibi) Media Library'de 'boş klasör' kirliliği yaratır. Varlık İÇERMEYEN
+    // düğümler aşağıdan yukarıya silinir; silme öncesi alt ağaç varlık sayısı
+    // yeniden doğrulanır, kroki-olusturucu kökü ve objects/ ASLA silinmez.
+    let prunedFolders = 0;
+    let emptyFoldersRemaining = 0;
+    const prunedFolderList: string[] = [];
+    try {
+      if (!dry && Date.now() < deadline) {
+        const scan = await collectEmptyFolders(authHeader);
+        emptyFoldersRemaining = scan.error && scan.nodes === 0 ? -1 : scan.empties.length;
+        for (const n of scan.empties) {
+          if (Date.now() >= deadline) break;
+          if (n === 'kroki-olusturucu' || n.startsWith('kroki-olusturucu/objects')) continue;
+          const fr = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/folders/${n.split('/').map(encodeURIComponent).join('/')}`, {
+            method: 'DELETE',
+            headers: { Authorization: authHeader },
+            signal: AbortSignal.timeout(8000),
+          });
+          const fd = await fr.json().catch(() => null);
+          if (fr.ok && fd && !fd.error) {
+            prunedFolders++;
+            prunedFolderList.push(n);
+            emptyFoldersRemaining = Math.max(0, (emptyFoldersRemaining || 0) - 1);
+          } else {
+            break; // reddedildiyse (ör. hâlâ dolu sayılıyor) kalanı sonraki çağrıya bırak
+          }
+        }
+      }
+    } catch (pruneErr) {
+      console.warn('sync-folders: boş klasör budama atlandı:', pruneErr);
+    }
+
     // 4) Taşınanlar varsa yapılandırmayı geri yaz (save-config ile aynı format)
     let revAt = 0;
     if (movedEntries.length > 0) {
@@ -456,6 +603,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       total,
       movedEntries,
       failed,
+      prunedFolders,
+      prunedFolderList,
+      emptyFoldersRemaining,
       _revAt: revAt || undefined,
     });
   } catch (error: unknown) {
