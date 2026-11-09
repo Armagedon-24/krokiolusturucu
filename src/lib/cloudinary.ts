@@ -193,6 +193,26 @@ export const getOptimizedCloudinaryUrl = (url: string, width = 80, height?: numb
   return url.replace('/image/upload/', `/image/upload/${transforms}/`);
 };
 
+/**
+ * Sunucu/HTTP hata gövdesini okunur bir mesaja çevirir. Vercel altyapı sayfaları
+ * (ör. 'DEPLOYMENT_NOT_FOUND') JSON yerine text/plain döndürür; response.json()
+ * bunu yutunca kullanıcı 'HTTP 404'ten öte bir şey göremiyordu. Deployment
+ * kaybolduğunda NE yapılacağını söyleyen net metin buradan gelir.
+ */
+async function readApiError(response: Response, fallback: string): Promise<string> {
+  const raw = await response.text().catch(() => '');
+  let msg = '';
+  try {
+    msg = String((JSON.parse(raw) as { error?: string })?.error || '');
+  } catch {
+    msg = raw.replace(/\s+/g, ' ').slice(0, 160).trim();
+  }
+  if (response.status === 404 && (raw.includes('DEPLOYMENT_NOT_FOUND') || raw.includes('deployment could not be found'))) {
+    return 'Uygulama sunucusu yayında değil (Vercel deployment kayıp). Vercel panosundan projeyi yeniden dağıtın (Redeploy), sonra sayfayı yenileyip tekrar deneyin.';
+  }
+  return msg || fallback;
+}
+
 export const cloudinary = {
   upload: async (file: Blob | string, fileName: string, category?: string, authToken?: string, group?: string, allSymbols?: readonly { id: string, name?: string }[]): Promise<string> => {
     try {
@@ -319,8 +339,7 @@ export const cloudinary = {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `Yedekleme başarısız (HTTP ${response.status})`);
+        throw new Error(await readApiError(response, `Yedekleme başarısız (HTTP ${response.status})`));
       }
 
       return await response.json();
@@ -358,13 +377,12 @@ export const cloudinary = {
         body: JSON.stringify({}),
       });
       if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
         // HATAYI YUTMA: daha önce null dönüyordu ve istemci sessizce vazgeçiyordu —
         // kullanıcı neden eşitlenmediğini asla göremiyordu. Hata mesajı taşınır.
         return {
           moved: 0, cleaned: 0, remaining: 0, orphansRemaining: 0, total: 0,
           movedEntries: [], failed: [],
-          error: err.error || `Klasör eşitleme başarısız (HTTP ${response.status})`,
+          error: await readApiError(response, `Klasör eşitleme başarısız (HTTP ${response.status})`),
         };
       }
       return await response.json();
