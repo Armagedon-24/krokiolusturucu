@@ -369,13 +369,15 @@ let _lastSilentSyncWarn = 0;
 /**
  * ALT KATEGORİ ↔ BULUT ALTKLASÖRÜ AYNASI (mevcut görseller dahil):
  * Buluttaki her kütüphane görselini (kategori, alt kategori) ikilisinin gerektirdiği
- * klasöre taşır: kroki-olusturucu/<Kategori>/<Alt Kategori>/<dosya>.
+ * klasöre taşır — klasörler uygulamadaki GÖRÜNEN adlarla:
+ *   kroki-olusturucu/Araçlar/Traktör/<dosya>
  * - Alt kategorisi boş olanlar (DİĞER) kategori klasörünün kökünde kalır.
  * - Zaten doğru klasörde olanlar için AĞ isteği yapılmaz (cloud.move yerelde no-op döner).
  * - kroki-olusturucu/objects/ (sahne yedeği deposu) hiç dokunulmaz.
  * - Taşınanların src'si store'da güncellenir (uploadedImages + allSymbols).
- * Böylece YENİ alt kategori yaratılmasıyla kalmaz, ESKİ yüklemeler de aynı başlık
- * altında toplanır; bulut klasör ağacı uygulamadaki düzeni birebir yansıtır.
+ * Böylece YENİ alt kategori yaratılmasıyla kalmaz, ESKİ yüklemeler de (kökte/yanlış
+ * klasörde duranlar dahil) aynı başlık altında toplanır; bulut klasör ağacı uygulamadaki
+ * sekmelerle birebir aynı isimleri taşır. Eşzamanlılık 4 — ilk toplu düzenleme hızlı biter.
  * Dönüş: taşınan görsel sayısı.
  */
 const mirrorGroupFolders = async (get: () => any, set: (p: any) => void): Promise<number> => {
@@ -397,29 +399,36 @@ const mirrorGroupFolders = async (get: () => any, set: (p: any) => void): Promis
   );
 
   let moved = 0;
-  for (const t of targets) {
-    try {
-      const res = await cloud.move(t.src, t.category, get().adminPassword || '', t.group);
-      if (res && res.secureUrl && res.secureUrl !== t.src) {
-        const newSrc = res.secureUrl;
-        set((state: any) => ({
-          uploadedImages: (state.uploadedImages || []).map((im: any) =>
-            im.id === t.id ? { ...im, src: newSrc } : im
-          ),
-          allSymbols: (state.allSymbols || []).map((cat: any) => ({
-            ...cat,
-            symbols: (cat.symbols || []).map((s: any) =>
-              s.id === t.id ? { ...s, src: newSrc } : s
+  let cursor = 0;
+  const token = get().adminPassword || '';
+  const allSymbols = get().allSymbols as any;
+  const worker = async () => {
+    while (cursor < targets.length) {
+      const t = targets[cursor++];
+      try {
+        const res = await cloud.move(t.src, t.category, token, t.group, allSymbols);
+        if (res && res.secureUrl && res.secureUrl !== t.src) {
+          const newSrc = res.secureUrl;
+          set((state: any) => ({
+            uploadedImages: (state.uploadedImages || []).map((im: any) =>
+              im.id === t.id ? { ...im, src: newSrc } : im
             ),
-          })),
-          _placementsSavedAt: Date.now(),
-        }));
-        moved++;
+            allSymbols: (state.allSymbols || []).map((cat: any) => ({
+              ...cat,
+              symbols: (cat.symbols || []).map((s: any) =>
+                s.id === t.id ? { ...s, src: newSrc } : s
+              ),
+            })),
+            _placementsSavedAt: Date.now(),
+          }));
+          moved++;
+        }
+      } catch (err) {
+        console.warn('Alt kategori klasör taşıması başarısız (kayıt korundu):', t.id, err);
       }
-    } catch (err) {
-      console.warn('Alt kategori klasör taşıması başarısız (kayıt korundu):', t.id, err);
     }
-  }
+  };
+  await Promise.all([worker(), worker(), worker(), worker()]);
   return moved;
 };
 
@@ -791,7 +800,7 @@ export const useStore = create<StoreState>()(
             // "Upload preset must be whitelisted" hatası veriyordu. Artık sunucu
             // tarafında imzalanan /api/upload-to-cloudinary kullanılır.
             const cleanName = img.name || 'gorsel';
-            const publicUrl = await cloud.upload(img.src, cleanName, img.category, get().adminPassword || '', img.group);
+            const publicUrl = await cloud.upload(img.src, cleanName, img.category, get().adminPassword || '', img.group, get().allSymbols as any);
             finalSrc = publicUrl;
             // Kullanıcı isteği: görsel buluta yüklendiğinde MESAJLA bildir
             get().addNotification({
@@ -925,7 +934,7 @@ export const useStore = create<StoreState>()(
           const targetCategory = category !== undefined ? category : current.category;
           const targetGroup = group !== undefined ? group : current.group;
           void (async () => {
-            const moved = await cloud.move(current.src!, targetCategory, get().adminPassword || '', targetGroup);
+            const moved = await cloud.move(current.src!, targetCategory, get().adminPassword || '', targetGroup, get().allSymbols as any);
             if (moved && moved.secureUrl !== current.src) {
               set((state) => ({
                 uploadedImages: state.uploadedImages.map((img) =>

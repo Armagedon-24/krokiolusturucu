@@ -67,19 +67,40 @@ const prettifyFolderName = (raw: string): string =>
     .replace(/(^|\s)([a-zçğıöşü])/g, (_m, p1, p2) => p1 + p2.toUpperCase());
 
 /**
- * Bulut klasör adı güvenli hale getirme: Türkçe karakterler katlanır (ç→c, ğ→g...)
- * ve public_id beyaz listesi dışındaki karakterler alt çizgiye düşürülür. Klasör adı
- * dosya adıyla AYNI kuralla temizlenir ki /api/upload-to-cloudinary ve
- * /api/move-cloudinary doğrulamasından güvenle geçsin. Uygulama içi eşleştirme
- * normKey üzerinden yapıldığı için (ARACLAR ~ ARAÇLAR) kategori eşleşmesi bozulmaz.
+ * Bulut klasör adı güvenli hale getirme — UNICODE KORUYAN sürüm:
+ * Türkçe karakterler (ç, ğ, ı, ö, ş, ü) KORUNUR; yalnızca klasör ayacı (/) ve
+ * kontrol/kurallı karakterler temizlenir. Çünkü buluttaki mevcut klasör ağacı
+ * Türkçe görünen adlarla kuruludur ('Araçlar', 'Cadde Sokak', 'Ev Eşyaları'...)
+ * ve kullanıcının görmeyi beklediği düzen budur. public_id beyaz listesi
+ * (api/upload-to-cloudinary, api/move-cloudinary) Unicode harfleri kabul eder.
+ * Uygulama içi eşleştirme normKey üzerinden yapıldığı için büyük-küçük/Türkçe
+ * karakter farkları kategori eşleşmesini bozmaz.
  */
-const sanitizeFolderName = (category?: string): string =>
-  (category || 'uncategorized')
-    .replace(/ç/g, 'c').replace(/ğ/g, 'g').replace(/ı/g, 'i')
-    .replace(/ö/g, 'o').replace(/ş/g, 's').replace(/ü/g, 'u')
-    .replace(/[^A-Za-z0-9._\-]/g, '_')
-    .replace(/^_+|_+$/g, '')
+export const safeCloudFolder = (folder?: string): string =>
+  (folder || '')
+    .replace(/[/\\]+/g, ' ')
+    .replace(/[\u0000-\u001f<>:"|?*]/g, '')
+    .replace(/\.{2,}/g, '.') // '..' yol geçişi kalıntısı oluşmasın
+    .replace(/\s+/g, ' ')
     .trim() || 'uncategorized';
+
+/**
+ * Kategori kimliğinden BULUT KLASÖR ADI (görünen ad) türetir.
+ * ALT KATEGORİ ↔ BULUT ALTKLASÖRÜ AYNASI: klasörler kategori kimlikleriyle
+ * ('vehicles') DEĞİL, uygulamada görünen adlarıyla ('Araçlar') yazılır — böylece
+ * bulut klasör ağacı uygulamadaki sekmelerle birebir aynı isimleri taşır ve
+ * mevcut Türkçe klasörlerle ('Araçlar' gibi) birleşir.
+ */
+export const categoryFolderName = (
+  categoryId: string | undefined,
+  allSymbols?: readonly { id: string, name?: string }[]
+): string => {
+  const raw = (allSymbols || []).find((c) => c.id === categoryId)?.name || categoryId || '';
+  const safe = safeCloudFolder(raw);
+  return safe === 'uncategorized' && categoryId && categoryId !== 'uncategorized'
+    ? safeCloudFolder(categoryId)
+    : safe;
+};
 
 /**
  * Bulut alt klasör adını uygulamadaki alt kategori (grup) etiketine eşler.
@@ -151,8 +172,12 @@ export const publicIdFromUrl = (url: string): string | null => {
   const parts = rest.split('/').filter(Boolean);
   if (parts.length > 0 && /^v\d+$/.test(parts[0])) parts.shift();
   if (parts.length === 0) return null;
-  const joined = parts.join('/');
-  return joined.replace(/\.[a-zA-Z0-9]+$/, '') || joined;
+  // URL kodlu Türkçe karakterleri çöz (Ara%C3%A7lar -> Araçlar): Cloudinary Admin API
+  // public_id'yi HAM unicode döndürür; URL'den türetilen kimliklerin onlarla
+  // eşleşebilmesi (mükerrer kontrol, kategori birleştirme, klasör aynası) için
+  // iki taraf da ham forma normalize edilir.
+  const decoded = parts.map((p) => { try { return decodeURIComponent(p); } catch { return p; } }).join('/');
+  return decoded.replace(/\.[a-zA-Z0-9]+$/, '') || decoded;
 };
 
 export const getOptimizedCloudinaryUrl = (url: string, width = 80, height?: number): string => {
@@ -169,7 +194,7 @@ export const getOptimizedCloudinaryUrl = (url: string, width = 80, height?: numb
 };
 
 export const cloudinary = {
-  upload: async (file: Blob | string, fileName: string, category?: string, authToken?: string, group?: string): Promise<string> => {
+  upload: async (file: Blob | string, fileName: string, category?: string, authToken?: string, group?: string, allSymbols?: readonly { id: string, name?: string }[]): Promise<string> => {
     try {
       // Blob'ları data URI'ye çevir (imzalı API veri URI bekler)
       let dataUri: string;
@@ -189,21 +214,21 @@ export const cloudinary = {
 
       // İmzasız preset Cloudinary'de beyaz listede olmadığı için ("Upload preset must be
       // whitelisted for unsigned uploads") yükleme artık imzalı sunucu API'si üzerinden yapılır.
-      // Türkçe karakterler katlanır (ç→c, ğ→g...) ki dosya adları aramada/mükerrer kontrolde tutarlı olsun.
+      // Dosya adı unicode koruyan kuralla temizlenir (Türkçe karakterler KALIR); klasör
+      // ayacı ve kontrol karakterleri alt çizgiye düşer.
       const safeName = (fileName || 'gorsel')
-        .replace(/ç/g, 'c').replace(/ğ/g, 'g').replace(/ı/g, 'i')
-        .replace(/ö/g, 'o').replace(/ş/g, 's').replace(/ü/g, 'u')
-        .replace(/[^a-zA-Z0-9.\-_]/g, '_');
-      const catFolder = sanitizeFolderName(
-        (category && category !== 'uncategorized') ? category : 'uncategorized'
-      );
-      // ALT KATEGORİ ↔ BULUT ALTKLASÖRÜ AYNASI: alt kategorisi olan görsel, kategori
-      // klasörü İÇİNDE kendi alt kategori klasörüne yazılır
-      // (kroki-olusturucu/<Kategori>/<Alt Kategori>/<dosya>) — bulut klasör ağacı
-      // uygulamadaki başlık düzenini birebir yansıtır. Alt kategori boşsa (DİĞER)
-      // görsel kategori klasörünün kökünde kalır.
-      const groupFolder = sanitizeFolderName(group || '');
-      const publicId = groupFolder
+        .replace(/[/\\]+/g, '_')
+        .replace(/[\u0000-\u001f<>:"|?*]/g, '')
+        .replace(/[^\p{L}\p{N} _.\-]/gu, '_')
+        .replace(/\s+/g, ' ')
+        .trim() || 'gorsel';
+      // KATEGORİ/ALT KATEGORİ ↔ BULUT KLASÖRÜ AYNASI: klasörler uygulamadaki GÖRÜNEN
+      // adlarla yazılır (kroki-olusturucu/Araçlar/Traktör/<dosya>) — bulut klasör ağacı
+      // uygulamadaki sekmelerle birebir aynı isimleri taşır, mevcut Türkçe klasörlerle
+      // ('Araçlar' gibi) birleşir. Alt kategori boşsa (DİĞER) görsel kategori kökünde kalır.
+      const catFolder = categoryFolderName(category, allSymbols);
+      const groupFolder = safeCloudFolder(group || '');
+      const publicId = groupFolder !== 'uncategorized'
         ? `kroki-olusturucu/${catFolder}/${groupFolder}/${safeName}`
         : `kroki-olusturucu/${catFolder}/${safeName}`;
 
@@ -231,22 +256,21 @@ export const cloudinary = {
   },
 
   /**
-   * KATEGORİ ↔ BULUT KLASÖRÜ AYNASI: görseli bulutta hedef kategorinin klasörüne
-   * TAŞIR (imzalı /api/move-cloudinary ile kopyalar). Eski kopya bilinçli olarak
-   * silinmez — tuvale eklenmiş nesneler eski URL ile çizmeye devam eder.
+   * KATEGORİ/ALT KATEGORİ ↔ BULUT KLASÖRÜ AYNASI: görseli bulutta hedef kategorinin
+   * klasörüne (görünen adla: kroki-olusturucu/Araçlar/Traktör/...) TAŞIR (imzalı
+   * /api/move-cloudinary ile kopyalar). Eski kopya bilinçli olarak silinmez — tuvale
+   * eklenmiş nesneler eski URL ile çizmeye devam eder.
    * Başarılıysa yeni secure_url döner; taşıma gerekmez/başarısızsa null.
    */
-  move: async (url: string, category?: string, authToken?: string, group?: string): Promise<{ publicId: string, secureUrl: string } | null> => {
+  move: async (url: string, category?: string, authToken?: string, group?: string, allSymbols?: readonly { id: string, name?: string }[]): Promise<{ publicId: string, secureUrl: string } | null> => {
     try {
       const fromPid = publicIdFromUrl(url);
       if (!fromPid) return null;
-      const catFolder = sanitizeFolderName(
-        (category && category !== 'uncategorized') ? category : 'uncategorized'
-      );
-      // Hedef: kategori klasörü + varsa alt kategori alt klasörü (klasör aynası)
-      const groupFolder = sanitizeFolderName(group || '');
+      // Hedef: kategorinin GÖRÜNEN adı + varsa alt kategori alt klasörü (klasör aynası)
+      const catFolder = categoryFolderName(category, allSymbols);
+      const groupFolder = safeCloudFolder(group || '');
       const fileName = fromPid.split('/').pop() || 'gorsel';
-      const toPid = groupFolder
+      const toPid = groupFolder !== 'uncategorized'
         ? `kroki-olusturucu/${catFolder}/${groupFolder}/${fileName}`
         : `kroki-olusturucu/${catFolder}/${fileName}`;
       if (toPid === fromPid) return null; // zaten doğru klasörde

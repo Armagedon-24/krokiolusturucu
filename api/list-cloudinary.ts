@@ -22,7 +22,11 @@ const pidFromUrl = (url?: string): string | null => {
   }
   if (parts.length > 0 && /^v\d+$/.test(parts[0])) parts.shift();
   if (parts.length === 0) return null;
-  return parts.join('/').replace(/\.[a-zA-Z0-9]+$/, '') || null;
+  // URL kodlu Türkçe karakterleri çöz (Ara%C3%A7lar -> Araçlar): Admin API public_id'yi
+  // HAM unicode döndürür; config'ten türetilen kimliklerin asset kimlikleriyle
+  // eşleşmesi (isim/kategori/alt kategori birleştirmesi) için ham forma normalize edilir.
+  const decoded = parts.map((p) => { try { return decodeURIComponent(p); } catch { return p; } });
+  return decoded.join('/').replace(/\.[a-zA-Z0-9]+$/, '') || null;
 };
 
 /**

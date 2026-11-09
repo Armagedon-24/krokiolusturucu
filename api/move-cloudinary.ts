@@ -13,10 +13,16 @@ import { verifyAuth } from './_auth.js';
  * (Eski kopya galeri/taramada isim eşleşmesiyle zaten mükerrer sayılmaz.)
  */
 
-/** public_id karakter beyaz listesi: harf, rakam, boşluk, tire, alt çizgi, nokta, slash (.. ve başında / yok) */
+/**
+ * public_id karakter beyaz listesi: Unicode harfler (Türkçe ç, ğ, ı, ö, ş, ü DAHİL),
+ * rakamlar, boşluk, tire, alt çizgi, nokta, slash. Klasör aynası uygulamadaki
+ * GÖRÜNEN adlarla (kroki-olusturucu/Araçlar/Traktör/...) çalıştığı için Türkçe
+ * karakterler ZORUNLUDUR; mevcut bulut klasör ağacı da zaten Türkçe adlıdır.
+ * Yol geçişi (..), başında / ve kontrol karakterleri reddedilir.
+ */
 function isValidPublicId(pid: string): boolean {
   if (!pid || pid.includes('..') || pid.startsWith('/') || pid.length > 256) return false;
-  return /^[A-Za-z0-9 _\-./]+$/.test(pid);
+  return /^[\p{L}\p{N} _\-./]+$/u.test(pid);
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
