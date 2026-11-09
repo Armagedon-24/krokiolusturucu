@@ -127,9 +127,11 @@ async function collectEmptyFolders(authHeader: string, prelisted?: string[]): Pr
   const encPath = (p: string) => p.split('/').map(encodeURIComponent).join('/');
   let queryShape: boolean | null = null; // hangi istek biçimi çalıştı?
   const listSub = async (path: string): Promise<string[]> => {
-    const urls: string[] = [];
-    if (queryShape !== false) urls.push(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/folders?of_folder_path=${encodeURIComponent(path)}&max_results=500`);
-    if (queryShape !== true) urls.push(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/folders/${encPath(path)}?max_results=500`);
+    const enc = encPath(path);
+    const queryUrl = `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/folders?of_folder_path=${encodeURIComponent(path)}&max_results=500`;
+    const pathUrl = `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/folders/${enc}?max_results=500`;
+    // SDK dokümanındaki biçim (path sonda) önce denenir; bilinen-iyi biçim varsa o önce.
+    const urls = queryShape === true ? [queryUrl, pathUrl] : [pathUrl, queryUrl];
     let lastErr = '';
     for (const u of urls) {
       try {
@@ -146,27 +148,37 @@ async function collectEmptyFolders(authHeader: string, prelisted?: string[]): Pr
     throw new Error(`klasör listeleme başarısız (path=${path}): ${lastErr}`);
   };
 
+  // SEVİYE PARALEL BFS: her seviyedeki klasör istekleri aynı anda atılır —
+  // sıralı tarama ~50 düğümde dakikalar sürüyordu; paralel tarama saniyelerde biter.
   const nodes: string[] = [];
-  const q = ['kroki-olusturucu'];
   let error: string | null = null;
-  while (q.length) {
-    const cur = q.shift()!;
-    let subs: string[] = [];
-    try {
-      subs = await listSub(cur);
-    } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
-      break;
+  let level: string[] = ['kroki-olusturucu'];
+  for (let depth = 0; level.length && depth < 8; depth++) {
+    const results = await Promise.all(level.map(async (cur) => {
+      try {
+        return { cur, subs: await listSub(cur), err: null as string | null };
+      } catch (e) {
+        return { cur, subs: [] as string[], err: e instanceof Error ? e.message : String(e) };
+      }
+    }));
+    const next: string[] = [];
+    for (const r of results) {
+      if (r.err) { error = r.err; continue; }
+      for (const s of r.subs) {
+        const full = s.startsWith(PREFIX_CONST) ? s : `${r.cur}/${s}`;
+        if (!full.startsWith(PREFIX_CONST) || full === 'kroki-olusturucu') continue;
+        if (full.startsWith('kroki-olusturucu/objects')) continue; // sahne yedeği deposu yönetilmez
+        if (nodes.includes(full) || next.includes(full)) continue;
+        nodes.push(full);
+        next.push(full);
+      }
     }
-    for (const s of subs) {
-      const full = s.startsWith(PREFIX_CONST) ? s : `${cur}/${s}`;
-      if (!full.startsWith(PREFIX_CONST) || full === 'kroki-olusturucu') continue;
-      if (full.startsWith('kroki-olusturucu/objects')) continue; // sahne yedeği deposu yönetilmez
-      nodes.push(full);
-      q.push(full);
-    }
+    if (error && nodes.length === 0) return { nodes: 0, empties: [], error };
+    level = next;
   }
-  if (error && nodes.length === 0) return { nodes: 0, empties: [], error };
+  if (nodes.length === 0) {
+    return { nodes: 0, empties: [], error: error || 'klasör ağacı boş döndü (Folders API biçimi uyuşmadı)' };
+  }
   const empties = nodes.filter((n) => !assetFolders.has(n) && ![...assetFolders].some((a) => a.startsWith(n + '/')));
   empties.sort((a, b) => b.split('/').length - a.split('/').length); // aşağıdan yukarıya silme sırası
   return { nodes: nodes.length, empties, error: null };
@@ -290,9 +302,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // 3) Yumuşak süre bütçesiyle taşı (eşzamanlılık 3)
     const movedEntries: { id: string; secureUrl: string }[] = [];
     const failed: { id: string; error: string }[] = [];
-    // Yumuşak süre bütçesi: plan 10 sn ile sınırlıysa bile son dalga bitmeden
-    // dönülür. Her fetch ayrıca kendi zaman aşımıyla korunur (asılı istek yok).
-    const deadline = Date.now() + 5000;
+    // Yumuşak süre bütçesi: uç nokta maxDuration=60 bildirir; taşıma + süpürme +
+    // budama fazlarının tamamı 45 sn'lik tek bütçede çalışır. Her fetch ayrıca
+    // kendi zaman aşımıyla korunur (asılı istek yok).
+    const deadline = Date.now() + 45000;
     let cursor = 0;
 
     // REFERANS DENETİMİ: eski public_id sahne/verilerde geçiyorsa eski kopya
