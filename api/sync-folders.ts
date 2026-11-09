@@ -126,7 +126,12 @@ async function collectEmptyFolders(authHeader: string, prelisted?: string[]): Pr
   }
   const assetFolders = new Set<string>();
   for (const p of listed) {
-    const parts = p.split('/');
+    // NFC NORMALİZASYONU: aynı Türkçe ad iki farklı bayt dizisiyle yazılabilir
+    // ('ş' U+015F ↔ 's'+U+0327). Folders API düğümü ile varlık yolu farklı
+    // normalizasyonda ise startsWith eşleşmez → klasör HATALI 'boş' sayılır,
+    // silmeye çalışılır, Cloudinary 'not empty' ile reddeder (kanıt:
+    // 'Trafik işaretleri' altındaki görünmez kaynak). Her iki taraf NFC'ye çevrilir.
+    const parts = p.normalize('NFC').split('/');
     parts.pop();
     for (let i = 1; i <= parts.length; i++) assetFolders.add(parts.slice(0, i).join('/'));
   }
@@ -186,7 +191,10 @@ async function collectEmptyFolders(authHeader: string, prelisted?: string[]): Pr
   if (nodes.length === 0) {
     return { nodes: 0, empties: [], error: error || 'klasör ağacı boş döndü (Folders API biçimi uyuşmadı)' };
   }
-  const empties = nodes.filter((n) => !assetFolders.has(n) && ![...assetFolders].some((a) => a.startsWith(n + '/')));
+  const empties = nodes.filter((n) => {
+    const nn = n.normalize('NFC');
+    return !assetFolders.has(nn) && ![...assetFolders].some((a) => a.startsWith(nn + '/'));
+  });
   empties.sort((a, b) => b.split('/').length - a.split('/').length); // aşağıdan yukarıya silme sırası
   return { nodes: nodes.length, empties, error: null };
 }
