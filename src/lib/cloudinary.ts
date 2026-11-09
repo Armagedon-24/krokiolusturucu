@@ -330,6 +330,40 @@ export const cloudinary = {
     }
   },
 
+  /**
+   * SUNUCU TARAFI KLASÖR EŞİTLEME: buluttaki her kütüphane görselini yapılandırmadaki
+   * (kategori, alt kategori) hedef klasörüne sunucuda taşır. Tek çağrı, yumuşak süre
+   * bütçesiyle çalışır; kalan görsel varsa 'remaining' bildirilir ve istemci döngüyle
+   * sürdürür. Taşınanların yeni src'leri yapılandırmaya işlenir + 'movedEntries' ile
+   * istemciye döner (istemci store'unu günceller → sonraki yedeklemeler temiz olur).
+   */
+  syncFolders: async (authToken?: string): Promise<{
+    moved: number;
+    remaining: number;
+    total: number;
+    movedEntries: { id: string; secureUrl: string }[];
+    failed: { id: string; error: string }[];
+  } | null> => {
+    try {
+      const response = await fetch('/api/sync-folders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-auth-token': authToken || '',
+        },
+        body: JSON.stringify({}),
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || `Klasör eşitleme başarısız (HTTP ${response.status})`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Cloudinary SyncFolders Error:', error);
+      return null;
+    }
+  },
+
   // Verileri geri yükle
   load: async (authToken?: string): Promise<any> => {
     // Zaman aşımı: CDN yanıtsız kalırsa uygulama açılışı sonsuza dek spinner'da kalmasın

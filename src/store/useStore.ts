@@ -106,6 +106,8 @@ interface StoreState extends CanvasState {
   setIsAdmin: (isAdmin: boolean, password?: string) => void;
   syncToCloud: (silent?: boolean) => void;
   restoreFromCloud: (silent?: boolean) => Promise<boolean>;
+  /** Açılışta/İNDİR sonrasında bulut klasör ağacını uygulamadaki düzene göre eşitler (yalnızca admin). */
+  healCloudFolders: () => Promise<void>;
   adminSettings: {
     logoConfig?: {
       x: number;
@@ -371,71 +373,45 @@ const fetchCloudAdminSettings = async (authToken?: string): Promise<any> => {
 // Sessiz senkron hataları için kısılmış uyarı (spam engelleme)
 let _lastSilentSyncWarn = 0;
 
+/** Yerel geliştirme ortamı: bulut API'leri (Vercel) burada çalışmaz. */
+const isLocalhostEnv = (): boolean => typeof window !== 'undefined' &&
+  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
 /**
- * ALT KATEGORİ ↔ BULUT ALTKLASÖRÜ AYNASI (mevcut görseller dahil):
- * Buluttaki her kütüphane görselini (kategori, alt kategori) ikilisinin gerektirdiği
- * klasöre taşır — klasörler uygulamadaki GÖRÜNEN adlarla:
- *   kroki-olusturucu/Araçlar/Traktör/<dosya>
- * - Alt kategorisi boş olanlar (DİĞER) kategori klasörünün kökünde kalır.
- * - Zaten doğru klasörde olanlar için AĞ isteği yapılmaz (cloud.move yerelde no-op döner).
- * - kroki-olusturucu/objects/ (sahne yedeği deposu) hiç dokunulmaz.
- * - Taşınanların src'si store'da güncellenir (uploadedImages + allSymbols).
- * Böylece YENİ alt kategori yaratılmasıyla kalmaz, ESKİ yüklemeler de (kökte/yanlış
- * klasörde duranlar dahil) aynı başlık altında toplanır; bulut klasör ağacı uygulamadaki
- * sekmelerle birebir aynı isimleri taşır. Eşzamanlılık 4 — ilk toplu düzenleme hızlı biter.
- * Dönüş: taşınan görsel sayısı.
+ * Taşınan görsellerin yeni bulut adreslerini store'a işler (uploadedImages + allSymbols).
+ * Sunucu tarafı klasör eşitleyicinin (sync-folders) döndürdüğü movedEntries için kullanılır;
+ * böylece sonraki yedeklemeler ESKİ klasör adreslerini yeniden yazmaz (döngü sellemesi).
  */
-const mirrorGroupFolders = async (get: () => any, set: (p: any) => void): Promise<number> => {
-  if (!get().isAdmin) return 0;
-
-  const seenPids = new Set<string>();
-  const targets: { id: string; src: string; category: string; group: string }[] = [];
-  const collect = (src?: string, id?: string, category?: string, group?: string) => {
-    if (!src || !/^https?:\/\/res\.cloudinary\.com\//i.test(src)) return;
-    const pid = publicIdFromUrl(src);
-    if (!pid || pid.startsWith('kroki-olusturucu/objects/')) return;
-    if (seenPids.has(pid)) return; // aynı görsel iki listede varsa tek taşıma
-    seenPids.add(pid);
-    targets.push({ id: id || pid, src, category: category || 'uncategorized', group: group || '' });
-  };
-  (get().uploadedImages || []).forEach((im: any) => collect(im.src, im.id, im.category, im.group));
-  (get().allSymbols || []).forEach((cat: any) =>
-    (cat.symbols || []).forEach((s: any) => collect(s.src, s.id, cat.id, s.group))
-  );
-
-  let moved = 0;
-  let cursor = 0;
-  const token = get().adminPassword || '';
-  const allSymbols = get().allSymbols as any;
-  const worker = async () => {
-    while (cursor < targets.length) {
-      const t = targets[cursor++];
-      try {
-        const res = await cloud.move(t.src, t.category, token, t.group, allSymbols);
-        if (res && res.secureUrl && res.secureUrl !== t.src) {
-          const newSrc = res.secureUrl;
-          set((state: any) => ({
-            uploadedImages: (state.uploadedImages || []).map((im: any) =>
-              im.id === t.id ? { ...im, src: newSrc } : im
-            ),
-            allSymbols: (state.allSymbols || []).map((cat: any) => ({
-              ...cat,
-              symbols: (cat.symbols || []).map((s: any) =>
-                s.id === t.id ? { ...s, src: newSrc } : s
-              ),
-            })),
-            _placementsSavedAt: Date.now(),
-          }));
-          moved++;
-        }
-      } catch (err) {
-        console.warn('Alt kategori klasör taşıması başarısız (kayıt korundu):', t.id, err);
-      }
-    }
-  };
-  await Promise.all([worker(), worker(), worker(), worker()]);
-  return moved;
+const applyMovedSrcs = (
+  set: (p: any) => void,
+  entries?: { id: string; secureUrl: string }[]
+) => {
+  if (!entries || entries.length === 0) return;
+  const byId = new Map(entries.map((e) => [e.id, e.secureUrl]));
+  set((state: any) => ({
+    uploadedImages: (state.uploadedImages || []).map((im: any) =>
+      byId.has(im.id) ? { ...im, src: byId.get(im.id) } : im
+    ),
+    allSymbols: (state.allSymbols || []).map((cat: any) => ({
+      ...cat,
+      symbols: (cat.symbols || []).map((s: any) =>
+        byId.has(s.id) ? { ...s, src: byId.get(s.id) } : s
+      ),
+    })),
+  }));
 };
+
+/**
+ * ALT KATEGORİ ↔ BULUT ALTKLASÖRÜ AYNASI — artık SUNUCU TARAFINDA:
+ * Eski istemci aynası her görsel için ayrı /api/move-cloudinary çağrısı açıyordu;
+ * büyük PNG'lerde ve soğuk başlangıçlarda Vercel'in 10 sn fonksiyon sınırına
+ * takılıp RASTGELE eksikler bırakıyordu (72 görsel 'uncategorized'/'evidence'
+ * gibi alakasız klasörlerde kalmıştı). Yerini /api/sync-folders aldı: tek uç
+ * nokta yapılandırmayı sunucuda okur, uyuşmayan HER görseli yumuşak süre
+ * bütçesiyle taşır ve kalanı 'remaining' ile bildirir — istemci döngüyle
+ * remaining=0 olana dek sürdürür (syncToCloud ve healCloudFolders).
+ * Aşağıdaki yardımcı, taşınanların yeni adreslerini store'a işler.
+ */
 
 export const useStore = create<StoreState>()(
   persist(
@@ -1547,18 +1523,6 @@ export const useStore = create<StoreState>()(
         };
 
         try {
-          // ALT KATEGORİ ↔ BULUT ALTKLASÖRÜ AYNASI: senkron öncesi mevcut görseller
-          // (eski yüklemeler dahil) kendi (kategori/alt kategori) klasörlerine toplanır.
-          // Yeni alt kategori yaratıldığında VE mevcut olanlar için bulut klasör ağacı
-          // uygulamadaki başlık düzenini birebir yansıtır. Taşıma olmasa bile maliyeti
-          // yoktur: doğru klasördeki görseller için ağ isteği yapılmaz.
-          let groupMoves = 0;
-          try {
-            groupMoves = await mirrorGroupFolders(get as unknown as () => any, set as unknown as (p: any) => void);
-          } catch (mirrorErr) {
-            console.warn('Alt kategori klasör aynası başarısız (senkron devam ediyor):', mirrorErr);
-          }
-
           const { uploadedImages, allSymbols, objects, backgroundImage, projectInfo, scenes, archiveScenes = [], activeSceneId, visualSettings } = get();
 
           // KRİTİK: Silme listelerini buluttaki son haliyle BİRLEŞTİR.
@@ -1639,6 +1603,27 @@ export const useStore = create<StoreState>()(
             configPayload.visualSettings,
             get().adminPassword || ''
           );
+
+          // SUNUCU TARAFI KLASÖR EŞİTLEME (eski istemci aynasının yerine): yedek az yeni
+          // yazıldı; sunucu bu yapılandırmadaki HER görselin fiziksel klasörünü uygulamanın
+          // (kategori, alt kategori) düzeniyle karşılaştırıp uyuşmayanları KENDİ taşır.
+          // İstemci taşıma istekleri büyük PNG'lerde zaman aşımına düşüp rastgele eksikler
+          // bırakıyordu; sunucu eşitleyici 'remaining=0' olana dek sürdürülebilir ve
+          // taşınanların yeni adreslerini yapılandırmaya da işler (döngü sellemesi yok).
+          let folderMoved = 0;
+          let folderFailed = 0;
+          try {
+            for (let i = 0; i < 40; i++) {
+              const heal = await cloud.syncFolders(get().adminPassword || '');
+              if (!heal) break;
+              folderMoved += heal.moved || 0;
+              folderFailed += (heal.failed || []).length;
+              applyMovedSrcs(set as unknown as (p: any) => void, heal.movedEntries);
+              if (!heal.remaining || !heal.moved) break; // bitti veya ilerleme yok
+            }
+          } catch (healErr) {
+            console.warn('Bulut klasör eşitleme başarısız (yedek güvende):', healErr);
+          }
           
           if (!silent) {
             clearProgress();
@@ -1648,7 +1633,8 @@ export const useStore = create<StoreState>()(
               force: true,
               message: 'Buluta Yüklendi',
               description: `Tüm veriler buluta başarıyla yedeklendi (${objects.length} nesne, ${finalArchiveToSync.length} sayfa, ${cleanUploads.length} görsel).` +
-                (groupMoves > 0 ? ` ${groupMoves} görsel alt kategori klasörüne düzenlendi.` : '')
+                (folderMoved > 0 ? ` ${folderMoved} görsel uygulamadaki kategori/alt kategori düzenine göre doğru klasöre taşındı.` : '') +
+                (folderFailed > 0 ? ` ${folderFailed} görsel şu an taşınamadı (sonraki eşitlemede otomatik denenir).` : '')
             });
           }
           // Bulut artık güncel: yerel yerleşim damgasıyla aynı tazelikte.
@@ -1688,6 +1674,42 @@ export const useStore = create<StoreState>()(
             _syncQueued = false;
             void get().syncToCloud(true);
           }
+        }
+      },
+
+      /**
+       * AÇILIŞ KLASÖR EŞİTLEME (yalnızca admin): bulut klasör ağacını uygulamadaki
+       * (kategori, alt kategori) düzenine göre SUNUCU TARAFINDA eşitler — yedek
+       * YAZMAZ, yalnızca dosyaları doğru klasörlere taşır ve taşınanların yeni
+       * adreslerini store'a işler. Uygulama açılışında restoreFromCloud'tan sonra
+       * arka planda çağrılır; böylece daha önce yarım kalan taşıma eksikleri
+       * (zaman aşımı vb.) kullanıcı müdahalesi olmadan tamamlanır.
+       */
+      healCloudFolders: async () => {
+        if (!get().isAdmin) return;
+        if (isLocalhostEnv()) return; // yerel geliştirmede bulut API'leri kapalı
+        if (_syncBusy) return; // sürmekte olan senkrondaki eşitleme işi tamamlayacak
+        let moved = 0;
+        try {
+          for (let i = 0; i < 40; i++) {
+            if (_syncBusy) break; // senkron başladıysa eşitlemeyi ona bırak (çakışma yok)
+            const heal = await cloud.syncFolders(get().adminPassword || '');
+            if (!heal) return;
+            moved += heal.moved || 0;
+            applyMovedSrcs(set as unknown as (p: any) => void, heal.movedEntries);
+            if (!heal.remaining || !heal.moved) break;
+          }
+        } catch (err) {
+          console.warn('Klasör eşitlemesi başarısız:', err);
+          return;
+        }
+        if (moved > 0) {
+          get().addNotification({
+            type: 'success',
+            force: true,
+            message: 'Bulut Klasörleri Eşitlendi',
+            description: `${moved} görsel uygulamadaki kategori/alt kategori düzenine göre doğru klasöre taşındı. Cloudinary klasör ağacını yenileyerek görebilirsiniz.`
+          });
         }
       },
 
@@ -1942,6 +1964,13 @@ export const useStore = create<StoreState>()(
             allSymbolsSyncedAt: Date.now(),
             cloudRevAt: Math.max(cloudRevAt, Number(get().cloudRevAt || 0)),
           });
+
+          // BULUT KLASÖR EŞİTLEMESİ (yalnızca admin, arka plan): her başarılı okuma/
+          // geri yüklemeden sonra bulut klasör ağacı uygulamadaki (kategori, alt kategori)
+          // düzenle karşılaştırılıp eksikler sunucuda tamamlanır. Yedek YAZMAZ; yalnızca
+          // dosyaları doğru klasörlere taşır ve yeni adresleri store'a işler. Eşzamanlı
+          // senkronla çakışmasın diye _syncBusy'i sorgular (healCloudFolders içinde).
+          void get().healCloudFolders();
 
           if (!silent) {
             clearProgress();

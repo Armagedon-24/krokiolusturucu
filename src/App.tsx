@@ -31,6 +31,7 @@ function App() {
         refreshSymbols({ trustLocalPlacements: true });
         // Always restore cloud symbols/settings, but start with a blank canvas.
         // Sessiz mod: her sayfa açılışında "Geri Yükleme Başarılı" bildirimi basılmasın.
+        // NOT: bulut klasör eşitlemesi restoreFromCloud'un başarı yolunda otomatik tetiklenir.
         await restoreFromCloud(true);
         // Always clear to blank canvas on page load — user must open a file from Case Manager
         clearCanvas();
