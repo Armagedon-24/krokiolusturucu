@@ -15,6 +15,7 @@ import { X, Rotate3D, Footprints, RotateCw, ArrowDown, Camera, Video, Square, Fo
 import { useStore } from '../../store/useStore';
 import { withBase } from '../../utils/assetMigration';
 import * as THREE from 'three';
+import { Animal3D } from './Animal3D';
 // @ts-ignore
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter';
 
@@ -1409,14 +1410,23 @@ const getStandardHeight = (symbolId: string): number => {
 /* Böylece elde, yerde yatan ama gerçekten 3 boyutlu nesneler olur.    */
 /* ------------------------------------------------------------------ */
 
-const MAX_EXTRACT_SIDE = 128;   // kontur çıkarımı için çözünürlük sınırı
+const MAX_EXTRACT_SIDE = 224;   // kontur çıkarımı için çözünürlük sınırı (128 → pürüzsüz kenar)
 const ALPHA_THRESHOLD = 64;
 
-const _alphaMaskCache = new Map<string, { w: number; h: number; mask: Uint8Array } | null>();
+const _alphaMaskCache = new Map<string, { w: number; h: number; mask: Uint8Array; color: string } | null>();
 const _extrudeGeoCache = new Map<string, THREE.BufferGeometry>();
 
-/** Görselin alfa kanalından ikili maske çıkarır (kenarCors yazma hatalarına karşı null). */
-function extractAlphaMask(img: HTMLImageElement): { w: number; h: number; mask: Uint8Array } | null {
+/**
+ * Görselin alfa kanalından ikili maske çıkarır (kenar/CORS hatalarına karşı null).
+ * Ek adımlar:
+ *  1. MORFOLOJİK KAPANMA — 1px boşluklar (tarama/çıizim greni) doldurulur,
+ *     böylece karakalem PNG'ler yüzlerce minik ada üretmez.
+ *  2. BAĞLI BİLEŞEN FİLTRESİ — alanı toplam dolunun %0.4'ünden küçük adacıklar
+ *     (tüy kırpıntıları, ot yaprakları, gren) atılır; kontur tek temiz siluet olur.
+ *  3. ORTALAMA RENK — opak piksellerin ortalamasından yan yüzey rengi türetilir
+ *     (eski sabit gri #62676e yerine, nesne rengiyle uyumlu gövde).
+ */
+function extractAlphaMask(img: HTMLImageElement): { w: number; h: number; mask: Uint8Array; color: string } | null {
   try {
     const iw = (img as any).naturalWidth || img.width;
     const ih = (img as any).naturalHeight || img.height;
@@ -1431,8 +1441,53 @@ function extractAlphaMask(img: HTMLImageElement): { w: number; h: number; mask: 
     ctx.drawImage(img, 0, 0, w, h);
     const data = ctx.getImageData(0, 0, w, h).data;
     const mask = new Uint8Array(w * h);
-    for (let i = 0; i < w * h; i++) mask[i] = data[i * 4 + 3] > ALPHA_THRESHOLD ? 1 : 0;
-    return { w, h, mask };
+    let rSum = 0, gSum = 0, bSum = 0, nSum = 0;
+    for (let i = 0; i < w * h; i++) {
+      if (data[i * 4 + 3] > ALPHA_THRESHOLD) {
+        mask[i] = 1;
+        rSum += data[i * 4]; gSum += data[i * 4 + 1]; bSum += data[i * 4 + 2]; nSum++;
+      }
+    }
+    // 1) 1px delik kapatma
+    const filled = new Uint8Array(mask);
+    for (let y = 1; y < h - 1; y++) {
+      for (let x = 1; x < w - 1; x++) {
+        const i = y * w + x;
+        if (mask[i]) continue;
+        const n = mask[i - 1] + mask[i + 1] + mask[i - w] + mask[i + w]
+          + mask[i - w - 1] + mask[i - w + 1] + mask[i + w - 1] + mask[i + w + 1];
+        if (n >= 5) filled[i] = 1;
+      }
+    }
+    // 2) bağlı bileşenler → minik adacıkları at
+    const lbl = new Int32Array(w * h).fill(-1);
+    const areas: number[] = [];
+    const stack: number[] = [];
+    for (let s = 0; s < w * h; s++) {
+      if (!filled[s] || lbl[s] >= 0) continue;
+      const id = areas.length;
+      let area = 0;
+      stack.push(s); lbl[s] = id;
+      while (stack.length) {
+        const p = stack.pop()!;
+        area++;
+        const cx = p % w, cy = (p / w) | 0;
+        if (cx > 0 && filled[p - 1] && lbl[p - 1] < 0) { lbl[p - 1] = id; stack.push(p - 1); }
+        if (cx < w - 1 && filled[p + 1] && lbl[p + 1] < 0) { lbl[p + 1] = id; stack.push(p + 1); }
+        if (cy > 0 && filled[p - w] && lbl[p - w] < 0) { lbl[p - w] = id; stack.push(p - w); }
+        if (cy < h - 1 && filled[p + w] && lbl[p + w] < 0) { lbl[p + w] = id; stack.push(p + w); }
+      }
+      areas.push(area);
+    }
+    const totalArea = areas.reduce((a, b) => a + b, 0);
+    const minArea = Math.max(16, totalArea * 0.004);
+    for (let i = 0; i < w * h; i++) mask[i] = (filled[i] === 1 && areas[lbl[i]] >= minArea) ? 1 : 0;
+    // 3) ortalama renk (yan yüzeyler için hafif koyulaştırılmış)
+    const shade = (v: number) => Math.max(0, Math.min(255, Math.round((v / Math.max(1, nSum)) * 0.72)));
+    const color = nSum > 0
+      ? '#' + [shade(rSum), shade(gSum), shade(bSum)].map((v) => v.toString(16).padStart(2, '0')).join('')
+      : '#62676e';
+    return { w, h, mask, color };
   } catch {
     return null; // tainted canvas / CORS
   }
@@ -1470,6 +1525,23 @@ function traceContourLoops(mask: Uint8Array, w: number, h: number): Array<Array<
   return loops;
 }
 
+/** Chaikin köşe kesme: konturu pürüzsüzleştirir (testere dişi jaggy'leri yok eder). */
+function chaikinSmooth(loop: Array<[number, number]>, iterations = 1): Array<[number, number]> {
+  let cur = loop;
+  for (let it = 0; it < iterations; it++) {
+    if (cur.length < 3) return cur;
+    const out: Array<[number, number]> = [];
+    const n = cur.length;
+    for (let i = 0; i < n; i++) {
+      const p = cur[i], q = cur[(i + 1) % n];
+      out.push([p[0] * 0.75 + q[0] * 0.25, p[1] * 0.75 + q[1] * 0.25]);
+      out.push([p[0] * 0.25 + q[0] * 0.75, p[1] * 0.25 + q[1] * 0.75]);
+    }
+    cur = out;
+  }
+  return cur;
+}
+
 /** Düz devam eden ızgara noktalarını atarak konturu sadeleştirir. */
 function decimateLoop(loop: Array<[number, number]>): Array<[number, number]> {
   if (loop.length < 6) return loop;
@@ -1494,14 +1566,17 @@ function buildExtrudedGeometry(
   const loops = traceContourLoops(mask, w, h);
   if (!loops.length) return null;
   const totalPts = loops.reduce((s, l) => s + l.length, 0);
-  if (totalPts > 2600 || loops.length > 24) return null; // aşırı karmaşık → kutu düşüşü
+  if (totalPts > 5200 || loops.length > 28) return null; // aşırı karmaşık → kutu düşüşü
   const sx = worldW / w, sy = worldH / h;
   const toVec = ([gx, gy]: [number, number]) => new THREE.Vector2((gx - w / 2) * sx, -(gy - h / 2) * sy);
-  const main = decimateLoop(loops[0]);
+  // Pürüzsüzleştirme hattı: sadeleştir → köşe kes → sadeleştir → köşe kes → sadeleştir
+  const refine = (l: Array<[number, number]>) =>
+    decimateLoop(chaikinSmooth(decimateLoop(chaikinSmooth(decimateLoop(l), 1)), 1));
+  const main = refine(loops[0]);
   if (main.length < 3) return null;
   const shape = new THREE.Shape(main.map(toVec));
-  for (let i = 1; i < Math.min(loops.length, 7); i++) {
-    const l = decimateLoop(loops[i]);
+  for (let i = 1; i < Math.min(loops.length, 9); i++) {
+    const l = refine(loops[i]);
     if (l.length < 3) continue;
     shape.holes.push(new THREE.Path(l.map(toVec)));
   }
@@ -1522,7 +1597,30 @@ function buildExtrudedGeometry(
 const getExtrudeHeightCm = (sId: string): number => {
   if (sId.startsWith('ht-')) return 9;                       // el aletleri
   if (sId.startsWith('w-')) return 7;                        // silahlar
-  if (sId.startsWith('an-')) return (sId.includes('chicken') || sId.includes('tavuk') || sId.includes('bird')) ? 25 : 40; // hayvanlar
+  if (sId.startsWith('an-')) return (sId.includes('chicken') || sId.includes('tavuk') || sId.includes('bird')) ? 25 : 40; // hayvanlar (yedek — an-* artık Animal3D)
+  if (sId.startsWith('cl-')) {                               // giysi / kişisel eşya
+    if (sId.includes('helmet') || sId.includes('kask')) return 20;
+    if (sId.includes('boot') || sId.includes('bot')) return 22;
+    if (sId.includes('shoe') || sId.includes('ayak')) return 12;
+    if (sId.includes('backpack') || sId.includes('çanta') || sId.includes('canta')) return 24;
+    if (sId.includes('jacket') || sId.includes('mont')) return 14;
+    if (sId.includes('vest') || sId.includes('yelek')) return 10;
+    if (sId.includes('cap')) return 10;
+    if (sId.includes('wallet')) return 3;
+    if (sId.includes('glove') || sId.includes('eldiven')) return 4;
+    return 12;
+  }
+  if (sId.startsWith('ex-')) {                               // katı olay yeri nesneleri
+    if (sId.includes('lpg')) return 60;
+    if (sId.includes('extinguisher') || sId.includes('söndürücü')) return 55;
+    if (sId.includes('kombi')) return 70;
+    if (sId.includes('gas-meter') || sId.includes('sayaç')) return 60;
+    if (sId.includes('fuse') || sId.includes('sigorta')) return 30;
+    if (sId.includes('detector') || sId.includes('dedektör')) return 8;
+    if (sId === 'ex-9' || sId.includes('varil')) return 88;
+    if (sId.startsWith('ex-rb')) return 40;
+    return 20;
+  }
   if (sId.startsWith('tr-casing')) return 2.5;               // fişek kovanı
   if (sId === 'tr-bullet-deformed') return 2;                // deforme mermi
   if (sId === 'tr-magazine') return 6;                       // şarjör
@@ -1576,8 +1674,9 @@ const ExtrudedSymbol3D = ({ x, y, rad, width, height, textureSrc, heightCm, zOff
 
   const materials = React.useMemo(() => ([
     new THREE.MeshStandardMaterial({ map: topTex, transparent: true, alphaTest: 0.15, roughness: 0.75, metalness: 0.05 }),
-    new THREE.MeshStandardMaterial({ color: '#62676e', roughness: 0.85, metalness: 0.05 }),
-  ]), [topTex]);
+    // Yan yüzey: dokunun ortalama renginden türetilmiş gövde rengi (nötr gri değil)
+    new THREE.MeshStandardMaterial({ color: (_alphaMaskCache.get(textureSrc)?.color) || '#62676e', roughness: 0.78, metalness: 0.05 }),
+  ]), [topTex, textureSrc]);
   useEffect(() => () => { materials.forEach((m: THREE.Material) => m.dispose()); }, [materials]);
 
   if (!geo) return fallback;
@@ -1860,7 +1959,8 @@ const Symbol3D = ({ obj, wallThickness, realObj, allWalls, visualObjects, upload
 
   // 2. Recognition Flags
   const isHumanSrc = src && typeof src === 'string' && (src.includes('manken') || src.includes('human') || src.includes('person') || src.includes('p-1') || src.includes('p-2'));
-  const isHuman = effSymbolId?.startsWith('p-') || isHumanSrc || effSymbolId === 'ev-human-poseable' || actualObj.isMannequin;
+  // kk-* figürleri (çocuk/yaralı) da gerçek insan modeliyle çizilir
+  const isHuman = effSymbolId?.startsWith('p-') || isHumanSrc || effSymbolId === 'ev-human-poseable' || actualObj.isMannequin || sIdLower.startsWith('kk-');
   const isWall = effSymbolId?.startsWith('arch-w1') || effSymbolId === 'arch-7' || effSymbolId === 'arch-w-square' || effSymbolId?.includes('fake');
   const isTraj = sIdLower.includes('shooting') || sIdLower.includes('atış');
   
@@ -1889,7 +1989,7 @@ const Symbol3D = ({ obj, wallThickness, realObj, allWalls, visualObjects, upload
   const isMarkerAnn = sIdLower === 'ev-circle' || sIdLower === 'ev-square';
   const isCalloutAnn = sIdLower === 'ev-callout';
   const isFlatEvAnn = sIdLower.startsWith('ev-') && !isMarkerAnn && !isCalloutAnn && !sIdLower.startsWith('ev-rect') && sIdLower !== 'ev-human-poseable';
-  const isFlatEvidence = sIdLower.startsWith('ei-') || sIdLower.startsWith('tr-') || sIdLower.startsWith('an-');
+  const isFlatEvidence = sIdLower.startsWith('ei-') || sIdLower.startsWith('tr-') || sIdLower.startsWith('an-') || sIdLower.startsWith('ex-');
   const isArrowAnn = sIdLower === 'a-4' || sIdLower === 'a-5' || !!actualObj.isDistanceArrow;
   const isTextAnn = actualObj.type === 'text';
   // Buildings rendered as 3D extruded boxes
@@ -2011,11 +2111,17 @@ const Symbol3D = ({ obj, wallThickness, realObj, allWalls, visualObjects, upload
     );
   }
 
-  if (isHuman) return (
-    <group position={[posX, totalOffset, posZ]} rotation={[0, rad, 0]}>
-      <Humanoid3D obj={actualObj} zOffset={0} />
-    </group>
-  );
+  if (isHuman) {
+    // kk-* çocuk/yaralı figürleri: ölçekli insan modeli + uygun duruş
+    const isKk = sIdLower.startsWith('kk-');
+    const kkPose = (sIdLower === 'kk-child-lying' || sIdLower === 'kk-injured') ? 'supine' : 'standing';
+    const humanScale = isKk ? Math.max(0.25, Math.min(2.5, height / (172 * SCALE))) : 1;
+    return (
+      <group position={[posX, totalOffset, posZ]} rotation={[0, rad, 0]} scale={[humanScale, humanScale, humanScale]}>
+        <Humanoid3D obj={isKk ? { ...actualObj, pose: kkPose } : actualObj} zOffset={0} />
+      </group>
+    );
+  }
 
   const finalW = width;
   const finalH = height;
@@ -2039,12 +2145,34 @@ const Symbol3D = ({ obj, wallThickness, realObj, allWalls, visualObjects, upload
   if (isBench) return <Bench3D x={posX} y={posZ} width={finalW} height={finalH} rad={rad} zOffset={yOff} />;
   if (isTrafficSign) return <TrafficSign3D x={posX} y={posZ} width={finalW} height={finalH} rad={rad} type={sIdLower} textureSrc={textureSrc} zOffset={yOff} />;
 
-  // Fiziksel nesneler (el aletleri, silahlar, delil nesneleri, hayvanlar, kovan/şarjör)
-  // yerde yatan düz decal yerine alfa siluetinden ekstrüde edilmiş GERÇEK 3B hacim:
-  // üst yüz orijinal çizimi taşar, yanlar katı gövdedir (kullanıcı isteği).
+  // HAYVANLAR (an-*): PNG siluetinden ekstrüzyon yerine PROSEDÜREL AYAKTA DURAN
+  // 3B modeller (gövde/boyun/bacak/kuyruk/boynuz). Düz tabaka 3B'de "2B ve bozuk"
+  // göründüğü için tamamen değiştirildi (kullanıcı raporu).
+  if (sIdLower.startsWith('an-')) {
+    return (
+      <Animal3D
+        x={posX}
+        y={posZ}
+        rad={rad}
+        width={finalW}
+        height={finalH}
+        zOffset={totalOffset}
+        symbolId={sIdLower}
+      />
+    );
+  }
+
+  // Fiziksel nesneler (el aletleri, silahlar, delil nesneleri, giysi/kişisel eşya,
+  // katı patlama nesneleri, kovan/şarjör) yerde yatan düz decal yerine alfa
+  // siluetinden ekstrüde edilmiş GERÇEK 3B hacim: üst yüz orijinal çizimi taşar,
+  // yanlar dokunun ortalama renginden boyanmış katı gövdedir.
+  const SOLID_EX_IDS = ['ex-9', 'ex-lpg', 'ex-kombi', 'ex-fire-extinguisher', 'ex-fuse-box', 'ex-gas-meter', 'ex-smoke-detector', 'ex-rb-1'];
+  const isSolidEx = SOLID_EX_IDS.some((w) => sIdLower === w || sIdLower.startsWith(w + '-'));
   const isPhysicalEvidence = sIdLower.startsWith('ei-') || sIdLower.startsWith('an-')
     || sIdLower.startsWith('ht-') || sIdLower.startsWith('w-')
-    || sIdLower.startsWith('tr-casing') || sIdLower === 'tr-magazine' || sIdLower === 'tr-bullet-deformed';
+    || sIdLower.startsWith('cl-')
+    || sIdLower.startsWith('tr-casing') || sIdLower === 'tr-magazine' || sIdLower === 'tr-bullet-deformed'
+    || isSolidEx;
 
   if (isPhysicalEvidence) {
     return (
