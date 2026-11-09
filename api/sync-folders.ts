@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from './_vercel-shim';
 import crypto from 'crypto';
-import { verifyAuth, secretsMatch } from './_auth.js';
+import { verifyAuth } from './_auth.js';
 
 export const maxDuration = 60;
 
@@ -29,11 +29,6 @@ export const maxDuration = 60;
 
 const CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME || 'dzen3qvgp';
 const PREFIX_CONST = 'kroki-olusturucu/';
-
-// GEÇİCİ tek kullanımlık işlem anahtarı: ilk kurulum döngüsünü tetiklemek için.
-// Kurulum doğrulanınca HEMEN sonraki commit ile kaldırılır (uç nokta kalıcı olarak
-// verifyAuth ile korunur).
-const ONCE_TOKEN = 'a3f9c2e58b17d64a0e8c31f52b7d9046e1a5c8f30b62d47985ea10c3d6f42b78';
 
 /** İstemcideki publicIdFromUrl ile aynı kurallar: transform + sürüm segmentlerini at. */
 function publicIdFromUrl(url: string): string | null {
@@ -285,14 +280,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Cache-Control', 'no-store');
 
   try {
-    // Auth: ya app admin token'ı (x-auth-token) ya da GEÇİCİ tek kullanımlık
-    // işlem anahtarı (x-once-token — ilk kurulum tetiklemesi için; sonradan
-    // kaldırılacak). İkisi de yoksa 401.
-    const onceHdr = req.headers['x-once-token'];
-    const onceStr = Array.isArray(onceHdr) ? onceHdr[0] : onceHdr;
-    if (!onceStr || !secretsMatch(onceStr, ONCE_TOKEN)) {
-      if (!verifyAuth(req, res)) return;
-    }
+    // Auth: yalnızca uygulama admin token'ı (x-auth-token). (İlk kurulum döngüsünü
+    // tetiklemek için kullanılan geçici x-once-token kaldırıldı — uç nokta kalıcı
+    // olarak verifyAuth ile korunur.)
+    if (!verifyAuth(req, res)) return;
 
     const API_KEY = process.env.CLOUDINARY_API_KEY;
     const API_SECRET = process.env.CLOUDINARY_API_SECRET;
