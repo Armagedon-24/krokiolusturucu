@@ -191,9 +191,14 @@ async function collectEmptyFolders(authHeader: string, prelisted?: string[]): Pr
   if (nodes.length === 0) {
     return { nodes: 0, empties: [], error: error || 'klasör ağacı boş döndü (Folders API biçimi uyuşmadı)' };
   }
+  // CLOUDINARY KLASÖR YOLLARI BÜYÜK/KÜÇÜK HARF DUYARSIZDIR ('Trafik işaretleri' ≡
+  // 'Trafik İşaretleri' — kanıt: probe, küçük harfli prefix ile büyük İ'li kaynağı
+  // buldu). Karşılaştırma da duyarsız olmalı; aksi halde GERÇEK görsel barındıran
+  // klasör 'boş' sanılır, silinmeye çalışılır ve 'not empty' red'i sonsuz döner.
+  const lowerAssetFolders = new Set([...assetFolders].map((a) => a.toLowerCase()));
   const empties = nodes.filter((n) => {
-    const nn = n.normalize('NFC');
-    return !assetFolders.has(nn) && ![...assetFolders].some((a) => a.startsWith(nn + '/'));
+    const nn = n.normalize('NFC').toLowerCase();
+    return !lowerAssetFolders.has(nn) && ![...lowerAssetFolders].some((a) => a.startsWith(nn + '/'));
   });
   empties.sort((a, b) => b.split('/').length - a.split('/').length); // aşağıdan yukarıya silme sırası
   return { nodes: nodes.length, empties, error: null };
