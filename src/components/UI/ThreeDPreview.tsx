@@ -2000,7 +2000,14 @@ const Symbol3D = ({ obj, wallThickness, realObj, allWalls, visualObjects, upload
   const isStation = sIdLower === 'arch-trainstation' || nameLower.includes('istasyon') || srcLower.includes('station');
 
   // Interactive 3D Objects
-  const isVehicle = sIdLower.startsWith('v-') || sIdLower.includes('car') || sIdLower.includes('sedan') || sIdLower.includes('suv') || sIdLower.includes('truck') || sIdLower.includes('bus') || sIdLower.includes('motor') || sIdLower.includes('police') || sIdLower.includes('ambulance') || sIdLower.includes('itfaiye') || sIdLower.includes('kepçe') || nameLower.includes('araç') || nameLower.includes('otomobil') || nameLower.includes('kamyon') || nameLower.includes('motosiklet') || nameLower.includes('otobüs') || nameLower.includes('ambulans') || nameLower.includes('polis') || nameLower.includes('itfaiye') || nameLower.includes('kepçe') || nameLower.includes('traktör') || nameLower.includes('çekici') || nameLower.includes('araba') || nameLower.includes('taksi') || nameLower.includes('minibüs');
+  // HAVA / DENİZ taşıtları: v-* öneki tüm taşıtları kapsıyor; uçak, helikopter,
+  // balon ve tekne otomobil kutusu DEĞİL, kendi gerçek 3B modelleriyle çizilir
+  // (kullanıcı raporu: 2B'de uçak ekleyene 3B'de basit araba çıkıyordu).
+  const isPlane = sIdLower === 'v-plane' || sIdLower === 'v-jet' || sIdLower === 'v-privatejet' || sIdLower === 'v-cessna';
+  const isHeli = sIdLower === 'v-helicopter' || sIdLower === 'v-atak';
+  const isBalloon = sIdLower === 'v-balloon';
+  const isBoat = sIdLower === 'v-rowboat' || sIdLower === 'v-motorboat' || sIdLower === 'v-jetski';
+  const isVehicle = (sIdLower.startsWith('v-') || sIdLower.includes('car') || sIdLower.includes('sedan') || sIdLower.includes('suv') || sIdLower.includes('truck') || sIdLower.includes('bus') || sIdLower.includes('motor') || sIdLower.includes('police') || sIdLower.includes('ambulance') || sIdLower.includes('itfaiye') || sIdLower.includes('kepçe') || nameLower.includes('araç') || nameLower.includes('otomobil') || nameLower.includes('kamyon') || nameLower.includes('motosiklet') || nameLower.includes('otobüs') || nameLower.includes('ambulans') || nameLower.includes('polis') || nameLower.includes('itfaiye') || nameLower.includes('kepçe') || nameLower.includes('traktör') || nameLower.includes('çekici') || nameLower.includes('araba') || nameLower.includes('taksi') || nameLower.includes('minibüs')) && !isPlane && !isHeli && !isBalloon && !isBoat;
   const isTree = sIdLower.startsWith('out-tree') || sIdLower.includes('tree') || sIdLower.includes('ağaç') || nameLower.includes('ağaç') || nameLower.includes('çam');
   const isCone = sIdLower === 'ts-cone' || sIdLower.includes('cone') || nameLower.includes('duba');
   const isBarrier = sIdLower === 'ts-barrier' || sIdLower.includes('barrier') || nameLower.includes('bariyer');
@@ -2140,6 +2147,14 @@ const Symbol3D = ({ obj, wallThickness, realObj, allWalls, visualObjects, upload
   if (isCabinet) return <Cabinet3D x={posX} y={posZ} width={finalW} height={finalH} rad={rad} zHeight={(actualObj.zHeight || 210) * SCALE} zOffset={yOff} />;
   
   // Custom realistic objects
+  // UÇAK / HELİKOPTER / BALON / TEKNE: kendi prosedürel modelleri (araba DEĞİL)
+  if (isPlane) {
+    const variant = sIdLower === 'v-plane' ? 'airliner' : sIdLower === 'v-jet' ? 'fighter' : sIdLower === 'v-privatejet' ? 'business' : 'cessna';
+    return <Aircraft3D x={posX} y={posZ} width={finalW} height={finalH} rad={rad} variant={variant} fill={fill} zOffset={yOff} />;
+  }
+  if (isHeli) return <Helicopter3D x={posX} y={posZ} width={finalW} height={finalH} rad={rad} attack={sIdLower === 'v-atak'} fill={fill} zOffset={yOff} />;
+  if (isBalloon) return <Balloon3D x={posX} y={posZ} width={finalW} height={finalH} rad={rad} fill={fill} zOffset={yOff} />;
+  if (isBoat) return <Boat3D x={posX} y={posZ} width={finalW} height={finalH} rad={rad} variant={sIdLower === 'v-rowboat' ? 'rowboat' : sIdLower === 'v-motorboat' ? 'motorboat' : 'jetski'} fill={fill} zOffset={yOff} />;
   if (isVehicle) return <Vehicle3D x={posX} y={posZ} width={finalW} height={finalH} rad={rad} type={sIdLower + ' ' + nameLower} fill={fill} zOffset={yOff} zHeight={actualObj.zHeight} />;
   if (isTree) return <Tree3D x={posX} y={posZ} width={finalW} height={finalH} rad={rad} type={sIdLower} zOffset={yOff} />;
   if (isCone) return <TrafficCone3D x={posX} y={posZ} zOffset={yOff} />;
@@ -4866,6 +4881,432 @@ const Vehicle3D = ({ x, y, width, height, rad, type, fill, zOffset, zHeight }: a
           distance={30 * SCALE} 
           color="#ffeb3b" 
         />
+      )}
+    </group>
+  );
+};
+
+// --- HAVA / DENİZ TAŞITLARI: prosedürel gerçek modeller ---
+// 2B'de uçak/helikopter/balon/tekne ekleyen kullanıcı 3B'de basit otomobil
+// kutusu görüyordu (kullanıcı raporu). v-* öneki tüm taşıtları kapsadığı için
+// bu sınıflar Vehicle3D'den AYRILDI; her sınıf kendi hacimli modeliyle çizilir.
+
+const AIRCRAFT_VARIANTS: any = {
+  airliner: { body: '#eef0f3', accent: '#1f5fa8', dark: '#37474f', metal: '#a7b6bd', wingY: -0.28, sweep: 0.42, winglet: true, windows: true },
+  fighter: { body: '#7d8994', accent: '#57646e', dark: '#222c33', metal: '#8fa1ad', wingY: -0.02, sweep: 0.62, winglet: false, windows: false },
+  business: { body: '#f6f8fa', accent: '#37474f', dark: '#37474f', metal: '#b0bec5', wingY: -0.22, sweep: 0.46, winglet: true, windows: true },
+  cessna: { body: '#f2f4f6', accent: '#c62828', dark: '#37474f', metal: '#b0bec5', wingY: 0.68, sweep: 0.05, winglet: false, windows: false },
+};
+
+const Aircraft3D = ({ x, y, width, height, rad, variant, fill, zOffset }: any) => {
+  const cfg = AIRCRAFT_VARIANTS[variant] || AIRCRAFT_VARIANTS.airliner;
+  const isVert = height > width;
+  const w = isVert ? height : width;   // gövde boyu (burun +X yönünde)
+  const d = isVert ? width : height;
+  const adjRad = isVert ? rad - Math.PI / 2 : rad;
+  const bodyColor = fill && fill !== '#000000' ? fill : cfg.body;
+
+  const fuseL = w * 0.94;
+  const fuseR = variant === 'fighter' ? Math.max(d * 0.11, w * 0.022) : Math.max(d * 0.15, w * 0.028);
+  const fuseY = fuseR * 1.5 + 1.2;                 // iniş takımı yüksekliği
+  const cylLen = fuseL * (variant === 'fighter' ? 0.66 : 0.56);
+  const noseLen = fuseL * 0.16;
+  const tailLen = fuseL * (variant === 'fighter' ? 0.2 : 0.3);
+  const wingSpan = Math.max(d * 1.9, w * 0.52);
+  const halfSpan = wingSpan / 2;
+  const wingChord = variant === 'fighter' ? w * 0.17 : w * 0.12;
+  const wingThick = Math.max(fuseR * 0.2, 0.5);
+  const wingX = variant === 'fighter' ? -fuseL * 0.04 : fuseL * 0.03;
+  const wingY = fuseY + fuseR * cfg.wingY;
+  const sweepAng = Math.atan(cfg.sweep);
+  const dihedral = variant === 'fighter' ? 0 : 0.07;
+  const tailX = -fuseL * 0.42;
+  const finH = variant === 'fighter' ? fuseR * 2.1 : fuseR * 2.4;
+  const stabSpan = w * 0.3;
+  const wheelR = fuseR * 0.3;
+
+  return (
+    <group position={[x, zOffset || 0, y]} rotation={[0, adjRad, 0]}>
+      {/* Gövde: orta silindir + burun konisi + kuyruk konisi */}
+      <mesh position={[0, fuseY, 0]} rotation={[0, 0, Math.PI / 2]} castShadow>
+        <cylinderGeometry args={[fuseR, fuseR, cylLen, 20]} />
+        <meshStandardMaterial color={bodyColor} roughness={0.35} metalness={0.25} />
+      </mesh>
+      <mesh position={[cylLen / 2 + noseLen / 2, fuseY, 0]} rotation={[0, 0, -Math.PI / 2]} castShadow>
+        <coneGeometry args={[fuseR, noseLen, 20]} />
+        <meshStandardMaterial color={bodyColor} roughness={0.35} metalness={0.25} />
+      </mesh>
+      <mesh position={[-(cylLen / 2 + tailLen / 2), fuseY + fuseR * 0.12, 0]} rotation={[0, 0, Math.PI / 2]} castShadow>
+        <cylinderGeometry args={[fuseR * (variant === 'fighter' ? 0.16 : 0.3), fuseR, tailLen, 20]} />
+        <meshStandardMaterial color={bodyColor} roughness={0.35} metalness={0.25} />
+      </mesh>
+
+      {/* Kokpit */}
+      {variant === 'fighter' ? (
+        <mesh position={[fuseL * 0.24, fuseY + fuseR * 0.72, 0]} scale={[2.2, 0.75, 1.35]} castShadow>
+          <sphereGeometry args={[fuseR * 0.62, 16, 12]} />
+          <meshStandardMaterial color={cfg.dark} roughness={0.15} metalness={0.6} />
+        </mesh>
+      ) : (
+        <mesh position={[fuseL * 0.26, fuseY + fuseR * 0.4, 0]} rotation={[0, 0, -0.18]} castShadow>
+          <boxGeometry args={[fuseR * 0.6, fuseR * 0.55, fuseR * 1.85]} />
+          <meshStandardMaterial color={cfg.dark} roughness={0.15} metalness={0.6} />
+        </mesh>
+      )}
+      {/* Cabin window line */}
+      {cfg.windows && (
+        <mesh position={[-fuseL * 0.02, fuseY + fuseR * 0.28, 0]}>
+          <boxGeometry args={[fuseL * 0.42, fuseR * 0.14, fuseR * 2.02]} />
+          <meshStandardMaterial color={cfg.dark} roughness={0.3} />
+        </mesh>
+      )}
+
+      {/* Wings (swept + dihedral) */}
+      {[-1, 1].map((sgn) => (
+        <group key={`wg${sgn}`} position={[wingX, wingY, sgn * fuseR * 0.7]} rotation={[-sgn * dihedral, -sgn * sweepAng, 0]}>
+          <mesh position={[0, 0, sgn * halfSpan * 0.48]} castShadow>
+            <boxGeometry args={[wingChord, wingThick, halfSpan * 0.94]} />
+            <meshStandardMaterial color={bodyColor} roughness={0.4} metalness={0.2} />
+          </mesh>
+          {cfg.winglet && (
+            <mesh position={[wingChord * 0.1, wingThick * 1.6, sgn * halfSpan * 0.94]} castShadow>
+              <boxGeometry args={[wingChord * 0.45, wingThick * 3.2, wingChord * 0.16]} />
+              <meshStandardMaterial color={cfg.accent} roughness={0.4} />
+            </mesh>
+          )}
+        </group>
+      ))}
+
+      {/* Engines */}
+      {variant === 'airliner' && [-1, 1].map((sgn) => (
+        <group key={`eng${sgn}`} position={[wingX + wingChord * 0.15, wingY - fuseR * 0.85, sgn * halfSpan * 0.42]}>
+          <mesh rotation={[0, 0, Math.PI / 2]} castShadow>
+            <cylinderGeometry args={[fuseR * 0.42, fuseR * 0.36, fuseR * 1.5, 16]} />
+            <meshStandardMaterial color={cfg.metal} roughness={0.35} metalness={0.55} />
+          </mesh>
+          <mesh position={[fuseR * 0.76, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+            <cylinderGeometry args={[fuseR * 0.34, fuseR * 0.34, fuseR * 0.1, 16]} />
+            <meshStandardMaterial color={cfg.dark} roughness={0.4} />
+          </mesh>
+          <mesh position={[-fuseR * 0.2, fuseR * 0.5, 0]}>
+            <boxGeometry args={[fuseR * 0.5, fuseR * 0.6, fuseR * 0.24]} />
+            <meshStandardMaterial color={bodyColor} />
+          </mesh>
+        </group>
+      ))}
+      {variant === 'business' && [-1, 1].map((sgn) => (
+        <mesh key={`beng${sgn}`} position={[tailX + fuseL * 0.16, fuseY + fuseR * 0.3, sgn * fuseR * 1.15]} rotation={[0, 0, Math.PI / 2]} castShadow>
+          <cylinderGeometry args={[fuseR * 0.36, fuseR * 0.3, fuseR * 1.2, 16]} />
+          <meshStandardMaterial color={cfg.metal} roughness={0.35} metalness={0.55} />
+        </mesh>
+      ))}
+      {variant === 'fighter' && (
+        <mesh position={[-(cylLen / 2 + tailLen) - 0.2, fuseY + fuseR * 0.15, 0]} rotation={[0, 0, Math.PI / 2]} castShadow>
+          <cylinderGeometry args={[fuseR * 0.55, fuseR * 0.34, fuseR * 0.7, 16]} />
+          <meshStandardMaterial color={cfg.dark} roughness={0.3} metalness={0.7} />
+        </mesh>
+      )}
+      {variant === 'cessna' && (
+        <group position={[cylLen / 2 + noseLen + 0.4, fuseY, 0]}>
+          <mesh rotation={[0, 0, -Math.PI / 2]} castShadow>
+            <coneGeometry args={[fuseR * 0.2, fuseR * 0.4, 12]} />
+            <meshStandardMaterial color={cfg.metal} metalness={0.6} roughness={0.3} />
+          </mesh>
+          <mesh castShadow>
+            <boxGeometry args={[fuseR * 0.1, fuseR * 2.6, fuseR * 0.3]} />
+            <meshStandardMaterial color={cfg.dark} roughness={0.4} />
+          </mesh>
+        </group>
+      )}
+
+      {/* Tail fin + horizontal stabilizer */}
+      <mesh position={[tailX, fuseY + fuseR + finH / 2, 0]} rotation={[0, 0, variant === 'fighter' ? 0.25 : 0.18]} castShadow>
+        <boxGeometry args={[fuseL * 0.13, finH, fuseR * 0.16]} />
+        <meshStandardMaterial color={cfg.accent} roughness={0.4} />
+      </mesh>
+      {(variant === 'business' ? [fuseY + fuseR + finH] : [fuseY + fuseR * 0.3]).map((sy, si) => (
+        <group key={`stab${si}`} position={[tailX - fuseL * 0.02, sy, 0]}>
+          {[-1, 1].map((sgn) => (
+            <mesh key={sgn} position={[0, 0, sgn * stabSpan * 0.26]} castShadow>
+              <boxGeometry args={[fuseL * 0.1, wingThick * 0.8, stabSpan * 0.5]} />
+              <meshStandardMaterial color={bodyColor} roughness={0.4} />
+            </mesh>
+          ))}
+        </group>
+      ))}
+
+      {/* Landing gear */}
+      {[[fuseL * 0.3, 0, 0.8], [-fuseL * 0.06, fuseR * 0.8, 1], [-fuseL * 0.06, -fuseR * 0.8, 1]].map(([gx, gz, wr], gi) => (
+        <group key={`gear${gi}`} position={[gx, 0, gz]}>
+          <mesh position={[0, fuseY / 2, 0]}>
+            <cylinderGeometry args={[fuseR * 0.07, fuseR * 0.07, fuseY, 8]} />
+            <meshStandardMaterial color={cfg.dark} roughness={0.5} />
+          </mesh>
+          <mesh position={[0, wheelR * wr, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+            <cylinderGeometry args={[wheelR * wr, wheelR * wr, fuseR * 0.18, 14]} />
+            <meshStandardMaterial color="#1c1c1c" roughness={0.9} />
+          </mesh>
+        </group>
+      ))}
+    </group>
+  );
+};
+
+const Helicopter3D = ({ x, y, width, height, rad, attack, fill, zOffset }: any) => {
+  const isVert = height > width;
+  const w = isVert ? height : width;
+  const d = isVert ? width : height;
+  const adjRad = isVert ? rad - Math.PI / 2 : rad;
+  const bodyColor = fill && fill !== '#000000' ? fill : (attack ? '#5c6650' : '#e8eef0');
+  const dark = '#263238';
+
+  const bodyL = w * 0.42;
+  const bodyH = d * 0.46;
+  const bodyW = d * 0.4;
+  const gc = d * 0.12 + 1;
+  const bodyY = gc + bodyH / 2;
+  const bodyX = bodyL * 0.18;
+  const boomL = w * 0.5;
+  const boomX = bodyX - bodyL / 2 - boomL / 2 + bodyL * 0.1;
+  const mastH = bodyH * 0.32;
+  const bladeLen = w * 0.95;
+  const wheelR = Math.max(d * 0.055, 1.2);
+
+  return (
+    <group position={[x, zOffset || 0, y]} rotation={[0, adjRad, 0]}>
+      {/* Cabin */}
+      <mesh position={[bodyX, bodyY, 0]} castShadow receiveShadow>
+        <boxGeometry args={[bodyL, bodyH, bodyW]} />
+        <meshStandardMaterial color={bodyColor} roughness={0.4} metalness={0.2} />
+      </mesh>
+      {/* Nose */}
+      <mesh position={[bodyX + bodyL / 2, bodyY - bodyH * 0.05, 0]} scale={[0.75, 0.8, 0.92]} castShadow>
+        <sphereGeometry args={[bodyH * 0.5, 16, 12]} />
+        <meshStandardMaterial color={bodyColor} roughness={0.4} metalness={0.2} />
+      </mesh>
+      {/* Cockpit glass */}
+      {attack ? (
+        [0.32, 0.05].map((_off, i) => (
+          <mesh key={i} position={[bodyX + bodyL * (0.3 - i * 0.22), bodyY + bodyH * (0.3 - i * 0.08), 0]} scale={[0.9, 0.55, 0.8]}>
+            <sphereGeometry args={[bodyH * 0.42, 14, 10]} />
+            <meshStandardMaterial color={dark} roughness={0.15} metalness={0.6} />
+          </mesh>
+        ))
+      ) : (
+        <mesh position={[bodyX + bodyL * 0.4, bodyY + bodyH * 0.3, 0]} scale={[0.62, 0.55, 0.82]}>
+          <sphereGeometry args={[bodyH * 0.5, 14, 10]} />
+          <meshStandardMaterial color={dark} roughness={0.15} metalness={0.6} />
+        </mesh>
+      )}
+      {/* Tail boom + fin */}
+      <mesh position={[boomX, bodyY + bodyH * 0.12, 0]} rotation={[0, 0, -0.05]} castShadow>
+        <boxGeometry args={[boomL, bodyH * 0.2, bodyW * 0.26]} />
+        <meshStandardMaterial color={bodyColor} roughness={0.4} metalness={0.2} />
+      </mesh>
+      <mesh position={[boomX - boomL / 2 + bodyH * 0.08, bodyY + bodyH * 0.38, 0]} rotation={[0, 0, -0.28]} castShadow>
+        <boxGeometry args={[bodyH * 0.12, bodyH * 0.62, bodyW * 0.16]} />
+        <meshStandardMaterial color={bodyColor} roughness={0.4} />
+      </mesh>
+      {/* Tail rotor */}
+      <group position={[boomX - boomL / 2 + bodyH * 0.1, bodyY + bodyH * 0.34, bodyW * 0.16]}>
+        <mesh>
+          <boxGeometry args={[bodyH * 0.04, bodyH * 0.5, bodyH * 0.04]} />
+          <meshStandardMaterial color={dark} roughness={0.5} />
+        </mesh>
+        <mesh>
+          <boxGeometry args={[bodyH * 0.5, bodyH * 0.04, bodyH * 0.04]} />
+          <meshStandardMaterial color={dark} roughness={0.5} />
+        </mesh>
+      </group>
+      {/* Main rotor */}
+      <group position={[bodyX + bodyL * 0.05, 0, 0]}>
+        <mesh position={[0, bodyY + bodyH / 2 + mastH / 2, 0]}>
+          <cylinderGeometry args={[bodyH * 0.05, bodyH * 0.06, mastH, 10]} />
+          <meshStandardMaterial color={dark} roughness={0.5} />
+        </mesh>
+        <mesh position={[0, bodyY + bodyH / 2 + mastH, 0]} castShadow>
+          <boxGeometry args={[bladeLen, bodyH * 0.035, bodyW * 0.14]} />
+          <meshStandardMaterial color={dark} roughness={0.5} />
+        </mesh>
+        <mesh position={[0, bodyY + bodyH / 2 + mastH, 0]} castShadow>
+          <boxGeometry args={[bodyW * 0.14, bodyH * 0.035, bladeLen]} />
+          <meshStandardMaterial color={dark} roughness={0.5} />
+        </mesh>
+      </group>
+      {/* ATAK: stub wings + weapon pods */}
+      {attack && (
+        <group position={[bodyX - bodyL * 0.05, bodyY, 0]}>
+          <mesh castShadow>
+            <boxGeometry args={[bodyL * 0.22, bodyH * 0.08, bodyW * 1.5]} />
+            <meshStandardMaterial color={bodyColor} roughness={0.4} />
+          </mesh>
+          {[-1, 1].map((sgn) => (
+            <mesh key={sgn} position={[0, -bodyH * 0.1, sgn * bodyW * 0.75]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+              <cylinderGeometry args={[bodyH * 0.09, bodyH * 0.09, bodyL * 0.24, 10]} />
+              <meshStandardMaterial color={dark} roughness={0.4} />
+            </mesh>
+          ))}
+        </group>
+      )}
+      {/* Wheels */}
+      {[[bodyX + bodyL * 0.32, 0, 0.9], [bodyX - bodyL * 0.25, bodyW * 0.34, 1], [bodyX - bodyL * 0.25, -bodyW * 0.34, 1]].map(([wx, wz, wr], wi) => (
+        <group key={`wh${wi}`} position={[wx, 0, wz]}>
+          <mesh position={[0, gc * 0.55, 0]}>
+            <cylinderGeometry args={[bodyH * 0.03, bodyH * 0.03, gc, 8]} />
+            <meshStandardMaterial color={dark} roughness={0.5} />
+          </mesh>
+          <mesh position={[0, wheelR * wr, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+            <cylinderGeometry args={[wheelR * wr, wheelR * wr, wheelR * 0.6, 12]} />
+            <meshStandardMaterial color="#1c1c1c" roughness={0.9} />
+          </mesh>
+        </group>
+      ))}
+    </group>
+  );
+};
+
+const Balloon3D = ({ x, y, width, height, rad, fill, zOffset }: any) => {
+  const w = width;
+  const d = height;
+  const adjRad = rad;
+  const envR = Math.min(w * 0.44, d * 0.34);
+  const envColor = fill && fill !== '#000000' ? fill : '#d9534f';
+
+  const basketW = w * 0.28;
+  const basketH = d * 0.1;
+  const ropeGap = d * 0.13;
+  const envY = basketH + ropeGap + envR * 1.12;
+
+  return (
+    <group position={[x, zOffset || 0, y]} rotation={[0, adjRad, 0]}>
+      {/* Envelope */}
+      <mesh position={[0, envY, 0]} scale={[1, 1.12, 1]} castShadow>
+        <sphereGeometry args={[envR, 22, 18]} />
+        <meshStandardMaterial color={envColor} roughness={0.6} />
+      </mesh>
+      {/* Equator stripes */}
+      {[0.35, -0.25].map((k, i) => (
+        <mesh key={i} position={[0, envY + envR * 1.12 * k, 0]} rotation={[Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[envR * Math.sqrt(Math.max(0.05, 1 - k * k * 1.25)), envR * 0.045, 10, 28]} />
+          <meshStandardMaterial color="#f4f0e6" roughness={0.6} />
+        </mesh>
+      ))}
+      {/* Skirt */}
+      <mesh position={[0, envY - envR * 1.12 - envR * 0.1, 0]} castShadow>
+        <coneGeometry args={[envR * 0.34, envR * 0.26, 14]} />
+        <meshStandardMaterial color="#8d3b32" roughness={0.7} />
+      </mesh>
+      {/* Burner frame */}
+      <mesh position={[0, basketH + ropeGap * 0.45, 0]}>
+        <cylinderGeometry args={[basketW * 0.16, basketW * 0.16, ropeGap * 0.5, 10]} />
+        <meshStandardMaterial color="#37474f" metalness={0.6} roughness={0.3} />
+      </mesh>
+      {/* Ropes */}
+      {[[1, 1], [1, -1], [-1, 1], [-1, -1]].map(([sx, sz], i) => (
+        <mesh key={i} position={[sx * basketW * 0.38, basketH + ropeGap / 2, sz * basketW * 0.38]} rotation={[sz * 0.18, 0, -sx * 0.18]}>
+          <cylinderGeometry args={[0.14, 0.14, ropeGap, 6]} />
+          <meshStandardMaterial color="#5d4a36" roughness={0.9} />
+        </mesh>
+      ))}
+      {/* Wicker basket */}
+      <mesh position={[0, basketH / 2, 0]} castShadow>
+        <boxGeometry args={[basketW, basketH, basketW]} />
+        <meshStandardMaterial color="#8d6e4a" roughness={0.95} />
+      </mesh>
+      <mesh position={[0, basketH + 0.15, 0]}>
+        <boxGeometry args={[basketW * 1.12, 0.3, basketW * 1.12]} />
+        <meshStandardMaterial color="#6d543a" roughness={0.95} />
+      </mesh>
+    </group>
+  );
+};
+
+const Boat3D = ({ x, y, width, height, rad, variant, fill, zOffset }: any) => {
+  const isVert = height > width;
+  const w = isVert ? height : width;   // tekne boyu (X)
+  const d = isVert ? width : height;
+  const adjRad = isVert ? rad - Math.PI / 2 : rad;
+
+  const hullColor = fill && fill !== '#000000' ? fill : (variant === 'rowboat' ? '#b3906b' : variant === 'motorboat' ? '#e9eef2' : '#e4572e');
+  const hullH = variant === 'jetski' ? d * 0.24 : d * 0.3;
+  const beam = Math.max(d * (variant === 'jetski' ? 0.34 : 0.42), w * 0.1);
+
+  const hullShape = useMemo(() => {
+    const s = new THREE.Shape();
+    s.moveTo(-w * 0.48, 0);
+    s.lineTo(w * 0.3, 0);
+    s.quadraticCurveTo(w * 0.44, 0.02, w * 0.48, hullH * 0.72);
+    s.lineTo(w * 0.48, hullH);
+    s.quadraticCurveTo(w * 0.12, hullH * 0.58, -w * 0.48, hullH * 0.52);
+    s.lineTo(-w * 0.48, 0);
+    return s;
+  }, [w, hullH]);
+
+  return (
+    <group position={[x, zOffset || 0, y]} rotation={[0, adjRad, 0]}>
+      {/* Hull (side profile extruded along Z) */}
+      <group position={[0, 0, -beam / 2]}>
+        <mesh castShadow receiveShadow>
+          <extrudeGeometry args={[hullShape, { depth: beam, bevelEnabled: true, bevelSize: Math.min(0.8, beam * 0.06), bevelThickness: Math.min(0.8, beam * 0.06), bevelSegments: 3, steps: 1 }]} />
+          <meshStandardMaterial color={hullColor} roughness={0.55} metalness={0.15} />
+        </mesh>
+      </group>
+      {/* Interior floor line */}
+      <mesh position={[w * 0.02, hullH * 0.42, 0]}>
+        <boxGeometry args={[w * 0.62, 0.25, beam * 0.78]} />
+        <meshStandardMaterial color={variant === 'rowboat' ? '#8a6d4f' : '#37474f'} roughness={0.85} />
+      </mesh>
+
+      {variant === 'rowboat' && (
+        <group>
+          {[-w * 0.24, 0, w * 0.2].map((bx, i) => (
+            <mesh key={i} position={[bx, hullH * 0.52, 0]} castShadow>
+              <boxGeometry args={[w * 0.045, hullH * 0.09, beam * 0.88]} />
+              <meshStandardMaterial color="#9c7a55" roughness={0.9} />
+            </mesh>
+          ))}
+          {[-1, 1].map((sgn) => (
+            <mesh key={`oar${sgn}`} position={[w * 0.08, hullH * 0.55, sgn * beam * 0.62]} rotation={[0, sgn * -0.35, sgn * 1.42]} castShadow>
+              <cylinderGeometry args={[0.3, 0.42, w * 0.52, 8]} />
+              <meshStandardMaterial color="#a1887f" roughness={0.9} />
+            </mesh>
+          ))}
+        </group>
+      )}
+
+      {variant === 'motorboat' && (
+        <group position={[-w * 0.5 - w * 0.02, 0, 0]}>
+          <mesh position={[0, hullH * 0.72, 0]} castShadow>
+            <boxGeometry args={[w * 0.07, hullH * 0.42, beam * 0.22]} />
+            <meshStandardMaterial color="#37474f" roughness={0.5} metalness={0.3} />
+          </mesh>
+          <mesh position={[0, hullH * 0.34, 0]}>
+            <cylinderGeometry args={[0.22, 0.22, hullH * 0.5, 8]} />
+            <meshStandardMaterial color="#455a64" roughness={0.5} metalness={0.4} />
+          </mesh>
+          {/* Windshield */}
+          <mesh position={[w * 0.3, hullH * 0.78, 0]} rotation={[0, 0, -0.5]} castShadow>
+            <boxGeometry args={[w * 0.1, hullH * 0.32, beam * 0.7]} />
+            <meshStandardMaterial color="#263238" roughness={0.15} metalness={0.6} />
+          </mesh>
+        </group>
+      )}
+
+      {variant === 'jetski' && (
+        <group>
+          <mesh position={[-w * 0.12, hullH * 0.95, 0]} castShadow>
+            <boxGeometry args={[w * 0.36, hullH * 0.55, beam * 0.52]} />
+            <meshStandardMaterial color="#2b2f33" roughness={0.6} />
+          </mesh>
+          <mesh position={[w * 0.2, hullH * 1.05, 0]} rotation={[0, 0, -0.25]} castShadow>
+            <boxGeometry args={[w * 0.14, hullH * 0.5, beam * 0.5]} />
+            <meshStandardMaterial color="#2b2f33" roughness={0.5} />
+          </mesh>
+          <mesh position={[w * 0.26, hullH * 1.28, 0]} rotation={[Math.PI / 2, 0, 0]}>
+            <cylinderGeometry args={[0.22, 0.22, beam * 0.56, 8]} />
+            <meshStandardMaterial color="#455a64" roughness={0.4} metalness={0.5} />
+          </mesh>
+        </group>
       )}
     </group>
   );
