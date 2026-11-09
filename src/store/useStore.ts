@@ -27,6 +27,12 @@ export interface Notification {
   type: 'success' | 'error' | 'info' | 'warning';
   message: string;
   description?: string;
+  /** Sessizleştirme politikasını atlar: rutin başarılı bildirimleri yok sayan
+   *  filtreye rağmen GÖSTERİLİR (bulut yükleme/indirme gibi kullanıcı isteği mesajları). */
+  force?: boolean;
+  /** Otomatik kapanmaz; çağıran işlem bitince removeNotification ile kaldırır
+   *  (ör. "Buluta Yükleniyor..." ilerleme bildirimi). */
+  sticky?: boolean;
 }
 
 interface StoreState extends CanvasState {
@@ -55,7 +61,10 @@ interface StoreState extends CanvasState {
   isSidebarOpen: boolean;
   toggleSidebar: () => void;
   notifications: Notification[];
-  addNotification: (notification: Omit<Notification, 'id'>) => void;
+  /** Bildirim ekler; otomatik kapanan bildirimlerin kimliğini döndürür
+   *  (sticky bildirimler çağıran tarafından removeNotification ile kaldırılır).
+   *  Sessizleştirme politikası nedeniyle YOK SAYILIRSA boş string döner. */
+  addNotification: (notification: Omit<Notification, 'id'>) => string;
   removeNotification: (id: string) => void;
   undo: () => void;
   redo: () => void;
@@ -730,6 +739,7 @@ export const useStore = create<StoreState>()(
             // Kullanıcı isteği: görsel buluta yüklendiğinde MESAJLA bildir
             get().addNotification({
               type: 'success',
+              force: true,
               message: 'Görsel Buluta Yüklendi',
               description: `"${img.name || 'Görsel'}" bulut kütüphanesine başarıyla eklendi.`
             });
@@ -939,21 +949,27 @@ export const useStore = create<StoreState>()(
       },
 
       addNotification: (n) => {
-        // BİLDİRİM POLİTİKASI: Yalnızca önemli hata (error) ve düzeltme gerektiren
-        // uyarılar (warning) gösterilir. Rutin işlemlerin (sembol ekleme, kaydetme,
-        // senkron vb.) "başarılı"/"bilgi" bildirimleri tamamen sessize alınır —
-        // kullanıcı yalnızca müdahale gerektiren durumlarda uyarılır.
-        if (n.type !== 'error' && n.type !== 'warning') return;
+        // BİLDİRİM POLİTİKASI: Yalnızca önemli hata (error), düzeltme gerektiren
+        // uyarılar (warning) ve force işaretli bildirimler gösterilir. Rutin
+        // işlemlerin (sembol ekleme vb.) "başarılı"/"bilgi" bildirimleri sessize
+        // alınır. force: bulut YÜKLE/İNDİR gibi kullanıcı isteğiyle bildirim
+        // bekleyen işlemler politika dışı tutulur ve MESAJ mutlaka gösterilir.
+        if (n.type !== 'error' && n.type !== 'warning' && !n.force) return '';
 
         const id = uuidv4();
         set((state) => ({
           // En fazla 5 eşzamanlı bildirim: toplu yüklemelerde yığın birikmesin
           notifications: [...state.notifications.slice(-4), { ...n, id }]
         }));
-        // Hata/uyarı bildirimleri ekranda daha uzun kalır (8 sn): okunması gerekir.
-        setTimeout(() => {
-          get().removeNotification(id);
-        }, 8000);
+        // Sticky bildirimler (ör. "Buluta Yükleniyor...") işlem bitene kadar ekranda
+        // kalır; çağıran taraf removeNotification ile kaldırır.
+        if (!n.sticky) {
+          // Hata/uyarı bildirimleri ekranda daha uzun kalır (8 sn): okunması gerekir.
+          setTimeout(() => {
+            get().removeNotification(id);
+          }, 8000);
+        }
+        return id;
       },
 
       removeNotification: (id) => {
@@ -1375,15 +1391,44 @@ export const useStore = create<StoreState>()(
         const isLocalhost = typeof window !== 'undefined' &&
           (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
         if (isLocalhost) {
+          // Manuel YÜKLE tıklamasında sessiz kalma: neden çalışmadığını söyle.
+          if (!silent) {
+            get().addNotification({
+              type: 'warning',
+              message: 'Yerel Ortam',
+              description: 'Bulut senkronu yerel geliştirme ortamında (localhost) devre dışıdır.'
+            });
+          }
           return;
         }
 
         // Çakışan senkronları tekilleştir: mevcut senkron bitince kuyruktaki tekrar çalışsın.
         if (_syncBusy) {
+          if (!silent) {
+            // Manuel YÜKLE: sürsen de sürecek olan senkron hakkında kullanıcıyı bilgilendir.
+            get().addNotification({
+              type: 'warning',
+              message: 'Lütfen Bekleyin',
+              description: 'Bulut senkronizasyonu sürüyor. İşlem bittikten sonra tekrar deneyin.'
+            });
+            return;
+          }
           _syncQueued = true;
           return;
         }
         _syncBusy = true;
+
+        // Kullanıcı isteği: YÜKLE başlarken İLERLEME mesajı bas (işlem bitene kadar ekranda kalır).
+        const progressId = silent ? '' : get().addNotification({
+          type: 'info',
+          force: true,
+          sticky: true,
+          message: 'Buluta Yükleniyor...',
+          description: 'Verileriniz buluta aktarılıyor, lütfen sayfayı kapatmayın.'
+        });
+        const clearProgress = () => {
+          if (progressId) get().removeNotification(progressId);
+        };
 
         try {
           const { uploadedImages, allSymbols, objects, backgroundImage, projectInfo, scenes, archiveScenes = [], activeSceneId, visualSettings } = get();
@@ -1468,9 +1513,11 @@ export const useStore = create<StoreState>()(
           );
           
           if (!silent) {
+            clearProgress();
             // Kullanıcı isteği: YÜKLE olumlu sonuçlandığında MESAJLA bildir
             get().addNotification({
               type: 'success',
+              force: true,
               message: 'Buluta Yüklendi',
               description: `Tüm veriler buluta başarıyla yedeklendi (${objects.length} nesne, ${finalArchiveToSync.length} sayfa, ${cleanUploads.length} görsel).`
             });
@@ -1485,6 +1532,7 @@ export const useStore = create<StoreState>()(
           });
         } catch (error: unknown) {
           console.error('Sync Error:', error);
+          clearProgress();
           if (!silent) {
             const errMsg = error instanceof Error && error.message ? error.message : '';
             get().addNotification({
@@ -1527,10 +1575,24 @@ export const useStore = create<StoreState>()(
           }
           return false;
         }
+
+        // Kullanıcı isteği: İNDİR başlarken İLERLEME mesajı bas (işlem bitene kadar ekranda kalır).
+        const progressId = silent ? '' : get().addNotification({
+          type: 'info',
+          force: true,
+          sticky: true,
+          message: 'Buluttan İndiriliyor...',
+          description: 'Bulut yedeği alınıyor ve uygulanıyor, lütfen bekleyin.'
+        });
+        const clearProgress = () => {
+          if (progressId) get().removeNotification(progressId);
+        };
+
         try {
           const data = await cloud.load(get().adminPassword || '');
           
           if (!data) {
+            clearProgress();
             if (!silent) {
               // Manuel İNDİR'de bulut boşsa kullanıcıyı boşta bırakma
               get().addNotification({
@@ -1570,6 +1632,7 @@ export const useStore = create<StoreState>()(
           const staleByTs = cloudRevAt === 0 && cloudTs > 0 && localSyncedAt > 0 && cloudTs < localSyncedAt - 60000;
           if (staleByRev || staleByTs) {
             console.warn('Bulut yapılandırması bayat görünüyor (CDN önbelleği):', { cloudRevAt, localRevAt, cloudTs, localSyncedAt });
+            clearProgress();
             if (!silent) {
               get().addNotification({
                 type: 'warning',
@@ -1736,12 +1799,14 @@ export const useStore = create<StoreState>()(
           });
 
           if (!silent) {
+            clearProgress();
             // Kullanıcı isteği: İNDİR olumlu sonuçlandığında MESAJLA bildir
             const restoredPages = (updates.scenes || []).length;
             const restoredObjects = (updates.objects || get().objects || []).length;
             const restoredImages = (updates.uploadedImages || get().uploadedImages || []).length;
             get().addNotification({
               type: 'success',
+              force: true,
               message: 'Buluttan İndirildi',
               description: `Bulut yedeği başarıyla uygulandı (${restoredPages} sayfa, ${restoredObjects} nesne, ${restoredImages} görsel).`
             });
@@ -1751,6 +1816,7 @@ export const useStore = create<StoreState>()(
 
         } catch (error: unknown) {
           console.error('Restore Error:', error);
+          clearProgress();
           if (!silent) {
             get().addNotification({
               type: 'error',
