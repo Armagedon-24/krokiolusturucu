@@ -5,7 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { SYMBOL_CATEGORIES } from '../constants/symbols';
 import { createKrokiTemplate, createDiagramTemplate } from '../constants/templates';
 import { buildScenarioObjects, type KrokiScenario } from '../data/krokiScenarios';
-import { cloudinary as cloud, publicIdFromUrl, normKey, mapCloudCategoryToId } from '../lib/cloudinary';
+import { cloudinary as cloud, publicIdFromUrl, normKey, mapCloudCategoryToId, ensureCategoryForFolder } from '../lib/cloudinary';
 import { migrateLegacyAssetUrl } from '../utils/assetMigration';
 
 /** Nesne listesindeki eski .png varlık yollarını .webp sürümüne taşır (yerinde). */
@@ -839,6 +839,8 @@ export const useStore = create<StoreState>()(
           (name !== undefined && name !== current.name);
         if (!changed) return;
 
+        const categoryChanged = category !== undefined && category !== current.category;
+
         set((state) => ({
           uploadedImages: state.uploadedImages.map((img) =>
             img.id === id ? { 
@@ -854,6 +856,36 @@ export const useStore = create<StoreState>()(
           // ve kullanıcının taşıdığı görsel eski kategorisine geri kayardı.
           _placementsSavedAt: Date.now(),
         }));
+
+        // KATEGORİ ↔ BULUT KLASÖRÜ AYNASI: kategori değiştiyse buluttaki görsel de
+        // yeni kategorinin klasörüne taşınır (kopya — eski URL kasıtlı olarak silinmez,
+        // tuvaldeki nesneler bozulmasın). Hata olsa bile kategori kaydı yukarıda
+        // güvenceye alındı; organizasyon yapılandırmayla (config) korunur.
+        if (categoryChanged && get().isAdmin && current.src &&
+            /^https?:\/\/res\.cloudinary\.com\//i.test(current.src)) {
+          void (async () => {
+            const moved = await cloud.move(current.src!, category, get().adminPassword || '');
+            if (moved && moved.secureUrl !== current.src) {
+              set((state) => ({
+                uploadedImages: state.uploadedImages.map((img) =>
+                  img.id === id ? { ...img, src: moved.secureUrl } : img
+                ),
+                // Aynı id kütüphane kaydında da (semboller sekmesi) geçiyorsa orayı da güncelle
+                allSymbols: state.allSymbols.map((cat) => ({
+                  ...cat,
+                  symbols: cat.symbols.map((s: any) =>
+                    s.id === id ? { ...s, src: moved.secureUrl } : s
+                  ),
+                })),
+                _placementsSavedAt: Date.now(),
+              }));
+              if (get().isAdmin) get().syncToCloud(true);
+            } else if (!moved) {
+              console.warn('Bulut klasör taşıma başarısız (kategori kaydı korundu):', id, category);
+            }
+          })();
+        }
+
         if (get().isAdmin) {
           get().syncToCloud(true);
         }
@@ -2107,13 +2139,20 @@ export const useStore = create<StoreState>()(
                                      libraryNames.has(normKey(asset.name));
 
             if (!isAlreadyPresent && !isDeleted) {
+              // KATEGORİ ↔ BULUT KLASÖRÜ AYNASI: bilinmeyen bulut klasörü, klasörün
+              // aynısı adla YENİ KATEGORİ olarak açılır — kullanıcı bulutta hangi
+              // klasöre koyduysa görsel uygulamada da o kategoride kalır
+              // ('uncategorized'a düşürülmez, hayalet kategori değil GERÇEK kategori olur).
+              const ensured = ensureCategoryForFolder(asset.category, get().allSymbols as any);
+              if (ensured.created) {
+                set({ allSymbols: ensured.allSymbols });
+                get().syncToCloud(true); // yeni kategori buluta da yazılsın
+              }
               newImages.push({
                 id: asset.id,
                 src: asset.src,
                 name: asset.name,
-                // Bulut klasör adı ('ARAÇLAR' gibi) uygulama kategori kimliğine eşlenir ('vehicles') —
-                // hayalet kategori oluşmaz, görsel doğru başlık altında görünür.
-                category: mapCloudCategoryToId(asset.category, get().allSymbols as any)
+                category: ensured.id
               });
               currentUrls.add(asset.src);
               currentPids.add(assetPid);

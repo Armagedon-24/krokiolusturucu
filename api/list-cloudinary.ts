@@ -26,13 +26,16 @@ const pidFromUrl = (url?: string): string | null => {
 };
 
 /**
- * Bulut yapılandırmasından (kroki_config_v2) public_id -> admin ismi haritası çıkarır.
- * Admin semboller panelinde bir sembole ne isim verdiyse bulut galerisinde ve
- * eksik taramasında DA o isim görünür (dosya adı değil, paneldeki isim).
- * Yapılandırma okunamazsa boş harita döner — mevcut davranış korunur.
+ * Bulut yapılandırmasından (kroki_config_v2) public_id -> { isim, kategori } haritası çıkarır.
+ * - İSİM: admin semboller panelinde verdiği isim bulut galerisinde/eksik taramada görünür.
+ * - KATEGORİ (klasör aynası): admin uygulamada görseli hangi kategoriye aldıysa o
+ *   kategori bulut listesinde de geçerli sayılır — fiziksel klasör adı değil,
+ *   kullanıcının atadığı kategori esastır ('uncategorized' olmayan gerçek atamalar).
+ * Yapılandırma okunamazsa boş haritalar döner — mevcut davranış korunur.
  */
-const buildLibraryNameMap = async (cloudName: string): Promise<Map<string, string>> => {
-  const map = new Map<string, string>();
+const buildLibraryMaps = async (cloudName: string): Promise<{ nameByPid: Map<string, string>, catByPid: Map<string, string> }> => {
+  const nameByPid = new Map<string, string>();
+  const catByPid = new Map<string, string>();
   const urls = [
     `https://res.cloudinary.com/${cloudName}/raw/upload/kroki_config_v2`,
     `https://res.cloudinary.com/${cloudName}/raw/upload/kroki_config_v2.json`,
@@ -42,21 +45,24 @@ const buildLibraryNameMap = async (cloudName: string): Promise<Map<string, strin
       const res = await fetch(u);
       if (!res.ok) continue;
       const cfg = await res.json();
-      const add = (src?: string, name?: string) => {
+      const add = (src?: string, name?: string, category?: string) => {
         const pid = pidFromUrl(src);
         const n = typeof name === 'string' ? name.trim() : '';
-        if (pid && n) map.set(pid, n);
+        const c = typeof category === 'string' ? category.trim() : '';
+        if (pid && n && !nameByPid.has(pid)) nameByPid.set(pid, n);
+        // 'uncategorized' gerçek bir atama değildir: klasör bilgisi geçerli kalır
+        if (pid && c && c !== 'uncategorized' && !catByPid.has(pid)) catByPid.set(pid, c);
       };
-      (cfg?.uploadedImages || []).forEach((img: { src?: string; name?: string }) => add(img?.src, img?.name));
-      (cfg?.allSymbols || []).forEach((cat: { symbols?: { src?: string; name?: string }[] }) =>
-        (cat?.symbols || []).forEach((s: { src?: string; name?: string }) => add(s?.src, s?.name))
+      (cfg?.uploadedImages || []).forEach((img: { src?: string; name?: string; category?: string }) => add(img?.src, img?.name, img?.category));
+      (cfg?.allSymbols || []).forEach((cat: { id?: string; symbols?: { src?: string; name?: string }[] }) =>
+        (cat?.symbols || []).forEach((s: { src?: string; name?: string }) => add(s?.src, s?.name, cat?.id))
       );
-      if (map.size > 0) break; // ilk okunan yapılandırma yeterli
+      if (nameByPid.size > 0 || catByPid.size > 0) break; // ilk okunan yapılandırma yeterli
     } catch {
       continue;
     }
   }
-  return map;
+  return { nameByPid, catByPid };
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -136,18 +142,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       };
     });
 
-    // ADMİN İSİMLERİ BİRLEŞTİR: semboller panelinde verilen isim, bulut kaydının da ismi olur.
-    // Eşleştirme public_id üzerinden yapılır; yapılandırma okunamazsa dosya adlarıyla devam edilir.
+    // ADMİN İSİMLERİ + KATEGORİLER BİRLEŞTİR: semboller panelinde verilen isim ve
+    // uygulamada atanan kategori, bulut kaydının da ismi/kategorisi olur.
+    // KATEGORİ KURALI (klasör aynası): yapılandırmada GERÇEK bir kategori ataması
+    // varsa (uncategorized değilse) o kazanır — admin uygulamada taşıdıysa bulut
+    // listesi de yeni kategoriyi gösterir. Yapılandırmada atama yoksa/yok sayılırsa
+    // Cloudinary klasör adı (klasör = kategori) esas alınır.
     try {
-      const nameByPid = await buildLibraryNameMap(CLOUD_NAME);
-      if (nameByPid.size > 0) {
-        assets.forEach((a: { id: string; name: string }) => {
+      const { nameByPid, catByPid } = await buildLibraryMaps(CLOUD_NAME);
+      if (nameByPid.size > 0 || catByPid.size > 0) {
+        assets.forEach((a: { id: string; name: string; category: string }) => {
           const libName = nameByPid.get(a.id);
           if (libName) a.name = libName;
+          const libCat = catByPid.get(a.id);
+          if (libCat) a.category = libCat;
         });
       }
     } catch (mergeErr) {
-      console.error('Bulut isim birleştirme başarısız (dosya adlarıyla devam):', mergeErr);
+      console.error('Bulut isim/kategori birleştirme başarısız (klasör adlarıyla devam):', mergeErr);
     }
 
     return res.status(200).json({ assets });

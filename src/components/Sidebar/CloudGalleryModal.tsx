@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { X, RefreshCw, CloudDownload, CheckSquare, Square, Search, AlertTriangle } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { v4 as uuidv4 } from 'uuid';
-import { getOptimizedCloudinaryUrl, publicIdFromUrl, normKey, mapCloudCategoryToId } from '../../lib/cloudinary';
+import { getOptimizedCloudinaryUrl, publicIdFromUrl, normKey, ensureCategoryForFolder } from '../../lib/cloudinary';
 
 interface CloudAsset {
   id: string;
@@ -138,14 +138,20 @@ export const CloudGalleryModal: React.FC<{ onClose: () => void }> = ({ onClose }
     for (const a of newSelectable) {
       if (!selected.has(a.id)) continue;
       const before = useStore.getState().uploadedImages.length;
+      // KATEGORİ ↔ BULUT KLASÖRÜ AYNASI: bulut klasörü ('OKULLAR' gibi) uygulamada
+      // karşılığı yoksa AYNI adla yeni kategori açılır; görsel o kategoriye eklenir.
+      // Böylece kullanıcının bulut klasör düzeni uygulamada ve config'te birebir yaşar.
+      const ensured = ensureCategoryForFolder(a.category, useStore.getState().allSymbols as any);
+      if (ensured.created) {
+        useStore.setState({ allSymbols: ensured.allSymbols });
+        useStore.getState().syncToCloud(true);
+      }
       await addUploadedImage(
         {
           id: uuidv4(),
           src: a.src,
           name: a.name,
-          // Bulut klasör adı ('ARAÇLAR') uygulama kategori kimliğine eşlenir ('vehicles'):
-          // görsel doğru kategori başlığı altında görünür, hayalet kategori oluşmaz.
-          category: mapCloudCategoryToId(a.category, allSymbols as any) || 'uncategorized'
+          category: ensured.id || 'uncategorized'
         },
         { allowDeletedName: true }
       );

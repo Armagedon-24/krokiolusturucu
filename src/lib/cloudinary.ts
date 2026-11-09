@@ -58,6 +58,70 @@ export const mapCloudCategoryToId = (
   return hit ? hit.id : 'uncategorized';
 };
 
+/** Kategori başlığı güzelleştirme: 'OKUL_FOTOGRALARI' / 'okul-fotograflari' -> 'Okul Fotograflari' */
+const prettifyFolderName = (raw: string): string =>
+  raw
+    .replace(/[-_]+/g, ' ')
+    .trim()
+    .toLowerCase()
+    .replace(/(^|\s)([a-zçğıöşü])/g, (_m, p1, p2) => p1 + p2.toUpperCase());
+
+/**
+ * Bulut klasör adı güvenli hale getirme: Türkçe karakterler katlanır (ç→c, ğ→g...)
+ * ve public_id beyaz listesi dışındaki karakterler alt çizgiye düşürülür. Klasör adı
+ * dosya adıyla AYNI kuralla temizlenir ki /api/upload-to-cloudinary ve
+ * /api/move-cloudinary doğrulamasından güvenle geçsin. Uygulama içi eşleştirme
+ * normKey üzerinden yapıldığı için (ARACLAR ~ ARAÇLAR) kategori eşleşmesi bozulmaz.
+ */
+const sanitizeFolderName = (category?: string): string =>
+  (category || 'uncategorized')
+    .replace(/ç/g, 'c').replace(/ğ/g, 'g').replace(/ı/g, 'i')
+    .replace(/ö/g, 'o').replace(/ş/g, 's').replace(/ü/g, 'u')
+    .replace(/[^A-Za-z0-9._\-]/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .trim() || 'uncategorized';
+
+/**
+ * KATEGORİ ↔ BULUT KLASÖRÜ AYNASI: bulut klasör adını kategori kimliğine eşler;
+ * eşleşen kategori YOKSA YENİ KATEGORİ OLUŞTURUR (id = klasörün birebir adı).
+ *
+ * Kullanıcı bulutta klasör yarattıysa ('OKULLAR' gibi) görselleri o klasörde
+ * kalmalıdır: tarama/galeri aktarımı bilinmeyen klasörleri 'uncategorized'a
+ * DÜŞÜRMEZ, klasörün aynısı adlı bir kategori açar. id klasör adının birebir
+ * kendisi tutulur ki sonraki yüklemeler de AYNI bulut klasörüne yazılsın
+ * (cloud.upload klasör olarak kategori kimliğini kullanır). Eşleşme normKey
+ * üzerinden yapıldığı için Türkçe karakter/büyük-küçük farkları tolere edilir.
+ *
+ * created=true dönerse çağıran allSymbols'ı store'a uygulamalı ve senkronlamalıdır.
+ */
+export const ensureCategoryForFolder = (
+  raw: string | undefined,
+  allSymbols: readonly { id: string, name: string, symbols?: any[] }[]
+): { id: string, name: string, created: boolean, allSymbols: any[] } => {
+  const key = normKey(raw);
+  if (!key || key === 'uncategorized' || key === 'kroki olusturucu') {
+    return { id: 'uncategorized', name: 'Uncategorized', created: false, allSymbols: allSymbols as any[] };
+  }
+  const alias = LEGACY_CATEGORY_ALIASES[key];
+  if (alias) {
+    const aliasCat = allSymbols.find((c) => c.id === alias);
+    if (aliasCat) return { id: alias, name: aliasCat.name, created: false, allSymbols: allSymbols as any[] };
+  }
+  const hit = allSymbols.find((c) => normKey(c.name) === key || normKey(c.id) === key);
+  if (hit) return { id: hit.id, name: hit.name, created: false, allSymbols: allSymbols as any[] };
+
+  // Yeni kategori: kimlik = bulut klasör adının birebir kendisi (klasör aynası korunur)
+  const rawName = (raw || '').toString().trim();
+  const id = rawName || key;
+  const name = prettifyFolderName(id) || id;
+  return {
+    id,
+    name,
+    created: true,
+    allSymbols: [...(allSymbols as any[]), { id, name, symbols: [] }],
+  };
+};
+
 /**
  * Cloudinary URL'sinden transform parametrelerinden bağımsız benzersiz public_id türetir.
  * Mükerrer kontrolü ve silinen görsellerin yeniden gelmemesi için kullanılır.
@@ -115,7 +179,9 @@ export const cloudinary = {
         .replace(/ç/g, 'c').replace(/ğ/g, 'g').replace(/ı/g, 'i')
         .replace(/ö/g, 'o').replace(/ş/g, 's').replace(/ü/g, 'u')
         .replace(/[^a-zA-Z0-9.\-_]/g, '_');
-      const catFolder = (category && category !== 'uncategorized') ? category : 'uncategorized';
+      const catFolder = sanitizeFolderName(
+        (category && category !== 'uncategorized') ? category : 'uncategorized'
+      );
       const publicId = `kroki-olusturucu/${catFolder}/${safeName}`;
 
       const response = await fetch('/api/upload-to-cloudinary', {
@@ -138,6 +204,44 @@ export const cloudinary = {
     } catch (error) {
       console.error('Cloudinary Upload Error:', error);
       throw error;
+    }
+  },
+
+  /**
+   * KATEGORİ ↔ BULUT KLASÖRÜ AYNASI: görseli bulutta hedef kategorinin klasörüne
+   * TAŞIR (imzalı /api/move-cloudinary ile kopyalar). Eski kopya bilinçli olarak
+   * silinmez — tuvale eklenmiş nesneler eski URL ile çizmeye devam eder.
+   * Başarılıysa yeni secure_url döner; taşıma gerekmez/başarısızsa null.
+   */
+  move: async (url: string, category?: string, authToken?: string): Promise<{ publicId: string, secureUrl: string } | null> => {
+    try {
+      const fromPid = publicIdFromUrl(url);
+      if (!fromPid) return null;
+      const catFolder = sanitizeFolderName(
+        (category && category !== 'uncategorized') ? category : 'uncategorized'
+      );
+      const fileName = fromPid.split('/').pop() || 'gorsel';
+      const toPid = `kroki-olusturucu/${catFolder}/${fileName}`;
+      if (toPid === fromPid) return null; // zaten doğru klasörde
+
+      const response = await fetch('/api/move-cloudinary', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-auth-token': authToken || '',
+        },
+        body: JSON.stringify({ fromPublicId: fromPid, toPublicId: toPid }),
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || `Klasör taşıma başarısız (HTTP ${response.status})`);
+      }
+      const data = await response.json();
+      if (!data.secure_url) return null;
+      return { publicId: data.public_id || toPid, secureUrl: data.secure_url };
+    } catch (error) {
+      console.error('Cloudinary Move Error:', error);
+      return null;
     }
   },
 
