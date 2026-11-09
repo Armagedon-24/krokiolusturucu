@@ -1994,6 +1994,10 @@ const Symbol3D = ({ obj, wallThickness, realObj, allWalls, visualObjects, upload
   const isTextAnn = actualObj.type === 'text';
   // Buildings rendered as 3D extruded boxes
   const isBuilding = sIdLower.startsWith('arch-b') || sIdLower === 'arch-house';
+  // Mimari anıt yapılar (karakalem): havaalanı ve demiryolu istasyonu —
+  // 3B'de düz decal yerine prosedürel hacimli model (Airport3D / Station3D)
+  const isAirport = sIdLower === 'arch-airport' || nameLower.includes('havaalan') || srcLower.includes('airport');
+  const isStation = sIdLower === 'arch-trainstation' || nameLower.includes('istasyon') || srcLower.includes('station');
 
   // Interactive 3D Objects
   const isVehicle = sIdLower.startsWith('v-') || sIdLower.includes('car') || sIdLower.includes('sedan') || sIdLower.includes('suv') || sIdLower.includes('truck') || sIdLower.includes('bus') || sIdLower.includes('motor') || sIdLower.includes('police') || sIdLower.includes('ambulance') || sIdLower.includes('itfaiye') || sIdLower.includes('kepçe') || nameLower.includes('araç') || nameLower.includes('otomobil') || nameLower.includes('kamyon') || nameLower.includes('motosiklet') || nameLower.includes('otobüs') || nameLower.includes('ambulans') || nameLower.includes('polis') || nameLower.includes('itfaiye') || nameLower.includes('kepçe') || nameLower.includes('traktör') || nameLower.includes('çekici') || nameLower.includes('araba') || nameLower.includes('taksi') || nameLower.includes('minibüs');
@@ -2160,6 +2164,17 @@ const Symbol3D = ({ obj, wallThickness, realObj, allWalls, visualObjects, upload
         symbolId={sIdLower}
       />
     );
+  }
+
+  // MİMARİ ANIT YAPILAR (arch-airport / arch-trainstation): karakalem cephe
+  // çizimi ana gövdenin ön yüzüne dokulanır; hacim için gerçek 3B çatı ve
+  // kontrol kulesi eklenir. Düz decal "2B ve bozuk" göründüğü için (kullanıcı
+  // raporu) hayvan figürlerindeki gibi prosedürel hacimli model çizilir.
+  if (isAirport) {
+    return <Airport3D x={posX} y={posZ} width={finalW} height={finalH} rad={rad} textureSrc={textureSrc} />;
+  }
+  if (isStation) {
+    return <Station3D x={posX} y={posZ} width={finalW} height={finalH} rad={rad} textureSrc={textureSrc} />;
   }
 
   // Fiziksel nesneler (el aletleri, silahlar, delil nesneleri, giysi/kişisel eşya,
@@ -3109,6 +3124,142 @@ const FloorItem3D = ({ x, y, width, height, rad, textureSrc, zOffset }: any) => 
 };
 
 // Building3D: renders extruded building matching 2D footprint
+// --- MİMARİ ANIT YAPILAR (karakalem): Havaalanı & Demiryolu İstasyonu ---
+// arch-airport / arch-trainstation 3B'de düz decal bırakılırsa "2B ve bozuk"
+// görünür (kullanıcı raporu). Bu yüzden hayvan figürlerindeki gibi PROSEDÜREL
+// hacimli modeller çizilir: karakalem cephe çizimi ana gövdenin ön yüzüne
+// dokulanır (dokunun altındaki yer/çim/peron şeridi doku dönüşümüyle kırpılır),
+// üstüne gerçek 3B çatı / kontrol kulesi eklenir.
+
+/** Cephe dokusunu kırpıp hazırlar: cropBottom → dokunun ALTUNDAN kırpılan oran
+ *  (yer çizgileri, çim, peron). v ∈ [cropBottom, 1] aralığı gösterilir. */
+const makeLandmarkFacadeTexture = (tFacade: THREE.Texture, cropBottom: number): THREE.Texture => {
+  const t = tFacade.clone();
+  t.needsUpdate = true;
+  t.wrapS = THREE.ClampToEdgeWrapping;
+  t.wrapT = THREE.ClampToEdgeWrapping;
+  t.repeat.set(1, 1 - cropBottom);
+  t.offset.set(0, cropBottom);
+  return t;
+};
+
+const LANDMARK_BODY_COLOR = '#f4f2ec';
+
+const Airport3D = ({ x, y, width, height, rad, textureSrc }: any) => {
+  const tFacade = useTexture(textureSrc) as THREE.Texture;
+  const facTex = useMemo(() => makeLandmarkFacadeTexture(tFacade, 0.13), [tFacade]);
+  const w = width;
+  const d = Math.max(height, 40 * SCALE);
+  const bodyH = 66 * SCALE;          // terminal gövdesi ~6.6 m (2 kat)
+  const roofThick = 3 * SCALE;
+  const shaftH = 96 * SCALE;         // kule gövdesi
+  const towerR = Math.max(4.5 * SCALE, w * 0.045);
+  const cabH = 20 * SCALE;           // kabin
+  const cabR = towerR * 1.8;
+  const towerX = w * 0.18;           // çizimdeki kule konumu (sağ-orta)
+
+  return (
+    <group position={[x, 0, y]} rotation={[0, rad, 0]}>
+      {/* Terminal gövdesi */}
+      <mesh position={[0, bodyH / 2, 0]} castShadow receiveShadow>
+        <boxGeometry args={[w, bodyH, d]} />
+        <meshStandardMaterial color={LANDMARK_BODY_COLOR} roughness={0.9} metalness={0.02} />
+      </mesh>
+      {/* Karakalem cephe dokusu (ön yüz) */}
+      <mesh position={[0, bodyH / 2, d / 2 + 0.3]}>
+        <planeGeometry args={[w * 0.995, bodyH * 0.995]} />
+        <meshBasicMaterial map={facTex} transparent alphaTest={0.03} side={THREE.DoubleSide} toneMapped={false} />
+      </mesh>
+      {/* Düz çatı plakası */}
+      <mesh position={[0, bodyH + roofThick / 2, 0]} castShadow>
+        <boxGeometry args={[w + SCALE, roofThick, d + SCALE]} />
+        <meshStandardMaterial color="#555555" roughness={0.9} />
+      </mesh>
+      {/* Hava trafik kontrol kulesi (çizimdeki konumda, gövde içinden yükselir) */}
+      <group position={[towerX, 0, -d * 0.05]}>
+        <mesh position={[0, shaftH / 2, 0]} castShadow>
+          <cylinderGeometry args={[towerR, towerR * 1.3, shaftH, 20]} />
+          <meshStandardMaterial color="#e8e6df" roughness={0.85} />
+        </mesh>
+        <mesh position={[0, shaftH + cabH / 2, 0]} castShadow>
+          <cylinderGeometry args={[cabR, cabR, cabH, 20]} />
+          <meshStandardMaterial color="#2e4653" roughness={0.25} metalness={0.5} />
+        </mesh>
+        <mesh position={[0, shaftH + cabH + 2.2 * SCALE, 0]} castShadow>
+          <coneGeometry args={[cabR * 1.02, 4.4 * SCALE, 20]} />
+          <meshStandardMaterial color="#555555" roughness={0.9} />
+        </mesh>
+        <mesh position={[0, shaftH + cabH + 7.5 * SCALE, 0]}>
+          <cylinderGeometry args={[0.3 * SCALE, 0.3 * SCALE, 7 * SCALE, 8]} />
+          <meshStandardMaterial color="#333333" roughness={0.7} />
+        </mesh>
+      </group>
+    </group>
+  );
+};
+
+const Station3D = ({ x, y, width, height, rad, textureSrc }: any) => {
+  const tFacade = useTexture(textureSrc) as THREE.Texture;
+  const facTex = useMemo(() => makeLandmarkFacadeTexture(tFacade, 0.14), [tFacade]);
+  const w = width;
+  const d = Math.max(height, 40 * SCALE);
+  const bodyH = 66 * SCALE;          // ana bina ~6.6 m (2 kat)
+  const ridgeH = 16 * SCALE;         // beşik çatı mahya yüksekliği
+  const pavW = w * 0.34;             // saatlı orta pavyon
+  const pavD = d * 0.62;
+  const pavH = 18 * SCALE;
+  const pavRidge = 10 * SCALE;
+
+  // Mahya X ekseni boyunca koşan beşik çatı prizması:
+  // üçgen kesit shape'i (x=derinlik, y=yükseklik) X boyunca ekstrüde edilir.
+  const roofShape = useMemo(() => {
+    const s = new THREE.Shape();
+    s.moveTo(-d / 2 - SCALE, 0);
+    s.lineTo(d / 2 + SCALE, 0);
+    s.lineTo(0, ridgeH);
+    s.closePath();
+    return s;
+  }, [d, ridgeH]);
+
+  const pavRoofShape = useMemo(() => {
+    const s = new THREE.Shape();
+    s.moveTo(-pavD / 2 - SCALE, 0);
+    s.lineTo(pavD / 2 + SCALE, 0);
+    s.lineTo(0, pavRidge);
+    s.closePath();
+    return s;
+  }, [pavD, pavRidge]);
+
+  return (
+    <group position={[x, 0, y]} rotation={[0, rad, 0]}>
+      {/* Ana bina gövdesi */}
+      <mesh position={[0, bodyH / 2, 0]} castShadow receiveShadow>
+        <boxGeometry args={[w, bodyH, d]} />
+        <meshStandardMaterial color={LANDMARK_BODY_COLOR} roughness={0.9} metalness={0.02} />
+      </mesh>
+      {/* Karakalem cephe dokusu (ön yüz) */}
+      <mesh position={[0, bodyH / 2, d / 2 + 0.3]}>
+        <planeGeometry args={[w * 0.995, bodyH * 0.995]} />
+        <meshBasicMaterial map={facTex} transparent alphaTest={0.03} side={THREE.DoubleSide} toneMapped={false} />
+      </mesh>
+      {/* Ana beşik çatı */}
+      <mesh position={[w / 2 + SCALE, bodyH, 0]} rotation={[0, -Math.PI / 2, 0]} castShadow>
+        <extrudeGeometry args={[roofShape, { depth: w + 2 * SCALE, bevelEnabled: false }]} />
+        <meshStandardMaterial color="#4a4a48" roughness={0.9} />
+      </mesh>
+      {/* Orta pavyon (çizimdeki yüksek çekim bölümü) + kendi beşik çatısı */}
+      <mesh position={[0, bodyH + pavH / 2, 0]} castShadow>
+        <boxGeometry args={[pavW, pavH, pavD]} />
+        <meshStandardMaterial color="#efece4" roughness={0.9} />
+      </mesh>
+      <mesh position={[pavW / 2 + SCALE, bodyH + pavH, 0]} rotation={[0, -Math.PI / 2, 0]} castShadow>
+        <extrudeGeometry args={[pavRoofShape, { depth: pavW + 2 * SCALE, bevelEnabled: false }]} />
+        <meshStandardMaterial color="#4a4a48" roughness={0.9} />
+      </mesh>
+    </group>
+  );
+};
+
 const Building3D = ({ x, y, width, height, rad, floors, textureSrc }: any) => {
   const tFacade = useTexture(textureSrc) as THREE.Texture;
   const floorH = 33 * SCALE; // ~3.3m per floor
