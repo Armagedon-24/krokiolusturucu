@@ -102,19 +102,26 @@ async function collectEmptyFolders(authHeader: string, prelisted?: string[]): Pr
   if (prelisted && prelisted.length) {
     listed = prelisted;
   } else {
-    let cursor: string | undefined = undefined;
-    for (let page = 0; page < 20; page++) {
-      const u = new URL(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/resources/image/upload`);
-      u.searchParams.set('prefix', PREFIX_CONST);
-      u.searchParams.set('max_results', '500');
-      if (cursor) u.searchParams.set('next_cursor', cursor);
-      const lr = await fetch(u.toString(), { headers: { Authorization: authHeader }, signal: AbortSignal.timeout(8000) });
-      if (!lr.ok) return { nodes: 0, empties: [], error: `varlık listeleme HTTP ${lr.status}` };
-      const ld = await lr.json().catch(() => null);
-      if (!ld || !Array.isArray(ld.resources)) return { nodes: 0, empties: [], error: 'varlık listeleme yanıtı geçersiz' };
-      for (const r of ld.resources) listed.push(String(r.public_id));
-      cursor = ld.next_cursor;
-      if (!cursor) break;
+    // GÖRSEL DIŞI KAYNAKLAR DA SAYILIR (raw/video): klasörde eski bir JSON/ses
+    // kalıntısı varsa yalnızca image listelesek klasörü 'boş' sanıp silmeye
+    // çalışırduk; Cloudinary ise 'Folder is not empty' ile reddederdi ve budama
+    // o klasörde SONSUZA DEK başarısız olurdu. (Kanıt: 'symbols', 'Kategorisiz'
+    // gibi 5 klasör tam bu tuzağa düşmüştü.)
+    for (const rtype of ['image', 'raw', 'video'] as const) {
+      let cursor: string | undefined = undefined;
+      for (let page = 0; page < 20; page++) {
+        const u = new URL(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/resources/${rtype}/upload`);
+        u.searchParams.set('prefix', PREFIX_CONST);
+        u.searchParams.set('max_results', '500');
+        if (cursor) u.searchParams.set('next_cursor', cursor);
+        const lr = await fetch(u.toString(), { headers: { Authorization: authHeader }, signal: AbortSignal.timeout(8000) });
+        if (!lr.ok) return { nodes: 0, empties: [], error: `varlık listeleme HTTP ${lr.status} (${rtype})` };
+        const ld = await lr.json().catch(() => null);
+        if (!ld || !Array.isArray(ld.resources)) return { nodes: 0, empties: [], error: 'varlık listeleme yanıtı geçersiz' };
+        for (const r of ld.resources) listed.push(String(r.public_id));
+        cursor = ld.next_cursor;
+        if (!cursor) break;
+      }
     }
   }
   const assetFolders = new Set<string>();
@@ -551,6 +558,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let prunedFolders = 0;
     let emptyFoldersRemaining = 0;
     const prunedFolderList: string[] = [];
+    let pruneErrors: { folder: string; error: string }[] = [];
     try {
       if (!dry && Date.now() < deadline) {
         const scan = await collectEmptyFolders(authHeader);
@@ -558,18 +566,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         for (const n of scan.empties) {
           if (Date.now() >= deadline) break;
           if (n === 'kroki-olusturucu' || n.startsWith('kroki-olusturucu/objects')) continue;
-          const fr = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/folders/${n.split('/').map(encodeURIComponent).join('/')}`, {
-            method: 'DELETE',
-            headers: { Authorization: authHeader },
-            signal: AbortSignal.timeout(8000),
-          });
-          const fd = await fr.json().catch(() => null);
-          if (fr.ok && fd && !fd.error) {
-            prunedFolders++;
-            prunedFolderList.push(n);
-            emptyFoldersRemaining = Math.max(0, (emptyFoldersRemaining || 0) - 1);
-          } else {
-            break; // reddedildiyse (ör. hâlâ dolu sayılıyor) kalanı sonraki çağrıya bırak
+          try {
+            const fr = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/folders/${n.split('/').map(encodeURIComponent).join('/')}`, {
+              method: 'DELETE',
+              headers: { Authorization: authHeader },
+              signal: AbortSignal.timeout(8000),
+            });
+            const fd = await fr.json().catch(() => null);
+            if (fr.ok && fd && !fd.error) {
+              prunedFolders++;
+              prunedFolderList.push(n);
+              emptyFoldersRemaining = Math.max(0, (emptyFoldersRemaining || 0) - 1);
+            } else {
+              // Reddedilme SEBEBİNİ kaydet ve KARDEŞLERE devam et: tek klasördeki red,
+              // aynı seviyedeki diğerlerinin silinmesini engellememeli (eski 'break'
+              // davranışı 5 klasörün hepsini birden kilitliyordu). Atalar, alt
+              // dalları silindikten sonraki çağrıda kendiliğinden düşer.
+              pruneErrors.push({ folder: n, error: (fd as { error?: { message?: string } })?.error?.message || `HTTP ${fr.status}` });
+            }
+          } catch (delErr) {
+            pruneErrors.push({ folder: n, error: delErr instanceof Error ? delErr.message : 'silme hatası' });
           }
         }
       }
@@ -618,6 +634,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       failed,
       prunedFolders,
       prunedFolderList,
+      pruneErrors,
       emptyFoldersRemaining,
       _revAt: revAt || undefined,
     });
