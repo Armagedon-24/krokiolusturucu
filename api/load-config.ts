@@ -37,7 +37,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const authHeader = 'Basic ' + Buffer.from(API_KEY + ':' + API_SECRET).toString('base64');
 
     // 1) Admin API: kaydın güncel metadata'sı (version, secure_url)
-    const metaUrl = `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/resources/raw/kroki_config_v2`;
+    // DİKKAT: tek varlık okuma ucu '/resources/{resource_type}/{type}/{public_id}'
+    // biçimindedir — '{type}' segmenti (upload) ZORUNLUDUR. Daha önce
+    // '/resources/raw/kroki_config_v2' deneniyordu; segment eksik olduğu için istek
+    // her seferinde reddediliyor ve uç nokta sürekli CDN yedeğine düşüyordu.
+    const metaUrl = `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/resources/raw/upload/kroki_config_v2`;
     const metaResp = await fetch(metaUrl, { headers: { Authorization: authHeader } });
 
     if (metaResp.status === 404) {
@@ -46,7 +50,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (!metaResp.ok) {
-      return res.status(502).json({ error: 'Bulut metadata okunamadı' });
+      return res.status(502).json({ error: `Bulut metadata okunamadı (Cloudinary HTTP ${metaResp.status})` });
     }
 
     const meta = await metaResp.json().catch(() => null);

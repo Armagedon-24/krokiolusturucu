@@ -79,22 +79,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const authHeader = 'Basic ' + Buffer.from(API_KEY + ':' + API_SECRET).toString('base64');
 
     // 1) Yaplandırmayı SUNUCUDA oku (sürümlü adres → her zaman taze)
-    const metaUrl = `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/resources/raw/kroki_config_v2`;
+    // DİKKAT: tek varlık okuma ucu '/resources/{resource_type}/{type}/{public_id}'
+    // biçimindedir — '{type}' segmenti (upload) ZORUNLUDUR. Daha önce
+    // '/resources/raw/kroki_config_v2' deneniyordu; segment eksik olduğu için Admin
+    // API isteği HER SEFERİNDE reddediliyordu ve eşitleme hiç taşımadan
+    // 'Bulut metadata okunamadı' ile çıkıyordu (taşınma kuyruğu hiç kurulamıyordu).
+    const metaUrl = `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/resources/raw/upload/kroki_config_v2`;
     const metaResp = await fetch(metaUrl, { headers: { Authorization: authHeader } });
     if (metaResp.status === 404) {
       return res.status(200).json({ moved: 0, remaining: 0, total: 0, movedEntries: [], failed: [] });
     }
-    if (!metaResp.ok) {
-      return res.status(502).json({ error: 'Bulut metadata okunamadı' });
-    }
-    const meta = await metaResp.json().catch(() => null);
+    const meta = metaResp.ok ? await metaResp.json().catch(() => null) : null;
+
+    // İçerik adresi: öncelik Admin API'nin verdiği sürümlü secure_url (taze garantisi).
+    // Admin API geçici olarak reddederse (rate limit 429/420, kısa süreli 5xx vb.)
+    // eşitleme TAMAMEN bloke olmasın: yapılandırma herkese açık CDN adresinden
+    // okunur. Sürümsüz adres nadiren bayat kopya servis edebilir; taşıma işlemleri
+    // idempotenttir (rename overwrite / upload overwrite=true) — en kötü durumda
+    // bazı taşımalar 'failed' sayılır ve sonraki çağrıda kendiliğinden düzelir.
     let contentUrl: string = meta?.secure_url || '';
     if (!contentUrl || !contentUrl.includes('/v')) {
       const base = `https://res.cloudinary.com/${CLOUD_NAME}/raw/upload`;
       contentUrl = meta?.version ? `${base}/v${meta.version}/kroki_config_v2` : `${base}/kroki_config_v2`;
     }
     const contentResp = await fetch(contentUrl);
-    if (!contentResp.ok) return res.status(502).json({ error: 'Bulut içeriği okunamadı' });
+    if (!contentResp.ok) {
+      return res.status(502).json({
+        error: `Bulut metadata okunamadı (Admin API HTTP ${metaResp.status}, CDN HTTP ${contentResp.status})`,
+      });
+    }
     const config = await contentResp.json().catch(() => null);
     if (!config) return res.status(502).json({ error: 'Bulut içeriği ayrıştırılamadı' });
 
@@ -301,6 +314,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // Bulut ağacını listele (en fazla 2 sayfa = 1000 varlık yeterli)
         const listed: string[] = [];
         let nextCursor: string | undefined = undefined;
+        let listedAnyPage = false; // en az bir sayfa başarıyla listelendi mi?
         for (let page = 0; page < 2 && Date.now() < deadline; page++) {
           const listUrl = new URL(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/resources/image/upload`);
           listUrl.searchParams.set('prefix', 'kroki-olusturucu/');
@@ -311,6 +325,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             signal: AbortSignal.timeout(8000),
           });
           if (!lr.ok) break;
+          listedAnyPage = true;
           const ld = await lr.json().catch(() => null);
           if (!ld || !Array.isArray(ld.resources)) break;
           for (const r of ld.resources) listed.push(String(r.public_id));
@@ -358,6 +373,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           }
         }
         orphansRemaining = Math.max(0, orphans.length - cleaned);
+        if (!listedAnyPage && listed.length === 0) {
+          // Listeleme hiç yapılamadı (rate limit / ağ hatası): '0 yetim' raporlamak
+          // temizliğin yarım kaldığını GİZLERDİ. -1 = 'bilinmiyor' → istemci döngüsü
+          // temizlik tamam sanmadan sürer; liste toparlanınca temizlik kaldığı yerden
+          // devam eder.
+          orphansRemaining = -1;
+        }
       }
     } catch (sweepErr) {
       console.warn('sync-folders: eski kopya temizliği atlandı:', sweepErr);
