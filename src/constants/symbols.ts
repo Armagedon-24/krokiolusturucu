@@ -669,12 +669,12 @@ export const SYMBOL_CATEGORIES = [
         type: 'symbol', width: 110, height: 220, fill: '#000000', description: 'Beş katlı okul binası ön görünümü (her katta 5 sınıf penceresi, çift kanatlı giriş kapısı, geniş üç basamaklı giriş merdiveni, bayrak direği ve okul tabelası).', isSketch: true },
       { id: 'arch-b5o-u', name: 'Okul (5 Katlı — Üstten)', src: '/assets/symbols/school_5_story_top.svg?v=2',
         type: 'symbol', width: 130, height: 97, fill: '#000000', description: 'Beş katlı okul çatı planı — kuşbakışı üst görünüm (9 sınıf — yazı tahtalı, iki merdiven hücresi, koridor, asansör hücresi, çift kanatlı giriş kapısı ve geniş giriş merdiveni, bayrak direği).', isSketch: true },
-      { id: 'arch-airport', name: 'Havaalanı', src: '/assets/symbols/airport_front.png',
-        thumbnail: '/assets/symbols/karakalem/airport_front.png', type: 'symbol',
-        width: 170, height: 84, fill: '#000000', description: 'Havaalanı kompleksi — cam cepheli terminal binası, hava trafik kontrol kulesi, yan idari binalar, hangar ve apronda uçak. Karakalem çizim; 3B görünümde gerçek hacimli model olarak çizilir.', isSketch: true },
-      { id: 'arch-trainstation', name: 'Demiryolu İstasyonu', src: '/assets/symbols/train_station_front.png',
-        thumbnail: '/assets/symbols/karakalem/train_station_front.png', type: 'symbol',
-        width: 150, height: 110, fill: '#000000', description: 'Demiryolu istasyonu — saatlı kemerli giriş, kemerli pencereli iki katlı ana bina, tek katlı kanat yapıları, peron tentesi ve lamba direkleri. Karakalem çizim; 3B görünümde beşik çatılı gerçek hacimli model olarak çizilir.', isSketch: true },
+      { id: 'arch-airport', name: 'Havaalanı', src: '/assets/symbols/airport_front.png?v=2',
+        thumbnail: '/assets/symbols/karakalem/airport_front.png?v=2', type: 'symbol',
+        width: 170, height: 84, fill: '#000000', description: 'Havaalanı kompleksi — cam cepheli terminal binası, hava trafik kontrol kulesi, yan idari binalar, apronda uçak ve önde pist orta çizgileri, eşik işaretleri ve taksi yoluyla görünür pist. Karakalem çizim; 3B görünümde gerçek hacimli model ve pist olarak çizilir.', isSketch: true },
+      { id: 'arch-trainstation', name: 'Demiryolu İstasyonu', src: '/assets/symbols/train_station_front.png?v=2',
+        thumbnail: '/assets/symbols/karakalem/train_station_front.png?v=2', type: 'symbol',
+        width: 150, height: 110, fill: '#000000', description: 'Demiryolu istasyonu — saatlı kemerli giriş, kemerli pencereli iki katlı ana bina, tek katlı kanat yapıları, peron tentesi, lamba direkleri ve önde traversli, balastlı çift ray. Karakalem çizim; 3B görünümde beşik çatılı gerçek hacimli model, peron ve raylar olarak çizilir.', isSketch: true },
     ]
   },
   {

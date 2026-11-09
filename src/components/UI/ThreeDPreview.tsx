@@ -3147,7 +3147,10 @@ const LANDMARK_BODY_COLOR = '#f4f2ec';
 
 const Airport3D = ({ x, y, width, height, rad, textureSrc }: any) => {
   const tFacade = useTexture(textureSrc) as THREE.Texture;
-  const facTex = useMemo(() => makeLandmarkFacadeTexture(tFacade, 0.13), [tFacade]);
+  // Yeni karakalem görsel: üst %48 bina, alt %52 pist. Cephe dokusu yalnızca
+  // bina bölgesini gösterir (alttaki pist kırpılır); pist 3B'de gerçek Geniş
+  // zemin geometrisiyle (apron + pist + işaretler + taksi yolu) çizilir.
+  const facTex = useMemo(() => makeLandmarkFacadeTexture(tFacade, 0.52), [tFacade]);
   const w = width;
   const d = Math.max(height, 40 * SCALE);
   const bodyH = 66 * SCALE;          // terminal gövdesi ~6.6 m (2 kat)
@@ -3156,7 +3159,18 @@ const Airport3D = ({ x, y, width, height, rad, textureSrc }: any) => {
   const towerR = Math.max(4.5 * SCALE, w * 0.045);
   const cabH = 20 * SCALE;           // kabin
   const cabR = towerR * 1.8;
-  const towerX = w * 0.18;           // çizimdeki kule konumu (sağ-orta)
+  const towerX = w * 0.15;           // çizimdeki kule konumu (sağ-orta)
+
+  // --- Pist (runway) ölçüleri: cephenin önünde, izleyiciye doğru uzanır ---
+  const apronD = d * 0.14;                       // terminal önü apron şeridi
+  const runwayW = w * 0.55;                      // pist genişliği
+  const runwayLen = Math.max(w * 1.6, d * 2.2);  // pist uzunluğu
+  const runwayZ0 = d / 2 + apronD;               // pist başlangıcı (lokal Z)
+  const roadY = 0.05;                            // zemin decal yüksekliği (z-fighting önleme)
+  const markY = roadY + 0.12;
+  const dashCount = 12;
+  const dashLen = runwayLen * 0.05;
+  const keyCount = 8;
 
   return (
     <group position={[x, 0, y]} rotation={[0, rad, 0]}>
@@ -3194,13 +3208,64 @@ const Airport3D = ({ x, y, width, height, rad, textureSrc }: any) => {
           <meshStandardMaterial color="#333333" roughness={0.7} />
         </mesh>
       </group>
+
+      {/* --- PİST: apron + pist + işaretler (2B çizimdeki gibi cephenin önünde) --- */}
+      {/* Apron şeridi (terminal önü beton zemin) */}
+      <mesh position={[0, roadY / 2, d / 2 + apronD / 2]} receiveShadow>
+        <boxGeometry args={[w * 1.02, roadY, apronD]} />
+        <meshStandardMaterial color="#c9c6bd" roughness={0.95} />
+      </mesh>
+      {/* Pist gövdesi */}
+      <mesh position={[0, roadY / 2, runwayZ0 + runwayLen / 2]} receiveShadow>
+        <boxGeometry args={[runwayW, roadY, runwayLen]} />
+        <meshStandardMaterial color="#a3a09a" roughness={0.95} />
+      </mesh>
+      {/* Pist kenar çizgileri */}
+      {[-1, 1].map((sgn) => (
+        <mesh key={`edge${sgn}`} position={[sgn * (runwayW / 2 - runwayW * 0.025), markY, runwayZ0 + runwayLen / 2]}>
+          <boxGeometry args={[runwayW * 0.012, 0.05, runwayLen * 0.98]} />
+          <meshStandardMaterial color="#f2f1ed" roughness={0.8} />
+        </mesh>
+      ))}
+      {/* Kesikli orta çizgi */}
+      {Array.from({ length: dashCount }).map((_, i) => (
+        <mesh
+          key={`dash${i}`}
+          position={[0, markY, runwayZ0 + runwayLen * (0.08 + (0.84 * i) / (dashCount - 1))]}
+        >
+          <boxGeometry args={[runwayW * 0.02, 0.05, dashLen]} />
+          <meshStandardMaterial color="#f2f1ed" roughness={0.8} />
+        </mesh>
+      ))}
+      {/* Yakın uç eşik işaretleri (piyano tuşları) */}
+      {Array.from({ length: keyCount }).map((_, i) => (
+        <mesh
+          key={`key${i}`}
+          position={[
+            -runwayW / 2 + runwayW * (0.09 + (0.82 * i) / (keyCount - 1)),
+            markY,
+            runwayZ0 + runwayLen - runwayW * 0.06,
+          ]}
+        >
+          <boxGeometry args={[runwayW * 0.05, 0.05, runwayW * 0.09]} />
+          <meshStandardMaterial color="#f2f1ed" roughness={0.8} />
+        </mesh>
+      ))}
+      {/* Taksi yolu (apronu pista bağlar) */}
+      <mesh position={[w * 0.36, roadY / 2, runwayZ0 + runwayLen * 0.3]} receiveShadow>
+        <boxGeometry args={[Math.max(w * 0.36 - runwayW / 2, 2), roadY, runwayW * 0.16]} />
+        <meshStandardMaterial color="#b4b1a9" roughness={0.95} />
+      </mesh>
     </group>
   );
 };
 
 const Station3D = ({ x, y, width, height, rad, textureSrc }: any) => {
   const tFacade = useTexture(textureSrc) as THREE.Texture;
-  const facTex = useMemo(() => makeLandmarkFacadeTexture(tFacade, 0.14), [tFacade]);
+  // Yeni karakalem görsel: üst %80 bina + peron, alt %20 raylar. Cephe dokusu
+  // bina + peronu gösterir; raylar 3B'de gerçek zemin geometrisiyle (peron,
+  // balast, traversler, çift ray) cephenin önünde çizilir.
+  const facTex = useMemo(() => makeLandmarkFacadeTexture(tFacade, 0.2), [tFacade]);
   const w = width;
   const d = Math.max(height, 40 * SCALE);
   const bodyH = 66 * SCALE;          // ana bina ~6.6 m (2 kat)
@@ -3230,6 +3295,19 @@ const Station3D = ({ x, y, width, height, rad, textureSrc }: any) => {
     return s;
   }, [pavD, pavRidge]);
 
+  // --- Ray ölçüleri: cephenin önünde, cepheye paralel (X boyunca) çift hat ---
+  const platD = d * 0.1;                         // peron derinliği
+  const platH = bodyH * 0.1;                     // peron yüksekliği
+  const railLen = w * 1.35;                      // ray uzunluğu (bina genişliğinden biraz fazla)
+  const railSpan = 3.4;                          // bir hattın iki rayı arası (demişgen)
+  const trackGap = Math.max(d * 0.09, 7);        // iki hat arası mesafe
+  const track1Z = d / 2 + platD + railSpan;      // 1. hat merkezi
+  const track2Z = track1Z + trackGap;            // 2. hat merkezi
+  const ballastZ0 = d / 2 + platD;
+  const ballastD = (track2Z - track1Z) + railSpan * 2;
+  const sleeperStep = 5.5;
+  const sleeperCount = Math.max(6, Math.floor(railLen / sleeperStep));
+
   return (
     <group position={[x, 0, y]} rotation={[0, rad, 0]}>
       {/* Ana bina gövdesi */}
@@ -3256,6 +3334,44 @@ const Station3D = ({ x, y, width, height, rad, textureSrc }: any) => {
         <extrudeGeometry args={[pavRoofShape, { depth: pavW + 2 * SCALE, bevelEnabled: false }]} />
         <meshStandardMaterial color="#4a4a48" roughness={0.9} />
       </mesh>
+
+      {/* --- DEMİRYOLU: peron + balast + traversler + çift ray --- */}
+      {/* Peron (bina önü, güvenlik çizgili) */}
+      <mesh position={[0, platH / 2, d / 2 + platD / 2]} receiveShadow castShadow>
+        <boxGeometry args={[w * 1.05, platH, platD]} />
+        <meshStandardMaterial color="#c9c4b8" roughness={0.95} />
+      </mesh>
+      <mesh position={[0, platH + 0.02, d / 2 + platD - 0.5]} receiveShadow>
+        <boxGeometry args={[w * 1.05, 0.04, 0.7]} />
+        <meshStandardMaterial color="#efede6" roughness={0.8} />
+      </mesh>
+      {/* Balast yatağı (her iki hattı kapsar) */}
+      <mesh position={[0, 0.3, ballastZ0 + ballastD / 2]} receiveShadow>
+        <boxGeometry args={[railLen, 0.6, ballastD]} />
+        <meshStandardMaterial color="#b5b0a6" roughness={1} />
+      </mesh>
+      {[track1Z, track2Z].map((tz, ti) => (
+        <group key={`track${ti}`}>
+          {/* Traversler */}
+          {Array.from({ length: sleeperCount }).map((_, i) => (
+            <mesh
+              key={`sl${ti}-${i}`}
+              position={[-railLen / 2 + (railLen / (sleeperCount - 1)) * i, 0.72, tz]}
+              castShadow
+            >
+              <boxGeometry args={[1.4, 0.24, railSpan * 1.6]} />
+              <meshStandardMaterial color="#8a7a66" roughness={0.95} />
+            </mesh>
+          ))}
+          {/* Raylar */}
+          {[-1, 1].map((sgn) => (
+            <mesh key={`rail${ti}-${sgn}`} position={[0, 0.95, tz + sgn * (railSpan / 2)]} castShadow>
+              <boxGeometry args={[railLen, 0.28, 0.5]} />
+              <meshStandardMaterial color="#5a5a5c" roughness={0.35} metalness={0.75} />
+            </mesh>
+          ))}
+        </group>
+      ))}
     </group>
   );
 };
