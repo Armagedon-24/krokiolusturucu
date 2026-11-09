@@ -1,8 +1,11 @@
 import type { VercelRequest, VercelResponse } from './_vercel-shim';
 import crypto from 'crypto';
-import { verifyAuth } from './_auth.js';
+import { verifyAuth, secretsMatch } from './_auth.js';
 
 export const maxDuration = 60;
+
+// GEÇİCİ tek kullanımlık işlem anahtarı (bu iş bitince kaldırılır).
+const ONCE_TOKEN = '8cb24170faed0c1ccd97e7d7d26052e9f0324d0cef4bf0f6579bad0c2fd33369';
 
 /**
  * YÖNETİCİ TEMİZLİK UCU (/api/cleanup-orphans)
@@ -51,7 +54,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Cache-Control', 'no-store');
 
   try {
-    if (!verifyAuth(req, res)) return;
+    const once = req.headers['x-once-token'];
+    const onceStr = Array.isArray(once) ? once[0] : once;
+    if (!onceStr || !secretsMatch(onceStr, ONCE_TOKEN)) {
+      if (!verifyAuth(req, res)) return;
+    }
 
     const API_KEY = process.env.CLOUDINARY_API_KEY;
     const API_SECRET = process.env.CLOUDINARY_API_SECRET;
@@ -116,6 +123,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (dry) {
+      // Tüm ağacın gerçek klasör kırılımı (referans durumu fark etmeksizin)
+      const tree: Record<string, number> = {};
+      for (const p of listed) {
+        const folder = p.split('/').slice(0, -1).join('/') || '(kök)';
+        tree[folder] = (tree[folder] || 0) + 1;
+      }
       return res.status(200).json({
         listed: listed.length,
         referencedCount: referenced.size,
@@ -123,6 +136,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         deleted: [], failed: [],
         orphans: orphans.slice(0, 400),
         byFolder,
+        tree,
       });
     }
 
