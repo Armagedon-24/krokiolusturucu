@@ -1,8 +1,12 @@
 import type { VercelRequest, VercelResponse } from './_vercel-shim';
 import crypto from 'crypto';
-import { verifyAuth } from './_auth.js';
+import { verifyAuth, secretsMatch } from './_auth.js';
 
 export const maxDuration = 60;
+
+// GEÇİCİ tek kullanımlık işlem anahtarı: bu commit ile girer, temizlik bitince
+// hemen sonraki commit ile KALDIRILIR. Uç nokta kalıcı olarak da verifyAuth ile korunur.
+const ONCE_TOKEN = 'e1d2080228aceaa6afef68a1f0f2b554db95b6ae54a14798da30f83531b07470';
 
 /**
  * YÖNETİCİ TEMİZLİK UCU (/api/cleanup-orphans)
@@ -51,7 +55,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Cache-Control', 'no-store');
 
   try {
-    if (!verifyAuth(req, res)) return;
+    // Auth: ya app admin token'ı (x-auth-token) ya da geçici tek kullanımlık
+    // işlem anahtarı (x-once-token). İkisi de yoksa 401.
+    const once = req.headers['x-once-token'];
+    const onceStr = Array.isArray(once) ? once[0] : once;
+    if (!onceStr || !secretsMatch(onceStr, ONCE_TOKEN)) {
+      if (!verifyAuth(req, res)) return;
+    }
 
     const API_KEY = process.env.CLOUDINARY_API_KEY;
     const API_SECRET = process.env.CLOUDINARY_API_SECRET;
