@@ -192,9 +192,8 @@ async function collectEmptyFolders(authHeader: string, prelisted?: string[]): Pr
 }
 
 /** Silme reddi ARAŞTIRMASI: klasörün altında standart listelemenin görmediği
- *  kaynak var mı? (image/raw/video × upload/authenticated/private — hepsi sorulur.)
- *  Dönen metin pruneErrors'a konur; hepsi boşsa klasörde kaynak değil, indeks
- *  kalıntısı (hayalet alt klasör) vardır → deepPrune devreye girer. */
+ *  kaynak/klasör var mı? Somut public_id'ler + alt klasör yolları raporlanır —
+ *  Unicode normalizasyonu (NFC/NFD) veya eşleşme farkı gizli kaynakları böyle görünür kılar. */
 async function probeFolderAssets(authHeader: string, folder: string): Promise<string> {
   const combos: [string, string][] = [
     ['image', 'upload'], ['image', 'authenticated'], ['image', 'private'],
@@ -202,6 +201,7 @@ async function probeFolderAssets(authHeader: string, folder: string): Promise<st
     ['video', 'upload'], ['video', 'authenticated'],
   ];
   const found: string[] = [];
+  const encF = encodeURIComponent(folder);
   for (const [rt, ty] of combos) {
     try {
       const u = new URL(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/resources/${rt}/${ty}`);
@@ -210,11 +210,20 @@ async function probeFolderAssets(authHeader: string, folder: string): Promise<st
       const r = await fetch(u.toString(), { headers: { Authorization: authHeader }, signal: AbortSignal.timeout(6000) });
       if (!r.ok) continue;
       const d = await r.json().catch(() => null);
-      const n = d && Array.isArray((d as { resources?: unknown[] }).resources) ? (d as { resources: unknown[] }).resources.length : 0;
-      if (n > 0) found.push(`${rt}/${ty}:${n}`);
+      const rs = d && Array.isArray((d as { resources?: unknown[] }).resources) ? (d as { resources: { public_id?: string }[] }).resources : [];
+      if (rs.length > 0) found.push(`${rt}/${ty}:${rs.length} [${rs.slice(0, 5).map((x) => JSON.stringify(x?.public_id || '?')).join(', ')}]`);
     } catch { /* alt tip sorgusu başarısız — yok say */ }
   }
-  return found.length ? found.join(', ') : 'kaynak yok';
+  // Doğrudan alt klasör listesi (BFS'in gördüklerinden bağımsız ikinci görüş)
+  try {
+    const r = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/folders/${encF}?max_results=100`, { headers: { Authorization: authHeader }, signal: AbortSignal.timeout(6000) });
+    if (r.ok) {
+      const d = await r.json().catch(() => null);
+      const fs = d && Array.isArray((d as { folders?: unknown[] }).folders) ? (d as { folders: { path?: string }[] }).folders : [];
+      if (fs.length > 0) found.push(`alt klasör:${fs.length} [${fs.slice(0, 5).map((x) => JSON.stringify(x?.path || '?')).join(', ')}]`);
+    }
+  } catch { /* yok say */ }
+  return found.length ? found.join(' ; ') : 'kaynak yok';
 }
 
 /** DERİN BUDAMA: 'Folder is not empty' red yiyecek klasörün Folders API'nin
