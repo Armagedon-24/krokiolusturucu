@@ -2,13 +2,15 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { X, RefreshCw, CloudDownload, CheckSquare, Square, Search, AlertTriangle } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { v4 as uuidv4 } from 'uuid';
-import { getOptimizedCloudinaryUrl, publicIdFromUrl, normKey, ensureCategoryForFolder } from '../../lib/cloudinary';
+import { getOptimizedCloudinaryUrl, publicIdFromUrl, normKey, ensureCategoryForFolder, mapCloudGroupLabel } from '../../lib/cloudinary';
 
 interface CloudAsset {
   id: string;
   src: string;
   name: string;
   category: string;
+  /** Alt kategori (grup): bulut alt klasörü/config atamasından gelir */
+  group?: string;
 }
 
 /**
@@ -106,7 +108,7 @@ export const CloudGalleryModal: React.FC<{ onClose: () => void }> = ({ onClose }
     const q = query.trim().toLowerCase();
     return assets.filter(a => {
       if (!showDeleted && isDeletedAsset(a)) return false;
-      if (q && !(`${a.name} ${a.category}`.toLowerCase().includes(q))) return false;
+      if (q && !(`${a.name} ${a.category} ${a.group || ''}`.toLowerCase().includes(q))) return false;
       return true;
     });
   }, [assets, query, showDeleted, isDeletedAsset]);
@@ -146,12 +148,24 @@ export const CloudGalleryModal: React.FC<{ onClose: () => void }> = ({ onClose }
         useStore.setState({ allSymbols: ensured.allSymbols });
         useStore.getState().syncToCloud(true);
       }
+      // ALT KATEGORİ AYNASI: bulut alt klasörü bilinen bir alt kategori etiketiyle
+      // eşlenir ('Ucaklar' -> 'Uçaklar'); bilinmeyense klasör adından türetilir —
+      // görsel uygulamada da buluttaki alt kategorisinde yaşar.
+      const knownGroups = new Set<string>();
+      (useStore.getState().allSymbols as any[]).forEach(cat => (cat.symbols || []).forEach((s: any) => {
+        if ((s.group || '').trim()) knownGroups.add(s.group.trim());
+      }));
+      useStore.getState().uploadedImages.forEach(im => {
+        const g = (im.group || '').trim();
+        if (g) knownGroups.add(g);
+      });
       await addUploadedImage(
         {
           id: uuidv4(),
           src: a.src,
           name: a.name,
-          category: ensured.id || 'uncategorized'
+          category: ensured.id || 'uncategorized',
+          group: mapCloudGroupLabel(a.group, Array.from(knownGroups))
         },
         { allowDeletedName: true }
       );
@@ -290,7 +304,14 @@ export const CloudGalleryModal: React.FC<{ onClose: () => void }> = ({ onClose }
                     {exists ? (
                       <span className="text-[8px] font-black text-gray-500 border border-white/10 rounded px-1">KÜTÜPHANEDE</span>
                     ) : (
-                      <span className="text-[8px] font-black text-[#F5C518]/70 uppercase">{a.category}</span>
+                      <span className="flex items-center gap-1 max-w-full">
+                        <span className="text-[8px] font-black text-[#F5C518]/70 uppercase truncate">{a.category}</span>
+                        {(a.group || '').trim() && (
+                          <span className="text-[7px] font-black text-gray-400 border border-white/10 rounded px-1 py-px truncate">
+                            {a.group}
+                          </span>
+                        )}
+                      </span>
                     )}
                   </button>
                 );

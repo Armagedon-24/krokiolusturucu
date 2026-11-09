@@ -82,6 +82,21 @@ const sanitizeFolderName = (category?: string): string =>
     .trim() || 'uncategorized';
 
 /**
+ * Bulut alt klasör adını uygulamadaki alt kategori (grup) etiketine eşler.
+ * ALT KATEGORİ ↔ BULUT ALTKLASÖRÜ AYNASI: bilinen etiketlerden normKey ile eşleşen
+ * varsa ONUN birebir etiketi kullanılır ('Ucaklar' klasörü -> uygulamadaki 'Uçaklar'
+ * etiketi); bilinmeyense klasör adı güzelleştirilip etiket olur. Boş/eksik girdi ''
+ * döner — uygulamada DİĞER başlığına düşer.
+ */
+export const mapCloudGroupLabel = (raw: string | undefined, knownGroups: readonly string[]): string => {
+  const key = normKey(raw);
+  if (!key) return '';
+  const hit = knownGroups.find((g) => normKey(g) === key);
+  if (hit) return hit;
+  return prettifyFolderName(String(raw)) || String(raw).trim();
+};
+
+/**
  * KATEGORİ ↔ BULUT KLASÖRÜ AYNASI: bulut klasör adını kategori kimliğine eşler;
  * eşleşen kategori YOKSA YENİ KATEGORİ OLUŞTURUR (id = klasörün birebir adı).
  *
@@ -154,7 +169,7 @@ export const getOptimizedCloudinaryUrl = (url: string, width = 80, height?: numb
 };
 
 export const cloudinary = {
-  upload: async (file: Blob | string, fileName: string, category?: string, authToken?: string): Promise<string> => {
+  upload: async (file: Blob | string, fileName: string, category?: string, authToken?: string, group?: string): Promise<string> => {
     try {
       // Blob'ları data URI'ye çevir (imzalı API veri URI bekler)
       let dataUri: string;
@@ -182,7 +197,15 @@ export const cloudinary = {
       const catFolder = sanitizeFolderName(
         (category && category !== 'uncategorized') ? category : 'uncategorized'
       );
-      const publicId = `kroki-olusturucu/${catFolder}/${safeName}`;
+      // ALT KATEGORİ ↔ BULUT ALTKLASÖRÜ AYNASI: alt kategorisi olan görsel, kategori
+      // klasörü İÇİNDE kendi alt kategori klasörüne yazılır
+      // (kroki-olusturucu/<Kategori>/<Alt Kategori>/<dosya>) — bulut klasör ağacı
+      // uygulamadaki başlık düzenini birebir yansıtır. Alt kategori boşsa (DİĞER)
+      // görsel kategori klasörünün kökünde kalır.
+      const groupFolder = sanitizeFolderName(group || '');
+      const publicId = groupFolder
+        ? `kroki-olusturucu/${catFolder}/${groupFolder}/${safeName}`
+        : `kroki-olusturucu/${catFolder}/${safeName}`;
 
       const response = await fetch('/api/upload-to-cloudinary', {
         method: 'POST',
@@ -213,15 +236,19 @@ export const cloudinary = {
    * silinmez — tuvale eklenmiş nesneler eski URL ile çizmeye devam eder.
    * Başarılıysa yeni secure_url döner; taşıma gerekmez/başarısızsa null.
    */
-  move: async (url: string, category?: string, authToken?: string): Promise<{ publicId: string, secureUrl: string } | null> => {
+  move: async (url: string, category?: string, authToken?: string, group?: string): Promise<{ publicId: string, secureUrl: string } | null> => {
     try {
       const fromPid = publicIdFromUrl(url);
       if (!fromPid) return null;
       const catFolder = sanitizeFolderName(
         (category && category !== 'uncategorized') ? category : 'uncategorized'
       );
+      // Hedef: kategori klasörü + varsa alt kategori alt klasörü (klasör aynası)
+      const groupFolder = sanitizeFolderName(group || '');
       const fileName = fromPid.split('/').pop() || 'gorsel';
-      const toPid = `kroki-olusturucu/${catFolder}/${fileName}`;
+      const toPid = groupFolder
+        ? `kroki-olusturucu/${catFolder}/${groupFolder}/${fileName}`
+        : `kroki-olusturucu/${catFolder}/${fileName}`;
       if (toPid === fromPid) return null; // zaten doğru klasörde
 
       const response = await fetch('/api/move-cloudinary', {

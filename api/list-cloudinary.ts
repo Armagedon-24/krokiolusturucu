@@ -26,16 +26,19 @@ const pidFromUrl = (url?: string): string | null => {
 };
 
 /**
- * Bulut yapılandırmasından (kroki_config_v2) public_id -> { isim, kategori } haritası çıkarır.
+ * Bulut yapılandırmasından (kroki_config_v2) public_id -> { isim, kategori, alt kategori } haritaları çıkarır.
  * - İSİM: admin semboller panelinde verdiği isim bulut galerisinde/eksik taramada görünür.
  * - KATEGORİ (klasör aynası): admin uygulamada görseli hangi kategoriye aldıysa o
  *   kategori bulut listesinde de geçerli sayılır — fiziksel klasör adı değil,
  *   kullanıcının atadığı kategori esastır ('uncategorized' olmayan gerçek atamalar).
+ * - ALT KATEGORİ (grup): adminin sembole/görsele verdiği alt kategori etiketi;
+ *   fiziksel alt klasör düzeninden bağımsız olarak kullanıcının ataması esas alınır.
  * Yapılandırma okunamazsa boş haritalar döner — mevcut davranış korunur.
  */
-const buildLibraryMaps = async (cloudName: string): Promise<{ nameByPid: Map<string, string>, catByPid: Map<string, string> }> => {
+const buildLibraryMaps = async (cloudName: string): Promise<{ nameByPid: Map<string, string>, catByPid: Map<string, string>, groupByPid: Map<string, string> }> => {
   const nameByPid = new Map<string, string>();
   const catByPid = new Map<string, string>();
+  const groupByPid = new Map<string, string>();
   const urls = [
     `https://res.cloudinary.com/${cloudName}/raw/upload/kroki_config_v2`,
     `https://res.cloudinary.com/${cloudName}/raw/upload/kroki_config_v2.json`,
@@ -45,24 +48,27 @@ const buildLibraryMaps = async (cloudName: string): Promise<{ nameByPid: Map<str
       const res = await fetch(u);
       if (!res.ok) continue;
       const cfg = await res.json();
-      const add = (src?: string, name?: string, category?: string) => {
+      const add = (src?: string, name?: string, category?: string, group?: string) => {
         const pid = pidFromUrl(src);
         const n = typeof name === 'string' ? name.trim() : '';
         const c = typeof category === 'string' ? category.trim() : '';
+        const g = typeof group === 'string' ? group.trim() : '';
         if (pid && n && !nameByPid.has(pid)) nameByPid.set(pid, n);
         // 'uncategorized' gerçek bir atama değildir: klasör bilgisi geçerli kalır
         if (pid && c && c !== 'uncategorized' && !catByPid.has(pid)) catByPid.set(pid, c);
+        // Alt kategori etiketi: boş olmayan gerçek atamalar fiziksel alt klasörü geçer
+        if (pid && g && !groupByPid.has(pid)) groupByPid.set(pid, g);
       };
-      (cfg?.uploadedImages || []).forEach((img: { src?: string; name?: string; category?: string }) => add(img?.src, img?.name, img?.category));
-      (cfg?.allSymbols || []).forEach((cat: { id?: string; symbols?: { src?: string; name?: string }[] }) =>
-        (cat?.symbols || []).forEach((s: { src?: string; name?: string }) => add(s?.src, s?.name, cat?.id))
+      (cfg?.uploadedImages || []).forEach((img: { src?: string; name?: string; category?: string; group?: string }) => add(img?.src, img?.name, img?.category, img?.group));
+      (cfg?.allSymbols || []).forEach((cat: { id?: string; symbols?: { src?: string; name?: string; group?: string }[] }) =>
+        (cat?.symbols || []).forEach((s: { src?: string; name?: string; group?: string }) => add(s?.src, s?.name, cat?.id, s?.group))
       );
-      if (nameByPid.size > 0 || catByPid.size > 0) break; // ilk okunan yapılandırma yeterli
+      if (nameByPid.size > 0 || catByPid.size > 0 || groupByPid.size > 0) break; // ilk okunan yapılandırma yeterli
     } catch {
       continue;
     }
   }
-  return { nameByPid, catByPid };
+  return { nameByPid, catByPid, groupByPid };
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -126,36 +132,59 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .map((r: any) => {
       const parts = r.public_id.split('/');
       const fileNameRaw = parts.pop() || r.public_id;
-      const folderName = parts.length > 1 ? parts.pop() : (parts.length === 1 && parts[0] !== 'kroki-olusturucu' ? parts[0] : 'uncategorized');
-      
+
+      // KATEGORİ + ALT KATEGORİ (klasör aynası):
+      //   kroki-olusturucu/<Kategori>/<dosya>            -> kategori, alt kategori yok (DİĞER)
+      //   kroki-olusturucu/<Kategori>/<Alt Kategori>/<dosya> -> kategori + alt kategori
+      // Kökte/legacy klasörlerdeki yüklemelerde son klasör adı kategori sayılır.
+      let folderName = 'uncategorized';
+      let groupName = '';
+      if (parts.length > 0 && parts[0] === 'kroki-olusturucu') {
+        if (parts.length >= 3) {
+          folderName = parts[1];
+          groupName = parts[2];
+        } else if (parts.length === 2) {
+          folderName = parts[1];
+        }
+        // parts.length === 1: dosya doğrudan kök klasörde -> uncategorized
+      } else {
+        folderName = parts.length > 0 ? parts[parts.length - 1] : 'uncategorized';
+      }
+
       let fileName = fileNameRaw;
       // Geriye dönük uyumluluk: Eğer eskiden 'kroki_123456_isim' formatında kaydedilmişse, o öneki temizle.
       if (fileName.match(/^kroki_\d+_/)) {
         fileName = fileName.replace(/^kroki_\d+_/, '');
       }
-      
+
       return {
         id: r.public_id,
         src: r.secure_url,
         name: fileName,
-        category: folderName || 'uncategorized'
+        category: folderName || 'uncategorized',
+        group: groupName
       };
     });
 
-    // ADMİN İSİMLERİ + KATEGORİLER BİRLEŞTİR: semboller panelinde verilen isim ve
-    // uygulamada atanan kategori, bulut kaydının da ismi/kategorisi olur.
+    // ADMİN İSİMLERİ + KATEGORİLER + ALT KATEGORİLER BİRLEŞTİR: semboller panelinde
+    // verilen isim, uygulamada atanan kategori ve alt kategori, bulut kaydının da
+    // ismi/kategorisi/alt kategorisi olur.
     // KATEGORİ KURALI (klasör aynası): yapılandırmada GERÇEK bir kategori ataması
     // varsa (uncategorized değilse) o kazanır — admin uygulamada taşıdıysa bulut
     // listesi de yeni kategoriyi gösterir. Yapılandırmada atama yoksa/yok sayılırsa
     // Cloudinary klasör adı (klasör = kategori) esas alınır.
+    // ALT KATEGORİ KURALI: boş olmayan yapılandırma ataması kazanır; yoksa fiziksel
+    // alt klasör adı (alt klasör = alt kategori) esas alınır.
     try {
-      const { nameByPid, catByPid } = await buildLibraryMaps(CLOUD_NAME);
-      if (nameByPid.size > 0 || catByPid.size > 0) {
-        assets.forEach((a: { id: string; name: string; category: string }) => {
+      const { nameByPid, catByPid, groupByPid } = await buildLibraryMaps(CLOUD_NAME);
+      if (nameByPid.size > 0 || catByPid.size > 0 || groupByPid.size > 0) {
+        assets.forEach((a: { id: string; name: string; category: string; group: string }) => {
           const libName = nameByPid.get(a.id);
           if (libName) a.name = libName;
           const libCat = catByPid.get(a.id);
           if (libCat) a.category = libCat;
+          const libGroup = groupByPid.get(a.id);
+          if (libGroup) a.group = libGroup;
         });
       }
     } catch (mergeErr) {

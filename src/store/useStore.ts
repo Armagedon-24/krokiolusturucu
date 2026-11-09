@@ -5,7 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { SYMBOL_CATEGORIES } from '../constants/symbols';
 import { createKrokiTemplate, createDiagramTemplate } from '../constants/templates';
 import { buildScenarioObjects, type KrokiScenario } from '../data/krokiScenarios';
-import { cloudinary as cloud, publicIdFromUrl, normKey, mapCloudCategoryToId, ensureCategoryForFolder } from '../lib/cloudinary';
+import { cloudinary as cloud, publicIdFromUrl, normKey, mapCloudCategoryToId, ensureCategoryForFolder, mapCloudGroupLabel } from '../lib/cloudinary';
 import { migrateLegacyAssetUrl } from '../utils/assetMigration';
 
 /** Nesne listesindeki eski .png varlık yollarını .webp sürümüne taşır (yerinde). */
@@ -365,6 +365,63 @@ const fetchCloudAdminSettings = async (authToken?: string): Promise<any> => {
 
 // Sessiz senkron hataları için kısılmış uyarı (spam engelleme)
 let _lastSilentSyncWarn = 0;
+
+/**
+ * ALT KATEGORİ ↔ BULUT ALTKLASÖRÜ AYNASI (mevcut görseller dahil):
+ * Buluttaki her kütüphane görselini (kategori, alt kategori) ikilisinin gerektirdiği
+ * klasöre taşır: kroki-olusturucu/<Kategori>/<Alt Kategori>/<dosya>.
+ * - Alt kategorisi boş olanlar (DİĞER) kategori klasörünün kökünde kalır.
+ * - Zaten doğru klasörde olanlar için AĞ isteği yapılmaz (cloud.move yerelde no-op döner).
+ * - kroki-olusturucu/objects/ (sahne yedeği deposu) hiç dokunulmaz.
+ * - Taşınanların src'si store'da güncellenir (uploadedImages + allSymbols).
+ * Böylece YENİ alt kategori yaratılmasıyla kalmaz, ESKİ yüklemeler de aynı başlık
+ * altında toplanır; bulut klasör ağacı uygulamadaki düzeni birebir yansıtır.
+ * Dönüş: taşınan görsel sayısı.
+ */
+const mirrorGroupFolders = async (get: () => any, set: (p: any) => void): Promise<number> => {
+  if (!get().isAdmin) return 0;
+
+  const seenPids = new Set<string>();
+  const targets: { id: string; src: string; category: string; group: string }[] = [];
+  const collect = (src?: string, id?: string, category?: string, group?: string) => {
+    if (!src || !/^https?:\/\/res\.cloudinary\.com\//i.test(src)) return;
+    const pid = publicIdFromUrl(src);
+    if (!pid || pid.startsWith('kroki-olusturucu/objects/')) return;
+    if (seenPids.has(pid)) return; // aynı görsel iki listede varsa tek taşıma
+    seenPids.add(pid);
+    targets.push({ id: id || pid, src, category: category || 'uncategorized', group: group || '' });
+  };
+  (get().uploadedImages || []).forEach((im: any) => collect(im.src, im.id, im.category, im.group));
+  (get().allSymbols || []).forEach((cat: any) =>
+    (cat.symbols || []).forEach((s: any) => collect(s.src, s.id, cat.id, s.group))
+  );
+
+  let moved = 0;
+  for (const t of targets) {
+    try {
+      const res = await cloud.move(t.src, t.category, get().adminPassword || '', t.group);
+      if (res && res.secureUrl && res.secureUrl !== t.src) {
+        const newSrc = res.secureUrl;
+        set((state: any) => ({
+          uploadedImages: (state.uploadedImages || []).map((im: any) =>
+            im.id === t.id ? { ...im, src: newSrc } : im
+          ),
+          allSymbols: (state.allSymbols || []).map((cat: any) => ({
+            ...cat,
+            symbols: (cat.symbols || []).map((s: any) =>
+              s.id === t.id ? { ...s, src: newSrc } : s
+            ),
+          })),
+          _placementsSavedAt: Date.now(),
+        }));
+        moved++;
+      }
+    } catch (err) {
+      console.warn('Alt kategori klasör taşıması başarısız (kayıt korundu):', t.id, err);
+    }
+  }
+  return moved;
+};
 
 export const useStore = create<StoreState>()(
   persist(
@@ -734,7 +791,7 @@ export const useStore = create<StoreState>()(
             // "Upload preset must be whitelisted" hatası veriyordu. Artık sunucu
             // tarafında imzalanan /api/upload-to-cloudinary kullanılır.
             const cleanName = img.name || 'gorsel';
-            const publicUrl = await cloud.upload(img.src, cleanName, img.category, get().adminPassword || '');
+            const publicUrl = await cloud.upload(img.src, cleanName, img.category, get().adminPassword || '', img.group);
             finalSrc = publicUrl;
             // Kullanıcı isteği: görsel buluta yüklendiğinde MESAJLA bildir
             get().addNotification({
@@ -840,6 +897,7 @@ export const useStore = create<StoreState>()(
         if (!changed) return;
 
         const categoryChanged = category !== undefined && category !== current.category;
+        const groupChanged = group !== undefined && (group || '') !== (current.group || '');
 
         set((state) => ({
           uploadedImages: state.uploadedImages.map((img) =>
@@ -857,14 +915,17 @@ export const useStore = create<StoreState>()(
           _placementsSavedAt: Date.now(),
         }));
 
-        // KATEGORİ ↔ BULUT KLASÖRÜ AYNASI: kategori değiştiyse buluttaki görsel de
-        // yeni kategorinin klasörüne taşınır (kopya — eski URL kasıtlı olarak silinmez,
-        // tuvaldeki nesneler bozulmasın). Hata olsa bile kategori kaydı yukarıda
-        // güvenceye alındı; organizasyon yapılandırmayla (config) korunur.
-        if (categoryChanged && get().isAdmin && current.src &&
+        // KATEGORİ/ALT KATEGORİ ↔ BULUT KLASÖRÜ AYNASI: kategori VEYA alt kategori
+        // değiştiyse buluttaki görsel de yeni (kategori/alt kategori) klasörüne taşınır
+        // (kopya — eski URL kasıtlı olarak silinmez, tuvaldeki nesneler bozulmasın).
+        // Hata olsa bile kategori/alt kategori kaydı yukarıda güvenceye alındı;
+        // organizasyon yapılandırmayla (config) korunur.
+        if ((categoryChanged || groupChanged) && get().isAdmin && current.src &&
             /^https?:\/\/res\.cloudinary\.com\//i.test(current.src)) {
+          const targetCategory = category !== undefined ? category : current.category;
+          const targetGroup = group !== undefined ? group : current.group;
           void (async () => {
-            const moved = await cloud.move(current.src!, category, get().adminPassword || '');
+            const moved = await cloud.move(current.src!, targetCategory, get().adminPassword || '', targetGroup);
             if (moved && moved.secureUrl !== current.src) {
               set((state) => ({
                 uploadedImages: state.uploadedImages.map((img) =>
@@ -1463,6 +1524,18 @@ export const useStore = create<StoreState>()(
         };
 
         try {
+          // ALT KATEGORİ ↔ BULUT ALTKLASÖRÜ AYNASI: senkron öncesi mevcut görseller
+          // (eski yüklemeler dahil) kendi (kategori/alt kategori) klasörlerine toplanır.
+          // Yeni alt kategori yaratıldığında VE mevcut olanlar için bulut klasör ağacı
+          // uygulamadaki başlık düzenini birebir yansıtır. Taşıma olmasa bile maliyeti
+          // yoktur: doğru klasördeki görseller için ağ isteği yapılmaz.
+          let groupMoves = 0;
+          try {
+            groupMoves = await mirrorGroupFolders(get as unknown as () => any, set as unknown as (p: any) => void);
+          } catch (mirrorErr) {
+            console.warn('Alt kategori klasör aynası başarısız (senkron devam ediyor):', mirrorErr);
+          }
+
           const { uploadedImages, allSymbols, objects, backgroundImage, projectInfo, scenes, archiveScenes = [], activeSceneId, visualSettings } = get();
 
           // KRİTİK: Silme listelerini buluttaki son haliyle BİRLEŞTİR.
@@ -1551,7 +1624,8 @@ export const useStore = create<StoreState>()(
               type: 'success',
               force: true,
               message: 'Buluta Yüklendi',
-              description: `Tüm veriler buluta başarıyla yedeklendi (${objects.length} nesne, ${finalArchiveToSync.length} sayfa, ${cleanUploads.length} görsel).`
+              description: `Tüm veriler buluta başarıyla yedeklendi (${objects.length} nesne, ${finalArchiveToSync.length} sayfa, ${cleanUploads.length} görsel).` +
+                (groupMoves > 0 ? ` ${groupMoves} görsel alt kategori klasörüne düzenlendi.` : '')
             });
           }
           // Bulut artık güncel: yerel yerleşim damgasıyla aynı tazelikte.
@@ -2148,11 +2222,23 @@ export const useStore = create<StoreState>()(
                 set({ allSymbols: ensured.allSymbols });
                 get().syncToCloud(true); // yeni kategori buluta da yazılsın
               }
+              // ALT KATEGORİ AYNASI: bulut alt klasörü/atanması bilinen bir alt kategori
+              // etiketiyle eşlenir ('Ucaklar' -> 'Uçaklar'); bilinmeyense klasör adından
+              // türetilir. Böylece bulutta hangi alt kategorideyse uygulamada da orada kalır.
+              const knownGroups = new Set<string>();
+              (get().allSymbols as any[]).forEach(cat => (cat.symbols || []).forEach((s: any) => {
+                if ((s.group || '').trim()) knownGroups.add(s.group.trim());
+              }));
+              get().uploadedImages.forEach(im => {
+                const g = (im.group || '').trim();
+                if (g) knownGroups.add(g);
+              });
               newImages.push({
                 id: asset.id,
                 src: asset.src,
                 name: asset.name,
-                category: ensured.id
+                category: ensured.id,
+                group: mapCloudGroupLabel(asset.group, Array.from(knownGroups))
               });
               currentUrls.add(asset.src);
               currentPids.add(assetPid);
