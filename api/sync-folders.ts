@@ -191,6 +191,67 @@ async function collectEmptyFolders(authHeader: string, prelisted?: string[]): Pr
   return { nodes: nodes.length, empties, error: null };
 }
 
+/** Silme reddi ARAŞTIRMASI: klasörün altında standart listelemenin görmediği
+ *  kaynak var mı? (image/raw/video × upload/authenticated/private — hepsi sorulur.)
+ *  Dönen metin pruneErrors'a konur; hepsi boşsa klasörde kaynak değil, indeks
+ *  kalıntısı (hayalet alt klasör) vardır → deepPrune devreye girer. */
+async function probeFolderAssets(authHeader: string, folder: string): Promise<string> {
+  const combos: [string, string][] = [
+    ['image', 'upload'], ['image', 'authenticated'], ['image', 'private'],
+    ['raw', 'upload'], ['raw', 'authenticated'],
+    ['video', 'upload'], ['video', 'authenticated'],
+  ];
+  const found: string[] = [];
+  for (const [rt, ty] of combos) {
+    try {
+      const u = new URL(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/resources/${rt}/${ty}`);
+      u.searchParams.set('prefix', folder + '/');
+      u.searchParams.set('max_results', '10');
+      const r = await fetch(u.toString(), { headers: { Authorization: authHeader }, signal: AbortSignal.timeout(6000) });
+      if (!r.ok) continue;
+      const d = await r.json().catch(() => null);
+      const n = d && Array.isArray((d as { resources?: unknown[] }).resources) ? (d as { resources: unknown[] }).resources.length : 0;
+      if (n > 0) found.push(`${rt}/${ty}:${n}`);
+    } catch { /* alt tip sorgusu başarısız — yok say */ }
+  }
+  return found.length ? found.join(', ') : 'kaynak yok';
+}
+
+/** DERİN BUDAMA: 'Folder is not empty' red yiyecek klasörün Folders API'nin
+ *  BFS'te atladığı hayalet alt klasörleri olabilir. Doğrudan alt klasörleri
+ *  sorar, derinlik önceliğiyle siler, sayısını döndürür. Sınır: derinlik 4. */
+async function deepPrune(authHeader: string, root: string, deadline: number, log: { folder: string; error: string }[]): Promise<number> {
+  const encP = (p: string) => p.split('/').map(encodeURIComponent).join('/');
+  const subs = async (p: string): Promise<string[]> => {
+    try {
+      const r = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/folders/${encP(p)}?max_results=500`, { headers: { Authorization: authHeader }, signal: AbortSignal.timeout(8000) });
+      if (!r.ok) return [];
+      const d = await r.json().catch(() => null);
+      return d && Array.isArray((d as { folders?: unknown[] }).folders)
+        ? (d as { folders: { path?: string }[] }).folders.map((f) => String(f?.path || '')).filter(Boolean)
+        : [];
+    } catch { return []; }
+  };
+  const del = async (p: string): Promise<boolean> => {
+    try {
+      const r = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/folders/${encP(p)}`, { method: 'DELETE', headers: { Authorization: authHeader }, signal: AbortSignal.timeout(8000) });
+      const d = await r.json().catch(() => null);
+      return r.ok && d && !(d as { error?: unknown }).error;
+    } catch { return false; }
+  };
+  let count = 0;
+  const walk = async (p: string, depth: number): Promise<void> => {
+    if (Date.now() >= deadline || depth > 4) return;
+    for (const s of await subs(p)) {
+      await walk(s, depth + 1);
+      if (await del(s)) count++;
+      else log.push({ folder: s, error: 'derin budama reddi' });
+    }
+  };
+  await walk(root, 0);
+  return count;
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -566,27 +627,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         for (const n of scan.empties) {
           if (Date.now() >= deadline) break;
           if (n === 'kroki-olusturucu' || n.startsWith('kroki-olusturucu/objects')) continue;
-          try {
-            const fr = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/folders/${n.split('/').map(encodeURIComponent).join('/')}`, {
-              method: 'DELETE',
-              headers: { Authorization: authHeader },
-              signal: AbortSignal.timeout(8000),
-            });
-            const fd = await fr.json().catch(() => null);
-            if (fr.ok && fd && !fd.error) {
-              prunedFolders++;
-              prunedFolderList.push(n);
-              emptyFoldersRemaining = Math.max(0, (emptyFoldersRemaining || 0) - 1);
-            } else {
-              // Reddedilme SEBEBİNİ kaydet ve KARDEŞLERE devam et: tek klasördeki red,
-              // aynı seviyedeki diğerlerinin silinmesini engellememeli (eski 'break'
-              // davranışı 5 klasörün hepsini birden kilitliyordu). Atalar, alt
-              // dalları silindikten sonraki çağrıda kendiliğinden düşer.
-              pruneErrors.push({ folder: n, error: (fd as { error?: { message?: string } })?.error?.message || `HTTP ${fr.status}` });
+          const attempt = async (): Promise<{ ok: boolean; error: string }> => {
+            try {
+              const fr = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/folders/${n.split('/').map(encodeURIComponent).join('/')}`, {
+                method: 'DELETE',
+                headers: { Authorization: authHeader },
+                signal: AbortSignal.timeout(8000),
+              });
+              const fd = await fr.json().catch(() => null);
+              if (fr.ok && fd && !(fd as { error?: unknown }).error) return { ok: true, error: '' };
+              return { ok: false, error: (fd as { error?: { message?: string } })?.error?.message || `HTTP ${fr.status}` };
+            } catch (delErr) {
+              return { ok: false, error: delErr instanceof Error ? delErr.message : 'silme hatası' };
             }
-          } catch (delErr) {
-            pruneErrors.push({ folder: n, error: delErr instanceof Error ? delErr.message : 'silme hatası' });
+          };
+          let res1 = await attempt();
+          if (!res1.ok) {
+            // RED ARAŞTIRMASI: (1) görünmez kaynak tipleri, (2) hayalet alt klasörler.
+            const detail = await probeFolderAssets(authHeader, n);
+            const recovered = await deepPrune(authHeader, n, deadline, pruneErrors);
+            if (recovered > 0) res1 = await attempt();
+            if (!res1.ok) {
+              // Sebep görünür olur: 'Folder is not empty | image/upload:3' gibi.
+              // Kardeşlere devam edilir — tek klasör diğerlerini kilitlemez.
+              pruneErrors.push({ folder: n, error: `${res1.error} | araştırma: ${detail}` });
+              continue;
+            }
           }
+          prunedFolders++;
+          prunedFolderList.push(n);
+          emptyFoldersRemaining = Math.max(0, (emptyFoldersRemaining || 0) - 1);
         }
       }
     } catch (pruneErr) {
