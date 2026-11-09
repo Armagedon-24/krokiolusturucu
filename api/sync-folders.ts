@@ -191,13 +191,16 @@ async function collectEmptyFolders(authHeader: string, prelisted?: string[]): Pr
   if (nodes.length === 0) {
     return { nodes: 0, empties: [], error: error || 'klasör ağacı boş döndü (Folders API biçimi uyuşmadı)' };
   }
-  // CLOUDINARY KLASÖR YOLLARI BÜYÜK/KÜÇÜK HARF DUYARSIZDIR ('Trafik işaretleri' ≡
-  // 'Trafik İşaretleri' — kanıt: probe, küçük harfli prefix ile büyük İ'li kaynağı
-  // buldu). Karşılaştırma da duyarsız olmalı; aksi halde GERÇEK görsel barındıran
-  // klasör 'boş' sanılır, silinmeye çalışılır ve 'not empty' red'i sonsuz döner.
-  const lowerAssetFolders = new Set([...assetFolders].map((a) => a.toLowerCase()));
+  // Cloudinary klasör yolları büyük/küçük harf DUYARSIZ, ama karşılaştırmada
+  // TÜRKÇE tuzağı var: 'İ' (U+0130) toLowerCase() ile 'i'+BİRLEŞEN NOKTA (U+0307)
+  // üretir — iki kod noktası! Düz 'i' ile eşleşmez (kanıt: 'Trafik İşaretleri'
+  // kaynağı, 'Trafik işaretleri' düğümüyle eşleşememişti → klasör hatalı 'boş'
+  // sanılıp silinmeye çalışılıyordu). foldKey: NFC + toLowerCase + U+0307 temizliği
+  // → 'İşaretleri' ≡ 'işaretleri' garanti edilir. (Gerçek harfler — ş, ç, ı — korunur.)
+  const foldKey = (s: string) => s.normalize('NFC').toLowerCase().replace(/\u0307/g, '');
+  const lowerAssetFolders = new Set([...assetFolders].map(foldKey));
   const empties = nodes.filter((n) => {
-    const nn = n.normalize('NFC').toLowerCase();
+    const nn = foldKey(n);
     return !lowerAssetFolders.has(nn) && ![...lowerAssetFolders].some((a) => a.startsWith(nn + '/'));
   });
   empties.sort((a, b) => b.split('/').length - a.split('/').length); // aşağıdan yukarıya silme sırası
