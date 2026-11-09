@@ -6,6 +6,7 @@ import {
   Trash2, 
   CloudUpload, 
   CloudDownload, 
+  FolderSync, 
   LogOut, 
   Rotate3D, 
   FolderOpen, 
@@ -45,6 +46,7 @@ export const Topbar: React.FC = () => {
     setIsAdmin,
     syncToCloud,
     restoreFromCloud,
+    healCloudFolders,
     objects,
     showConfirm,
     projectInfo
@@ -53,6 +55,7 @@ export const Topbar: React.FC = () => {
   const [isDistanceMatrixOpen, setIsDistanceMatrixOpen] = React.useState(false);
   const [isThreeDOpen, setIsThreeDOpen] = React.useState(false);
   const [isAdminModalOpen, setIsAdminModalOpen] = React.useState(false);
+  const [healingFolders, setHealingFolders] = React.useState(false);
   const [isPreviewModalOpen, setIsPreviewModalOpen] = React.useState(false);
   const [isAboutOpen, setIsAboutOpen] = React.useState(false);
 
@@ -133,6 +136,19 @@ export const Topbar: React.FC = () => {
                 syncToCloud();
               }} className="flex items-center gap-1.5 px-2 py-1 bg-[#F5C518]/10 text-[#F5C518] rounded hover:bg-[#F5C518]/20 transition-all text-[9px] font-bold border border-[#F5C518]/30" title="Buluta Yükle" aria-label="Buluta Yükle"><CloudUpload size={12} /> YÜKLE</button>
             <button onClick={() => restoreFromCloud()} className="flex items-center gap-1.5 px-2 py-1 bg-blue-500/10 text-blue-400 rounded hover:bg-blue-500/20 transition-all text-[9px] font-bold border border-blue-500/30" title="Buluttan İndir" aria-label="Buluttan İndir"><CloudDownload size={12} /> İNDİR</button>
+            <button
+              onClick={async () => {
+                if (healingFolders) return;
+                setHealingFolders(true);
+                try { await healCloudFolders(); } finally { setHealingFolders(false); }
+              }}
+              disabled={healingFolders}
+              className="flex items-center gap-1.5 px-2 py-1 bg-green-500/10 text-green-400 rounded hover:bg-green-500/20 transition-all text-[9px] font-bold border border-green-500/30 disabled:opacity-50"
+              title="Bulut klasör ağacını uygulamadaki kategori/alt kategori düzenine göre eşitle (yanlış klasördeki görseller taşınır, eski kopyalar temizlenir)"
+              aria-label="Bulut Klasörlerini Eşitle"
+            >
+              <FolderSync size={12} className={healingFolders ? 'animate-spin' : ''} /> EŞİTLE
+            </button>
           </div>
         )}
       </div>

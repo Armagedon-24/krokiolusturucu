@@ -216,6 +216,7 @@ const _assetUrlCache = new Map<string, string>();   // dataUri -> kalıcı bulut
 const _assetFailCache = new Map<string, number>();  // dataUri -> son başarısız deneme (5 dk tekrar denemez)
 let _syncBusy = false;   // eşzamanlı senkron çakışma koruması
 let _syncQueued = false; // çakışan istek kuyruğu
+let _healBusy = false;   // eşzamanlı klasör eşitleme çakışma koruması
 
 const sha1Hex = async (text: string): Promise<string> => {
   try {
@@ -1691,27 +1692,71 @@ export const useStore = create<StoreState>()(
         if (!get().isAdmin) return;
         if (isLocalhostEnv()) return; // yerel geliştirmede bulut API'leri kapalı
         if (_syncBusy) return; // sürmekte olan senkrondaki eşitleme işi tamamlayacak
+        if (_healBusy) return; // zaten sürüyor — çift döngü açma
+        _healBusy = true;
         let moved = 0;
+        let cleaned = 0;
+        let failedCount = 0;
+        let noProgress = 0;
+        let lastError = '';
+        const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
         try {
+          // NOT: ilerleme olmadığında hemen vazgeçme — tek dalga hepsi başarısız olan
+          // çağrı (ağ titremesi/geçici sunucu hatası) tüm eşitlemeyi sessizce durduruyordu.
+          // 3 ardışık ilerlemesiz turda geri çekil (1.5 sn bekle + tekrar dene).
           for (let i = 0; i < 60; i++) {
             if (_syncBusy) break; // senkron başladıysa eşitlemeyi ona bırak (çakışma yok)
             const heal = await cloud.syncFolders(get().adminPassword || '');
-            if (!heal) return;
+            if (!heal) {
+              lastError = lastError || 'Sunucuya ulaşılamadı (ağ veya yanıt hatası)';
+              noProgress++;
+              if (noProgress >= 3) break;
+              await sleep(1500);
+              continue;
+            }
+            if ((heal as { error?: string }).error) {
+              // Sunucu açık bir hata bildirdi (ör. Cloudinary anahtarları eksik) — kullanıcı görsün
+              lastError = String((heal as { error?: string }).error);
+              break;
+            }
             moved += heal.moved || 0;
+            cleaned += heal.cleaned || 0;
+            failedCount += (heal.failed || []).length;
+            if (failedCount > 0 && !lastError) {
+              lastError = `${failedCount} görsel taşınamadı: ${(heal.failed || [])[0]?.error || 'bilinmeyen hata'}`;
+            }
             applyMovedSrcs(set as unknown as (p: any) => void, heal.movedEntries);
-            if (!heal.remaining && !heal.orphansRemaining) break;
-            if (!heal.moved && !heal.cleaned) break;
+            if (!heal.remaining && !heal.orphansRemaining) { noProgress = 0; break; }
+            if (!heal.moved && !heal.cleaned) {
+              noProgress++;
+              if (noProgress >= 3) break;
+              await sleep(1500);
+              continue;
+            }
+            noProgress = 0;
           }
         } catch (err) {
-          console.warn('Klasör eşitlemesi başarısız:', err);
-          return;
+          lastError = err instanceof Error ? err.message : 'Bilinmeyen eşitleme hatası';
+        } finally {
+          _healBusy = false;
         }
         if (moved > 0) {
           get().addNotification({
             type: 'success',
             force: true,
             message: 'Bulut Klasörleri Eşitlendi',
-            description: `${moved} görsel uygulamadaki kategori/alt kategori düzenine göre doğru klasöre taşındı. Cloudinary klasör ağacını yenileyerek görebilirsiniz.`
+            description: `${moved} görsel uygulamadaki kategori/alt kategori düzenine göre doğru klasöre taşındı` +
+              (cleaned > 0 ? `, ${cleaned} eski kopya temizlendi` : '') +
+              (failedCount > 0 ? `; ${failedCount} görsel şu an taşınamadı (tekrar EŞİTLE'ye basın)` : '') +
+              '. Cloudinary klasör ağacını yenileyerek görebilirsiniz.'
+          });
+        } else if (lastError) {
+          get().addNotification({
+            type: 'error',
+            force: true,
+            sticky: true,
+            message: 'Klasör Eşitleme Başarısız',
+            description: lastError + ' — İnternet bağlantınızı kontrol edip EŞİTLE düğmesini tekrar deneyin.'
           });
         }
       },

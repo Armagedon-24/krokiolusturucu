@@ -31,8 +31,12 @@ function App() {
         refreshSymbols({ trustLocalPlacements: true });
         // Always restore cloud symbols/settings, but start with a blank canvas.
         // Sessiz mod: her sayfa açılışında "Geri Yükleme Başarılı" bildirimi basılmasın.
-        // NOT: bulut klasör eşitlemesi restoreFromCloud'un başarı yolunda otomatik tetiklenir.
-        await restoreFromCloud(true);
+        // KRİTİK: restoreFromCloud bayat kopya reddi / bulut boş gibi durumlarda false
+        // döner ve başarı yolundaki otomatik klasör eşitlemesi TETİKLENMEZDİ — bulut
+        // ağacı yarım kalan taşımalarla saatlerce bekleyebiliyordu. Eşitleyici config'i
+        // sunucuda TAZE okur, yerel state'e bağımlı değildir → erken dönüşte de çalıştır.
+        const restored = await restoreFromCloud(true);
+        if (!restored) void useStore.getState().healCloudFolders();
         // Always clear to blank canvas on page load — user must open a file from Case Manager
         clearCanvas();
       } catch (error) {

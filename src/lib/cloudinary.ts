@@ -345,6 +345,8 @@ export const cloudinary = {
     total: number;
     movedEntries: { id: string; secureUrl: string }[];
     failed: { id: string; error: string }[];
+    /** Sunucu/HTTP hatası durumunda dolu gelir — istemci kullanıcıya gösterebilir. */
+    error?: string;
   } | null> => {
     try {
       const response = await fetch('/api/sync-folders', {
@@ -357,7 +359,13 @@ export const cloudinary = {
       });
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
-        throw new Error(err.error || `Klasör eşitleme başarısız (HTTP ${response.status})`);
+        // HATAYI YUTMA: daha önce null dönüyordu ve istemci sessizce vazgeçiyordu —
+        // kullanıcı neden eşitlenmediğini asla göremiyordu. Hata mesajı taşınır.
+        return {
+          moved: 0, cleaned: 0, remaining: 0, orphansRemaining: 0, total: 0,
+          movedEntries: [], failed: [],
+          error: err.error || `Klasör eşitleme başarısız (HTTP ${response.status})`,
+        };
       }
       return await response.json();
     } catch (error) {
