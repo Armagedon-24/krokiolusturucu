@@ -1593,8 +1593,69 @@ function buildExtrudedGeometry(
   return geo;
 }
 
+/* ------------------------------------------------------------------ */
+/* SVG YÜKSEK ÇÖZÜNÜRLÜK RASTERİZASYONU                                */
+/* SVG semboller WebGL'e intrinsic boyutta (örn. 200×200) yüklenir ve  */
+/* büyük zemin decallerine gerilince bulanıklaşır (2B Konva, çizim      */
+/* boyutunda rasterize ettiği için net kalır). Bu hook SVG'yi hedef     */
+/* çözünürlükte canvas'a yeniden çizip net bir doku üretir; PNG/JPEG    */
+/* için no-op'tur.                                                      */
+/* ------------------------------------------------------------------ */
+const _svgHiResCache = new Map<string, THREE.Texture>();
+const useSvgHiResTexture = (src: string | undefined, target = 1400): THREE.Texture | null => {
+  const [tex, setTex] = useState<THREE.Texture | null>(() => (src ? _svgHiResCache.get(src) || null : null));
+  useEffect(() => {
+    if (!src) return;
+    const isSvg = src.startsWith('data:image/svg') || src.toLowerCase().includes('.svg');
+    if (!isSvg) return;
+    const cached = _svgHiResCache.get(src);
+    if (cached) { setTex(cached); return; }
+    let cancelled = false;
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      if (cancelled) return;
+      try {
+        const iw = img.naturalWidth || img.width || 300;
+        const ih = img.naturalHeight || img.height || 300;
+        const s = Math.max(1, Math.min(10, target / Math.max(iw, ih)));
+        const c = document.createElement('canvas');
+        c.width = Math.max(2, Math.round(iw * s));
+        c.height = Math.max(2, Math.round(ih * s));
+        const ctx = c.getContext('2d');
+        if (!ctx) return;
+        ctx.drawImage(img, 0, 0, c.width, c.height);
+        const t = new THREE.CanvasTexture(c);
+        t.anisotropy = 8;
+        t.colorSpace = THREE.SRGBColorSpace;
+        // Sınır aşılırsa en eski kaydıreferansı bırak (dispose YAPMA — kullanımda olabilir)
+        if (_svgHiResCache.size > 60) {
+          const k0 = _svgHiResCache.keys().next().value as string | undefined;
+          if (k0) _svgHiResCache.delete(k0);
+        }
+        _svgHiResCache.set(src, t);
+        setTex(t);
+      } catch { /* tainted canvas vb. — orijinal dokuyla devam */ }
+    };
+    img.src = src;
+    return () => { cancelled = true; };
+  }, [src, target]);
+  return tex;
+};
+
 /** Fiziksel nesnelerin 3B yüksekliği (cm) — kategori bazlı gerçekçi kalınlık. */
 const getExtrudeHeightCm = (sId: string): number => {
+  if (sId.startsWith('v-')) {                                 // kara taşıtları (SVG üst görünüm ekstrüzyonu)
+    if (sId.includes('trailer')) return 380;
+    if (sId.includes('minibus')) return 240;
+    if (sId.includes('bus')) return 310;
+    if (sId.includes('forklift')) return 220;
+    if (sId.includes('crane') || sId.includes('excavator') || sId.includes('loader') || sId.includes('tractor')) return 280;
+    if (sId.includes('truck') || sId.includes('dump') || sId.includes('concrete') || sId.includes('firetruck') || sId.includes('tow') || sId.includes('municipal')) return 300;
+    if (sId.includes('panelvan') || sId.includes('minivan') || sId.includes('ambulance') || sId.includes('armored')) return 200;
+    if (sId.includes('suv') || sId.includes('station') || sId.includes('pickup') || sId.includes('quad')) return 175;
+    return 150; // binek otolar (sedan, hatchback, coupe, taksi, polis...)
+  }
   if (sId.startsWith('ht-')) return 9;                       // el aletleri
   if (sId.startsWith('w-')) return 7;                        // silahlar
   if (sId.startsWith('an-')) return (sId.includes('chicken') || sId.includes('tavuk') || sId.includes('bird')) ? 25 : 40; // hayvanlar (yedek — an-* artık Animal3D)
@@ -1632,7 +1693,7 @@ const getExtrudeHeightCm = (sId: string): number => {
  * Alfa siluetinden ekstrüde edilmiş 3B sembol.
  * Geometri üretilemezse (karmaşık maske, CORS, boş doku) `fallback`'a düşer.
  */
-const ExtrudedSymbol3D = ({ x, y, rad, width, height, textureSrc, heightCm, zOffset, fallback }: any) => {
+const ExtrudedSymbol3D = ({ x, y, rad, width, height, textureSrc, heightCm, zOffset, fallback, hiResTexture }: any) => {
   const tMain = useTexture(textureSrc) as THREE.Texture;
   const hWorld = Math.max(1.5, (heightCm || 10) * SCALE);
 
@@ -1662,14 +1723,15 @@ const ExtrudedSymbol3D = ({ x, y, rad, width, height, textureSrc, heightCm, zOff
   }, [tMain, textureSrc, width, height, hWorld]);
 
   // Üst yüz dokusu: şekil koordinatları (−w/2..w/2) → UV 0..1
+  // hiResTexture varsa (SVG yüksek çözünürlük rasteri) üst yüz o dokudan çizilir
   const topTex = React.useMemo(() => {
-    const t = tMain.clone();
+    const t = (hiResTexture || tMain).clone();
     t.needsUpdate = true;
     t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
     t.repeat.set(1 / Math.max(width, 0.01), 1 / Math.max(height, 0.01));
     t.offset.set(0.5, 0.5);
     return t;
-  }, [tMain, width, height]);
+  }, [tMain, hiResTexture, width, height]);
   useEffect(() => () => { topTex.dispose(); }, [topTex]);
 
   const materials = React.useMemo(() => ([
@@ -1733,6 +1795,56 @@ const FlatDecal3D = ({ x, y, rad, wWorld, hWorld, texture, elev = 0.08, renderOr
     </mesh>
   </group>
 );
+
+// st-1 / st-cadde / st-sokak — 2B Bezier yol motorunun 3B aynası.
+// Bu yollar 2B'de vektör motoruyla çizilir (SVG dokuya düşmez); 3B'de SVG doku
+// yerine AYNI geometriyi (Q Bezier gövde + siyah kenarlar + [20,20] kesikli orta
+// çizgi + yol adı etiketi) yüksek çözünürlükte canvas'a çizip zemine yatırır.
+// Böylece kıvrım, kesikli çizgi periyodu ve yol adı 2B görünümle birebir olur.
+const ROAD_ENGINE_IDS_3D = new Set(['st-1', 'st-cadde', 'st-sokak']);
+// Çizgi-motorlu (fill'siz, yalnızca stroke) iki tekerliler: alfa silueti ekstrüzyona
+// uygun değil — eski prosedürel 3B modelde kalır.
+const VEHICLE_LINEART_IDS_3D = new Set(['v-motor', 'v-bicycle', 'v-scooter']);
+const RoadDecal3D = ({ obj, width, height }: any) => {
+  const w2d = Math.max(20, width / SCALE);
+  const h2d = Math.max(20, height / SCALE);
+  const res = Math.min(4, Math.max(1.2, 2048 / Math.max(w2d, h2d)));
+  const tex = useCanvasTexture((ctx) => {
+    ctx.scale(res, res);
+    const w = w2d, h = h2d;
+    const curv = obj.curvature || 0;
+    const curvX = obj.curvatureX !== undefined ? obj.curvatureX : w / 2;
+    const controlY = h / 2 + curv * 2;
+    const p = new Path2D(`M 0 ${h / 2} Q ${curvX} ${controlY} ${w} ${h / 2}`);
+    const e = Math.max(1.5, h / 20);
+    ctx.lineCap = 'butt';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = h + 2 * e; // siyah taban → iki yanda e kalınlığında yol kenarı
+    ctx.stroke(p);
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = h;
+    ctx.stroke(p);
+    const showMid = obj.roadMiddleLine !== undefined ? !!obj.roadMiddleLine : String(obj.symbolId || '') === 'st-1';
+    if (showMid) {
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = e;
+      ctx.setLineDash([20, 20]);
+      ctx.stroke(p);
+      ctx.setLineDash([]);
+    }
+    const sname = String(obj.streetName || '').trim();
+    if (sname) {
+      const sfs = obj.streetFontSize || Math.max(11, Math.min(30, h * 0.32));
+      ctx.fillStyle = obj.distanceColor || '#000000';
+      ctx.font = `bold ${sfs}px ${obj.fontFamily || 'Inter'}, Arial, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(sname, w / 2, h / 2);
+    }
+  }, Math.round(w2d * res), Math.round(h2d * res), [w2d, h2d, res, obj.curvature, obj.curvatureX, obj.roadMiddleLine, obj.streetName, obj.streetFontSize, obj.distanceColor, obj.symbolId, obj.fontFamily]);
+  return <FlatDecal3D x={0} y={0} rad={0} wWorld={w2d * SCALE} hWorld={h2d * SCALE} texture={tex} elev={0.07 + stableHash01(String(obj.id || 'road')) * 0.03} />;
+};
 
 /** Ölçü/yön oku (a-4 çift uçlu, a-5 tek uçlu) — mesafe etiketiyle birlikte. */
 const ArrowDecal3D = ({ obj, stageWidth, stageHeight }: any) => {
@@ -1948,6 +2060,9 @@ const CalloutDecal3D = ({ obj }: any) => {
 const Symbol3D = ({ obj, wallThickness, realObj, allWalls, visualObjects, uploadedImages, stageWidth, stageHeight }: any) => {
   const actualObj = realObj || obj;
   const { x, y, rotation, symbolId, src, fill } = obj;
+  // SVG yüksek çözünürlük rasteri — hook kuralları gereği koşulsuz en üstte çağrılır;
+  // SVG olmayan kaynaklar için no-op'tur. Araç üst yüzü + zemin decallerinde kullanılır.
+  const svgHiRes = useSvgHiResTexture(typeof src === 'string' ? src : undefined);
   
   // 1. Dimensions and Identifiers
   const width = (actualObj.width || 0) * (actualObj.scaleX || 1);
@@ -2094,6 +2209,12 @@ const Symbol3D = ({ obj, wallThickness, realObj, allWalls, visualObjects, upload
     return <VerticalDecal3D textureSrc={textureSrc} width={width} height={height} zHeight={zHeight} thickness={currentWallThickness} />;
   }
 
+  // st-1 / st-cadde / st-sokak: 2B Bezier yol motorunun 3B aynası — SVG dokuya
+  // düşmez; kıvrım, kesikli orta çizgi ve yol adı 2B ile birebir çizilir.
+  if (ROAD_ENGINE_IDS_3D.has(sIdLower)) {
+    return <RoadDecal3D obj={actualObj} width={width} height={height} />;
+  }
+
   const autoHeight = getStandardHeight(effSymbolId);
 
   // 6. Volumetric Rendering
@@ -2167,7 +2288,29 @@ const Symbol3D = ({ obj, wallThickness, realObj, allWalls, visualObjects, upload
   if (isHeli) return <Helicopter3D x={posX} y={posZ} width={finalW} height={finalH} rad={rad} attack={sIdLower === 'v-atak'} fill={fill} zOffset={yOff} />;
   if (isBalloon) return <Balloon3D x={posX} y={posZ} width={finalW} height={finalH} rad={rad} fill={fill} zOffset={yOff} />;
   if (isBoat) return <Boat3D x={posX} y={posZ} width={finalW} height={finalH} rad={rad} variant={sIdLower === 'v-rowboat' ? 'rowboat' : sIdLower === 'v-motorboat' ? 'motorboat' : 'jetski'} fill={fill} zOffset={yOff} />;
-  if (isVehicle) return <Vehicle3D x={posX} y={posZ} width={finalW} height={finalH} rad={rad} type={sIdLower + ' ' + nameLower} fill={fill} zOffset={yOff} zHeight={actualObj.zHeight} />;
+  if (isVehicle) {
+    // Kara taşıtları (v-*): 2B'deki temiz SVG üst görünüm alfa ekstrüzyonuyla
+    // hacme çevrilir — kuşbakışında 2B çizimle birebir ("SVG gibi" temiz görünüm),
+    // yanlardan gerçek hacimli gövde. Geometri üretilemeyen dokularda eski
+    // prosedürel 3B modele düşer. Çizgi-motorlu iki tekerliler eski modelde kalır.
+    if (sIdLower.startsWith('v-') && !VEHICLE_LINEART_IDS_3D.has(sIdLower)) {
+      return (
+        <ExtrudedSymbol3D
+          x={posX}
+          y={posZ}
+          rad={rad}
+          width={finalW}
+          height={finalH}
+          textureSrc={textureSrc}
+          hiResTexture={svgHiRes}
+          heightCm={getExtrudeHeightCm(sIdLower)}
+          zOffset={totalOffset}
+          fallback={<Vehicle3D x={posX} y={posZ} width={finalW} height={finalH} rad={rad} type={sIdLower + ' ' + nameLower} fill={fill} zOffset={yOff} zHeight={actualObj.zHeight} />}
+        />
+      );
+    }
+    return <Vehicle3D x={posX} y={posZ} width={finalW} height={finalH} rad={rad} type={sIdLower + ' ' + nameLower} fill={fill} zOffset={yOff} zHeight={actualObj.zHeight} />;
+  }
   if (isTree) return <Tree3D x={posX} y={posZ} width={finalW} height={finalH} rad={rad} type={sIdLower} zOffset={yOff} />;
   if (isCone) return <TrafficCone3D x={posX} y={posZ} zOffset={yOff} />;
   if (isBarrier) return <SecurityBarrier3D x={posX} y={posZ} width={finalW} rad={rad} zOffset={yOff} />;
@@ -3138,13 +3281,15 @@ const TV3D = ({ x, y, width, height, rad, zHeight, textureSrc }: any) => {
 
 const FloorItem3D = ({ x, y, width, height, rad, textureSrc, zOffset }: any) => {
   const tMain = useTexture(textureSrc) as THREE.Texture;
+  const tHi = useSvgHiResTexture(textureSrc); // SVG dokuları yüksek çözünürlükte rasterize et (bulanıklık düzeltmesi)
+  const t = tHi || tMain;
   const w = width; // already scaled
   const d = height; // already scaled
   return (
     <group position={[x, 0.05 + (zOffset || 0), y]} rotation={[0, rad, 0]}>
       <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <planeGeometry args={[w, d]} />
-        <meshStandardMaterial map={tMain} transparent alphaTest={0.05} />
+        <meshStandardMaterial map={t} transparent alphaTest={0.05} />
       </mesh>
     </group>
   );
