@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- Yazı tipleri artık tamamen yerel: src/offline-fonts.css (offline kullanım) -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/logo.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/logo.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icon-512.png" />
+    <link rel="shortcut icon" href="/logo.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover" />
+    <!--
+      CSP: GitHub Pages özel başlık desteklemediği için meta etiketiyle zorlanır.
+      Vercel dağıtımında ek olarak vercel.json başlıkları uygulanır.
+      script-src 'self': tüm betikler harici dosya (inline script yok).
+    -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://res.cloudinary.com https://static-maps.yandex.ru https://server.arcgisonline.com https://*.tile.openstreetmap.org; media-src 'self' blob:; font-src 'self' data:; connect-src 'self' https://res.cloudinary.com https://nominatim.openstreetmap.org; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="description" content="Polis Kriminal Laboratuvarı - Olay Yeri Kroki Oluşturma Sistemi" />
+    <meta name="theme-color" content="#1e293b" />
+    <meta property="og:title" content="Kroki Oluşturucu - Olay Yeri Dokümantasyon" />
+    <meta property="og:description" content="Polis Kriminal Laboratuvarı - Olay Yeri Kroki Oluşturma Sistemi" />
+    <meta property="og:image" content="/logo.png" />
+    <title>Kroki Oluşturucu - Olay Yeri Dokümantasyon</title>
+    <script type="module" crossorigin src="/assets/index-BzregFHY.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/rolldown-runtime-CRqgUL4m.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-react-DINcDvCS.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-ui-BNeyf8j9.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-three-B9PNK1h0.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-state-RarJdjRh.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-runtime-Ba5N5ZRK.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-konva-Bl4nmkC5.js">
+    <link rel="stylesheet" crossorigin href="/assets/index-B2z0oeBL.css">
+  <link rel="manifest" href="/manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="/registerSW.js" defer></script></head>
+  <body>
+    <div id="root"></div>
+    <!-- Anti-Copy / Anti-Inspect koruması CSP uyumluluğu için harici dosyaya taşındı (CSP: script-src 'self') -->
+    <script src="/app-guard.js" defer></script>
+  </body>
+</html>
