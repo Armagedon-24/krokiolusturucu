@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8"/>
+<title>Araç Testi</title>
+<style>html,body{margin:0;height:100%;overflow:hidden;background:#bcd4e8}</style>
+</head>
+<body>
+<script type="module">
+import * as THREE from './three.module.js';
+import { buildSedan, buildSUV, buildBus, buildTruck } from './cars.js';
+
+const q = new URLSearchParams(location.search);
+const kind = q.get('kind') || 'sedan';
+const color = q.get('color') || '#2a2e33';
+const view = q.get('view') || 'bird';
+const rot = parseFloat(q.get('rot') || '0');   // aracın sahne içi dönüşü (derece)
+const e = 0.55;
+
+// ---- uygulama ile aynı ışıklandırma ----
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#bcd4e8');
+scene.add(new THREE.HemisphereLight('#e3edf7', '#8f9296', .65));
+scene.add(new THREE.AmbientLight('#ffffff', .5));
+const sun = new THREE.DirectionalLight('#ffffff', 1);
+sun.position.set(100, 200, 100);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.left = -400; sun.shadow.camera.right = 400;
+sun.shadow.camera.top = 400; sun.shadow.camera.bottom = -400;
+scene.add(sun);
+
+// ---- zemin + yol (ekran görüntüsündeki gibi) ----
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(4000, 4000), new THREE.MeshStandardMaterial({ color: '#cfd3d6', roughness: .95 }));
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+const road = new THREE.Mesh(new THREE.BoxGeometry(1400, 1, 260), new THREE.MeshStandardMaterial({ color: '#f2f2f0', roughness: .9 }));
+road.position.set(0, .5, 0);
+road.receiveShadow = true;
+scene.add(road);
+for (let i = -8; i <= 8; i++) {
+  const dash = new THREE.Mesh(new THREE.BoxGeometry(40, 1.2, 4), new THREE.MeshStandardMaterial({ color: '#1a1a1a' }));
+  dash.position.set(i * 80, 1.1, 0);
+  scene.add(dash);
+}
+
+// ---- araç ----
+let t, h, u, build;
+if (kind === 'sedan') { t = 460 * e; h = 180 * e; build = buildSedan; }
+else if (kind === 'suv') { t = 480 * e; h = 195 * e; build = buildSUV; }
+else if (kind === 'bus') { t = 1100 * e; h = 255 * e; build = buildBus; }
+else { t = 900 * e; h = 250 * e; build = buildTruck; }
+u = e;
+const car = build(t, h, u, color);
+const carWrap = new THREE.Group();
+carWrap.add(car);
+carWrap.rotation.y = rot * Math.PI / 180;
+scene.add(carWrap);
+
+// ---- kamera ----
+const cam = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 1, 5000);
+const D = t;
+const cams = {
+  bird:   [D * .75, D * .95, D * 1.05],
+  front:  [D * 1.15, D * .38, D * .75],
+  side:   [D * .05, D * .30, D * 1.25],
+  top:    [0.001, D * 1.6, 0.001],
+};
+cam.position.set(...cams[view]);
+cam.lookAt(0, t * .12, 0);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(2);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+function frame() { renderer.render(scene, cam); requestAnimationFrame(() => { renderer.render(scene, cam); window.__done = true; }); }
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
