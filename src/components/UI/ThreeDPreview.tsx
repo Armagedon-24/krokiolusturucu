@@ -18,6 +18,8 @@ import * as THREE from 'three';
 import { Animal3D } from './Animal3D';
 // @ts-ignore
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter';
+// @ts-ignore
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 
 /**
  * 3D PREVIEW ENGINE - FORENSIC INTEGRITY STANDARDS:
@@ -3741,74 +3743,14 @@ const SymbolWithTexture = ({ x, y, width, height, rad, fill, textureSrc, zHeight
   );
 };
 
-// --- CUSTOM HIGH-FIDELITY 3D COMPONENTS FOR REALISM ---
-
-interface WindowProps {
-  width: number;
-  height: number;
-  thick: number;
-  onClick?: (e: any) => void;
-}
-
-// Door window: width = car-length (X), height = vertical (Y), glass faces Z (outward)
-const WindowFrameAndGlass = ({ width, height, thick, onClick }: WindowProps) => {
-  const ft = 1.2 * SCALE; // frame thickness in X/Y
-  const glassW = width - ft * 2;
-  const glassH = height - ft * 2;
-  const depth = thick; // Z depth (glass depth, 0 = flat plane)
-
-  return (
-    <group>
-      {/* Top Frame bar (runs along X) */}
-      <mesh position={[0, height / 2 - ft / 2, 0]} onClick={onClick} castShadow>
-        <boxGeometry args={[width, ft, depth]} />
-        <meshStandardMaterial color="#1a1a1a" roughness={0.6} />
-      </mesh>
-      {/* Bottom Frame bar (runs along X) */}
-      <mesh position={[0, -height / 2 + ft / 2, 0]} onClick={onClick} castShadow>
-        <boxGeometry args={[width, ft, depth]} />
-        <meshStandardMaterial color="#1a1a1a" roughness={0.6} />
-      </mesh>
-      {/* Left Frame bar (runs along Y) */}
-      <mesh position={[-width / 2 + ft / 2, 0, 0]} onClick={onClick} castShadow>
-        <boxGeometry args={[ft, glassH, depth]} />
-        <meshStandardMaterial color="#1a1a1a" roughness={0.6} />
-      </mesh>
-      {/* Right Frame bar (runs along Y) */}
-      <mesh position={[width / 2 - ft / 2, 0, 0]} onClick={onClick} castShadow>
-        <boxGeometry args={[ft, glassH, depth]} />
-        <meshStandardMaterial color="#1a1a1a" roughness={0.6} />
-      </mesh>
-      {/* Glass Pane — dark tinted, clearly visible as closed glass */}
-      <mesh position={[0, 0, 0]} onClick={onClick}>
-        <boxGeometry args={[glassW, glassH, depth * 0.5]} />
-        <meshPhysicalMaterial
-          color="#1e3a4a"
-          roughness={0.05}
-          metalness={0.0}
-          transparent
-          opacity={0.88}
-          side={THREE.DoubleSide}
-          envMapIntensity={1.2}
-        />
-      </mesh>
-      {/* Specular highlight stripe */}
-      <mesh position={[-glassW * 0.2, 0, depth * 0.26]} rotation={[0, 0, Math.PI / 4]} onClick={onClick}>
-        <boxGeometry args={[glassW * 0.06, glassH * 1.3, 0.015 * SCALE]} />
-        <meshBasicMaterial color="#ffffff" transparent opacity={0.22} />
-      </mesh>
-    </group>
-  );
-};
-
 /** Mürekkep rengini 3B boya rengine çevirir: simsiyah çizimler için koyu
  *  antrasit (metalik boya parlaklığı kaybolmasın), bembeyaz için açık gri. */
 const liftInkColor = (c?: string | null): string | null => {
   if (!c || !/^#[0-9a-fA-F]{6}$/.test(c)) return null;
   const r = parseInt(c.slice(1, 3), 16), g = parseInt(c.slice(3, 5), 16), b = parseInt(c.slice(5, 7), 16);
   const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-  if (lum < 0.075) return '#2a2e33';
-  if (lum > 0.93) return '#e8eaec';
+  if (lum < 0.075) return '#33383f';
+  if (lum > 0.93) return '#eef0f2';
   return c;
 };
 
@@ -3845,1298 +3787,393 @@ const InkVehicle3D = (props: any) => {
   return <Vehicle3D {...props} fill={props.fill || liftInkColor(ink) || undefined} rollOver={rollOver} />;
 };
 
+// --- KARA TAŞITLARI: prosedürel gerçekçi modeller ---
+// Önceki "kutu yığını" model (çatı plakası + döndürülmüş ön cam grupları +
+// tıklanabilir kapılar) 3B'de siyah blob gibi çirkin görünüyordu (kullanıcı
+// raporu: "araç görseli çok çirkin görünüyor"). Yeni model: TEK PARÇA
+// ekstrüde gövde profili (kama burnu → kuşak çizgisi → bagaj) + koyu cam
+// kanopi + boya rengi çatı plakası + A/B/C direkleri + emisif farlar +
+// tamponlar + aynalar + plaka. Metalik boya ve cam parlaklığı prosedürel
+// RoomEnvironment ile gelir (dış CDN bağımlılığı YOK).
+
+const VEH_GLASS_MAT = new THREE.MeshPhysicalMaterial({ color: '#16293c', metalness: 0.2, roughness: 0.05, clearcoat: 1, envMapIntensity: 2.0, transparent: true, opacity: 0.96 });
+const VEH_TRIM_MAT = new THREE.MeshStandardMaterial({ color: '#1d2024', roughness: 0.6, metalness: 0.3 });
+const VEH_TIRE_MAT = new THREE.MeshStandardMaterial({ color: '#0c0d0e', roughness: 0.95 });
+const VEH_RIM_MAT = new THREE.MeshStandardMaterial({ color: '#d3d8dd', metalness: 0.35, roughness: 0.22 });
+const VEH_HUB_MAT = new THREE.MeshStandardMaterial({ color: '#d9dde1', metalness: 0.6, roughness: 0.2 });
+const VEH_HEADLIGHT_MAT = new THREE.MeshStandardMaterial({ color: '#fff6d8', emissive: '#ffedaa', emissiveIntensity: 1.6, roughness: 0.2 });
+const VEH_TAILLIGHT_MAT = new THREE.MeshStandardMaterial({ color: '#8a0f14', emissive: '#e8192c', emissiveIntensity: 1.5, roughness: 0.3 });
+const VEH_PLATE_MAT = new THREE.MeshStandardMaterial({ color: '#f2f4f6', roughness: 0.6 });
+const VEH_ARCH_MAT = new THREE.MeshStandardMaterial({ color: '#141517', roughness: 0.9 });
+const VEH_CARGO_MAT = new THREE.MeshPhysicalMaterial({ color: '#dde1e5', metalness: 0.15, roughness: 0.45 });
+const VEH_STRIPE_WHITE_MAT = new THREE.MeshStandardMaterial({ color: '#f4f6f8', roughness: 0.4, metalness: 0.1 });
+const VEH_STRIPE_RED_MAT = new THREE.MeshStandardMaterial({ color: '#cc0000', roughness: 0.45, metalness: 0.1 });
+
+/** Lastik + jant: jant lastikten hafifçe geniş, yandan gümüş yüzey görünür. */
+const VehWheel = ({ px, pz, R, W }: { px: number; pz: number; R: number; W: number }) => (
+  <group position={[px, R, pz]} rotation={[Math.PI / 2, 0, 0]}>
+    <mesh castShadow material={VEH_TIRE_MAT}>
+      <cylinderGeometry args={[R, R, W, 28]} />
+    </mesh>
+    <mesh material={VEH_RIM_MAT}>
+      <cylinderGeometry args={[R * 0.58, R * 0.58, W * 1.05, 24]} />
+    </mesh>
+    <mesh material={VEH_HUB_MAT}>
+      <cylinderGeometry args={[R * 0.16, R * 0.16, W * 1.12, 12]} />
+    </mesh>
+  </group>
+);
+
+/** Prosedürel ortam haritası (RoomEnvironment): metalik boya/cam/krom
+ *  parlaklığı için; dış CDN'den HDR indirme YOK (eski drei <Environment
+ *  preset> çökmesinin yerine tamamen yerel çözüm). */
+const SceneEnvironment = () => {
+  const gl = useThree((s: any) => s.gl);
+  const scene = useThree((s: any) => s.scene);
+  useEffect(() => {
+    if (!gl || !scene) return;
+    let rt: THREE.WebGLRenderTarget | null = null;
+    try {
+      const pmrem = new THREE.PMREMGenerator(gl);
+      rt = pmrem.fromScene(new RoomEnvironment(), 0.04);
+      scene.environment = rt.texture;
+      pmrem.dispose();
+    } catch {
+      // ortam haritası üretilemezse yerel ışıklar tek başına yeterli
+    }
+    return () => {
+      if (rt) rt.dispose();
+      scene.environment = null;
+    };
+  }, [gl, scene]);
+  return null;
+};
+
 const Vehicle3D = ({ x, y, width, height, rad, type, fill, zOffset, zHeight, rollOver }: any) => {
   const isVerticalIn2D = height > width;
-  const w = isVerticalIn2D ? height : width;
-  const d = isVerticalIn2D ? width : height;
+  const w = isVerticalIn2D ? height : width; // uzunluk (X)
+  const d = isVerticalIn2D ? width : height; // genişlik (Z)
   const adjustedRad = isVerticalIn2D ? rad - Math.PI / 2 : rad;
-
   const typeLower = (type || '').toLowerCase();
-  
-  let color = fill || "#3a4046";
-  if (typeLower.includes('itfaiye') || typeLower.includes('fire')) {
-    color = "#cc0000";
-  } else if (typeLower.includes('taksi') || typeLower.includes('taxi')) {
-    color = "#f5c518";
-  } else if (typeLower.includes('polis') || typeLower.includes('police')) {
-    color = "#0033aa";
-  }
 
-  // Base height properties
+  let color = fill || '#3d434b';
+  if (typeLower.includes('itfaiye') || typeLower.includes('fire')) color = '#c62828';
+  else if (typeLower.includes('taksi') || typeLower.includes('taxi')) color = '#f2c230';
+  else if (typeLower.includes('polis') || typeLower.includes('police')) color = '#2b58d8';
+
   const isMotorcycle = typeLower.includes('motor') || typeLower.includes('moto') || typeLower.includes('bisiklet');
-  const isTruck = typeLower.includes('truck') || typeLower.includes('kamyon') || typeLower.includes('v-truck') || typeLower.includes('itfaiye') || typeLower.includes('kepçe') || typeLower.includes('çekici') || typeLower.includes('traktör');
-  const isBus = typeLower.includes('bus') || typeLower.includes('otobüs') || typeLower.includes('v-bus') || typeLower.includes('minibüs');
-  const isSiren = typeLower.includes('police') || typeLower.includes('police-car') || typeLower.includes('ambulance') || typeLower.includes('v-police') || typeLower.includes('v-ambulance') || typeLower.includes('ambulans') || typeLower.includes('polis') || typeLower.includes('itfaiye');
+  const isTruck = typeLower.includes('truck') || typeLower.includes('kamyon') || typeLower.includes('itfaiye') || typeLower.includes('kepçe') || typeLower.includes('çekici') || typeLower.includes('traktör');
+  const isBus = typeLower.includes('bus') || typeLower.includes('otobüs') || typeLower.includes('minibüs');
+  const isSiren = typeLower.includes('police') || typeLower.includes('ambulance') || typeLower.includes('ambulans') || typeLower.includes('polis') || typeLower.includes('itfaiye');
   const isSUV = typeLower.includes('suv') || typeLower.includes('jeep') || typeLower.includes('ambulance') || typeLower.includes('ambulans') || typeLower.includes('police') || typeLower.includes('polis');
+  const isFire = typeLower.includes('itfaiye') || typeLower.includes('fire');
+  const isCar = !isTruck && !isBus && !isMotorcycle;
 
-  // Interactive Door States
-  const [leftDoorOpen, setLeftDoorOpen] = useState(false);
-  const [rightDoorOpen, setRightDoorOpen] = useState(false);
-  const [leftRearDoorOpen, setLeftRearDoorOpen] = useState(false);
-  const [rightRearDoorOpen, setRightRearDoorOpen] = useState(false);
-  const [truckDoorOpen, setTruckDoorOpen] = useState(false);
-  const [busDoorOpen, setBusDoorOpen] = useState(false);
-
-  const leftDoorRef = useRef<THREE.Group>(null);
-  const rightDoorRef = useRef<THREE.Group>(null);
-  const leftRearDoorRef = useRef<THREE.Group>(null);
-  const rightRearDoorRef = useRef<THREE.Group>(null);
-  const truckDoorLeftRef = useRef<THREE.Group>(null);
-  const truckDoorRightRef = useRef<THREE.Group>(null);
-  const busDoorRef = useRef<THREE.Group>(null);
-
-  const leftDoorRot = useRef(0);
-  const rightDoorRot = useRef(0);
-  const leftRearDoorRot = useRef(0);
-  const rightRearDoorRot = useRef(0);
-  const truckDoorLeftRot = useRef(0);
-  const truckDoorRightRot = useRef(0);
-  const busDoorRot = useRef(0);
-
-  // Click Helpers
-  const toggleLeft = (e: any) => { e.stopPropagation(); setLeftDoorOpen(!leftDoorOpen); };
-  const toggleRight = (e: any) => { e.stopPropagation(); setRightDoorOpen(!rightDoorOpen); };
-  const toggleLeftRear = (e: any) => { e.stopPropagation(); setLeftRearDoorOpen(!leftRearDoorOpen); };
-  const toggleRightRear = (e: any) => { e.stopPropagation(); setRightRearDoorOpen(!rightRearDoorOpen); };
-  const toggleTruck = (e: any) => { e.stopPropagation(); setTruckDoorOpen(!truckDoorOpen); };
-  const toggleBus = (e: any) => { e.stopPropagation(); setBusDoorOpen(!busDoorOpen); };
-
-  useFrame(() => {
-    // Left Door (Swing wide 82 degrees for high visibility - Outward)
-    const targetLeft = leftDoorOpen ? Math.PI / 2.2 : 0;
-    leftDoorRot.current += (targetLeft - leftDoorRot.current) * 0.15;
-    if (leftDoorRef.current) leftDoorRef.current.rotation.y = leftDoorRot.current;
-
-    // Right Door (Swing wide 82 degrees for high visibility - Outward)
-    const targetRight = rightDoorOpen ? -Math.PI / 2.2 : 0;
-    rightDoorRot.current += (targetRight - rightDoorRot.current) * 0.15;
-    if (rightDoorRef.current) rightDoorRef.current.rotation.y = rightDoorRot.current;
-
-    // Left Rear Door (Outward)
-    const targetLeftRear = leftRearDoorOpen ? Math.PI / 2.2 : 0;
-    leftRearDoorRot.current += (targetLeftRear - leftRearDoorRot.current) * 0.15;
-    if (leftRearDoorRef.current) leftRearDoorRef.current.rotation.y = leftRearDoorRot.current;
-
-    // Right Rear Door (Outward)
-    const targetRightRear = rightRearDoorOpen ? -Math.PI / 2.2 : 0;
-    rightRearDoorRot.current += (targetRightRear - rightRearDoorRot.current) * 0.15;
-    if (rightRearDoorRef.current) rightRearDoorRef.current.rotation.y = rightRearDoorRot.current;
-
-    // Truck Cabin Doors (Swing wide 82 degrees for high visibility - Outward)
-    const targetTruckL = truckDoorOpen ? Math.PI / 2.2 : 0;
-    const targetTruckR = truckDoorOpen ? -Math.PI / 2.2 : 0;
-    truckDoorLeftRot.current += (targetTruckL - truckDoorLeftRot.current) * 0.15;
-    truckDoorRightRot.current += (targetTruckR - truckDoorRightRot.current) * 0.15;
-    if (truckDoorLeftRef.current) truckDoorLeftRef.current.rotation.y = truckDoorLeftRot.current;
-    if (truckDoorRightRef.current) truckDoorRightRef.current.rotation.y = truckDoorRightRot.current;
-
-    // Bus Entrance Door (Swing wide 120 degrees for high visibility)
-    const targetBus = busDoorOpen ? Math.PI / 1.5 : 0;
-    busDoorRot.current += (targetBus - busDoorRot.current) * 0.15;
-    if (busDoorRef.current) busDoorRef.current.rotation.y = busDoorRot.current;
-  });
-
-  // Determine standard default height in cm for scaling
+  const S = SCALE;
   const defaultHeightCm = isTruck ? 300 : isBus ? 320 : isMotorcycle ? 100 : 150;
   const targetHeightCm = zHeight || defaultHeightCm;
-  const heightScale = targetHeightCm / defaultHeightCm;
+  const hs = targetHeightCm / defaultHeightCm;
+  const bevel = 2.2 * S * hs;
 
-  let bodyH = (isTruck ? 80 : isBus ? 110 : isSUV ? 80 : 65) * SCALE * heightScale;
-  let cabinH = (isTruck ? 70 : isBus ? 0 : isSUV ? 45 : 55) * SCALE * heightScale;
-  let groundClearance = (isTruck ? 25 : isBus ? 20 : isMotorcycle ? 20 : 15) * SCALE * heightScale;
-  const wheelR = (isTruck ? 22 : isBus ? 22 : isMotorcycle ? 20 : 20) * SCALE * heightScale;
-  const wheelW = (isTruck ? 12 : isBus ? 12 : isMotorcycle ? 8 : 12) * SCALE * heightScale;
+  const minLengthUnits = Math.max(100, (targetHeightCm || 150) * 0.7 * S);
+  const sizeScale = w < minLengthUnits ? minLengthUnits / w : 1;
 
-  // Custom Shape Profiles with Cutout Holes for realistic interiors
-  // WINDING ORDER WARNING: Main shape MUST be clockwise, holes MUST be counter-clockwise!
-  const bodyProfileShape = useMemo(() => {
-    const shape = new THREE.Shape();
-    if (isTruck) {
-      // Truck Lower Body Profile (Clockwise)
-      shape.moveTo(-w / 2, groundClearance);
-      shape.lineTo(-w / 2, groundClearance + bodyH * 0.95);
-      shape.lineTo(w * 0.1, groundClearance + bodyH * 0.95);
-      shape.lineTo(w * 0.12, groundClearance + bodyH);
-      shape.lineTo(w * 0.35, groundClearance + bodyH);
-      shape.lineTo(w * 0.42, groundClearance + bodyH * 0.8);
-      shape.lineTo(w * 0.5, groundClearance + bodyH * 0.75);
-      shape.lineTo(w * 0.5, groundClearance);
-      shape.lineTo(-w / 2, groundClearance);
-    } else if (isBus) {
-      // Bus Lower Body Profile (Clockwise)
-      shape.moveTo(-w / 2, groundClearance);
-      shape.lineTo(-w / 2, groundClearance + bodyH * 0.55);
-      shape.lineTo(w / 2, groundClearance + bodyH * 0.55);
-      shape.lineTo(w / 2, groundClearance + bodyH * 0.2);
-      shape.lineTo(w / 2 - w * 0.02, groundClearance);
-      shape.lineTo(-w / 2, groundClearance);
-    } else if (isMotorcycle) {
-      shape.moveTo(0, 0);
-    } else if (typeLower.includes('suv') || typeLower.includes('jeep') || typeLower.includes('ambulance') || typeLower.includes('ambulans')) {
-      // SUV / Ambulance Lower Body Profile (Clockwise) - curved
-      shape.moveTo(-w / 2, groundClearance);
-      shape.lineTo(-w / 2, groundClearance + 2 * SCALE);
-      shape.quadraticCurveTo(-w / 2 + 3 * SCALE, groundClearance + bodyH * 0.8, -w / 2 + 4 * SCALE, groundClearance + bodyH);
-      shape.lineTo(w * 0.2, groundClearance + bodyH);
-      shape.quadraticCurveTo(w * 0.3, groundClearance + bodyH, w * 0.38, groundClearance + bodyH * 0.85);
-      shape.quadraticCurveTo(w * 0.45, groundClearance + bodyH * 0.78, w * 0.5, groundClearance + bodyH * 0.72);
-      shape.lineTo(w * 0.5, groundClearance + 2 * SCALE);
-      shape.quadraticCurveTo(w * 0.5, groundClearance, w * 0.48, groundClearance);
-      shape.lineTo(-w / 2, groundClearance);
-    } else {
-      // Sedan Lower Body Profile (Clockwise) - aerodynamic curves
-      const c = groundClearance;
-      const b = bodyH;
-      shape.moveTo(-w / 2, c);
-      // Rear bumper lower lip
-      shape.lineTo(-w / 2 + 0.5 * SCALE, c);
-      shape.lineTo(-w / 2 + 0.5 * SCALE, c + b * 0.55);
-      // Rear bumper curve up to decklid
-      shape.quadraticCurveTo(-w / 2 + 4 * SCALE, c + b * 0.95, -w * 0.25, c + b);
-      // Trunk deck / rear roofline
-      shape.lineTo(-w * 0.08, c + b);
-      // Rear windshield base to roof (slight dip)
-      shape.quadraticCurveTo(-w * 0.03, c + b * 0.97, 0, c + b * 0.96);
-      shape.lineTo(w * 0.04, c + b * 0.96);
-      // Roof to front windshield base
-      shape.quadraticCurveTo(w * 0.08, c + b, w * 0.12, c + b);
-      // Hood top
-      shape.lineTo(w * 0.22, c + b);
-      // Hood front curve down to nose
-      shape.quadraticCurveTo(w * 0.32, c + b * 0.95, w * 0.38, c + b * 0.82);
-      // Front nose curve
-      shape.quadraticCurveTo(w * 0.45, c + b * 0.75, w * 0.5, c + b * 0.7);
-      // Front bumper
-      shape.lineTo(w * 0.5, c + 0.5 * SCALE);
-      shape.quadraticCurveTo(w * 0.5, c, w * 0.48, c);
-      shape.lineTo(-w / 2, c);
-    }
-    return shape;
-  }, [isTruck, isBus, typeLower, w, bodyH, cabinH, groundClearance]);
+  // --- otomobil / SUV ölçüleri ---
+  const c = (isTruck ? 34 : isBus ? 28 : 16) * S * hs; // yerden yükseklik
+  const b = (isSUV ? 75 : 65) * S * hs;                // kuşak çizgisi (yerden yükseklik eki)
+  const cabH = (isSUV ? 55 : 60) * S * hs;             // yeşilhane yüksekliği
+  const belt = c + b;
+  const roofY = belt + cabH;
+  const canD = d * 0.84;
+  const axRoofR = -w * (isSUV ? 0.28 : 0.15);
+  const axRoofF = w * 0.04;
+  const axAbase = w * (isSUV ? 0.15 : 0.12);
+  const axCbase = -w * (isSUV ? 0.36 : 0.28);
+  const pilZ = canD / 2 + 1.2 * S + 0.9 * S;
+  const angA = Math.atan2(-(axRoofF - axAbase), cabH);
+  const angC = Math.atan2(-(axRoofR - axCbase), cabH);
+  const lenA = Math.hypot(axRoofF - axAbase, cabH) + 1.5 * S;
+  const lenC = Math.hypot(axRoofR - axCbase, cabH) + 1.5 * S;
 
-  // Extrude settings - Larger bevel values for rounded car edges
-  const extrudeSettings = useMemo(() => ({
-    depth: d,
-    bevelEnabled: true,
-    bevelSegments: 5,
-    steps: 1,
-    bevelSize: 2.2 * SCALE,
-    bevelThickness: 2.2 * SCALE
-  }), [d]);
+  const truckTop = 300 * S * hs;
+  const busTop = 320 * S * hs;
+  const busH = busTop - c;
 
+  // Gövde profili: kama burnu (alçak kaput) → kuşak çizgisi → bagaj
+  const bodyGeo = useMemo(() => {
+    if (!isCar) return null;
+    const s = new THREE.Shape();
+    s.moveTo(-w / 2, c);
+    s.lineTo(-w / 2, c + b * 0.55);
+    s.quadraticCurveTo(-w / 2 + 7 * S, c + b * 0.92, -w * 0.40, c + b * 0.97);
+    s.lineTo(-w * 0.24, belt);
+    s.quadraticCurveTo(w * 0.02, belt - b * 0.015, w * 0.14, belt - b * 0.07);
+    s.lineTo(w * 0.16, belt - b * 0.08);
+    s.quadraticCurveTo(w * 0.30, belt - b * 0.12, w * 0.40, belt - b * 0.28);
+    s.quadraticCurveTo(w * 0.465, belt - b * 0.40, w / 2, belt - b * 0.48);
+    s.lineTo(w / 2, c + 6 * S);
+    s.quadraticCurveTo(w / 2, c, w / 2 - 2 * S, c);
+    s.lineTo(-w / 2, c);
+    return new THREE.ExtrudeGeometry(s, { depth: d, bevelEnabled: true, bevelSegments: 4, bevelSize: bevel, bevelThickness: bevel });
+  }, [isCar, w, c, b, belt, d, bevel]);
+
+  // Cam kanopi (yeşilhane): gövdeden dar, koyu fümeri
+  const canopyGeo = useMemo(() => {
+    if (!isCar) return null;
+    const s = new THREE.Shape();
+    s.moveTo(axCbase, belt);
+    s.lineTo(axRoofR, roofY);
+    s.lineTo(axRoofF, roofY);
+    s.lineTo(axAbase, belt);
+    s.lineTo(axCbase, belt);
+    return new THREE.ExtrudeGeometry(s, { depth: canD, bevelEnabled: true, bevelSegments: 3, bevelSize: 1.2 * S, bevelThickness: 1.2 * S });
+  }, [isCar, axCbase, axRoofR, axRoofF, axAbase, belt, roofY, canD]);
+
+  // Kamyon kabin profili (kamera üstü kamyon)
+  const truckCabGeo = useMemo(() => {
+    if (!isTruck) return null;
+    const cabH2 = truckTop - c;
+    const s = new THREE.Shape();
+    s.moveTo(w * 0.10, c);
+    s.lineTo(w * 0.10, c + cabH2 * 0.96);
+    s.lineTo(w * 0.24, truckTop);
+    s.lineTo(w * 0.42, truckTop);
+    s.lineTo(w * 0.50, c + cabH2 * 0.72);
+    s.lineTo(w / 2, c + cabH2 * 0.60);
+    s.lineTo(w / 2, c + 5 * S);
+    s.quadraticCurveTo(w / 2, c, w / 2 - 2 * S, c);
+    s.lineTo(w * 0.10, c);
+    return new THREE.ExtrudeGeometry(s, { depth: d * 0.94, bevelEnabled: true, bevelSegments: 3, bevelSize: 1.5 * S, bevelThickness: 1.5 * S });
+  }, [isTruck, w, d, c, truckTop]);
+
+  // Tekerlekler
+  const wheelR = (isTruck ? 30 : isBus ? 32 : isSUV ? 28 : 26) * S * hs;
+  const wheelW = (isTruck ? 17 : isBus ? 18 : 15) * S;
+  const bodyFaceHalf = isBus ? d * 0.47 : isTruck ? d * 0.47 : d / 2 + bevel;
+  const wz = bodyFaceHalf - wheelW / 2 + 1.4 * S;
+  const axles: Array<[number, number]> = isTruck
+    ? [[w * 0.34, wz], [w * 0.34, -wz], [-w * 0.02, wz], [-w * 0.02, -wz], [-w * 0.28, wz], [-w * 0.28, -wz]]
+    : isBus
+      ? [[w * 0.32, wz], [w * 0.32, -wz], [-w * 0.32, wz], [-w * 0.32, -wz]]
+      : [[w * 0.30, wz], [w * 0.30, -wz], [-w * 0.30, wz], [-w * 0.30, -wz]];
+
+  const modelTop = isTruck ? truckTop : isBus ? busTop : roofY + 2.5 * S;
+  const rollShift = modelTop * sizeScale + 2 * S;
+
+  const paintMat = useMemo(() => new THREE.MeshPhysicalMaterial({ color, metalness: 0.35, roughness: 0.32, clearcoat: 1.0, clearcoatRoughness: 0.15, envMapIntensity: 1.0 }), [color]);
+
+  // --- MOTOSİKLET ---
   if (isMotorcycle) {
-    // Devrilmiş/yatık motosiklet: tüm içerik uzun eksen (X) etrafında çevrilir
-    const motoShift = groundClearance + 45 * SCALE * heightScale + wheelR;
+    const wheelRm = 20 * S * hs;
+    const wheelWm = 8 * S;
+    const clr = 18 * S * hs;
+    const motoShift = clr + 45 * S * hs + wheelRm;
     return (
       <group position={[x, zOffset || 0, y]} rotation={[0, adjustedRad, 0]}>
-        <group position={[0, rollOver ? motoShift : 0, 0]} rotation={[rollOver ? Math.PI : 0, 0, 0]}>
-        {/* Wheels */}
-        <mesh position={[-w / 3, wheelR, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow>
-          <cylinderGeometry args={[wheelR, wheelR, wheelW, 16]} />
-          <meshStandardMaterial color="#111111" roughness={0.9} />
-        </mesh>
-        <mesh position={[w / 3, wheelR, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow>
-          <cylinderGeometry args={[wheelR, wheelR, wheelW, 16]} />
-          <meshStandardMaterial color="#111111" roughness={0.9} />
-        </mesh>
-        {/* Frame/Body */}
-        <mesh position={[0, groundClearance + 10 * SCALE * heightScale, 0]} castShadow>
-          <boxGeometry args={[w * 0.7, 15 * SCALE * heightScale, 12 * SCALE]} />
-          <meshStandardMaterial color={color} metalness={0.8} roughness={0.2} />
-        </mesh>
-        <mesh position={[-w / 10, groundClearance + 18 * SCALE * heightScale, 0]} castShadow>
-          <boxGeometry args={[w * 0.4, 4 * SCALE * heightScale, 10 * SCALE]} />
-          <meshStandardMaterial color="#222" />
-        </mesh>
-        <mesh position={[w / 4, groundClearance + 25 * SCALE * heightScale, 0]} rotation={[0, 0, -Math.PI / 6]} castShadow>
-          <cylinderGeometry args={[1.5 * SCALE, 1.5 * SCALE, 20 * SCALE * heightScale]} />
-          <meshStandardMaterial color="#7f8c8d" metalness={0.9} />
-        </mesh>
-        <mesh position={[w / 4, groundClearance + 35 * SCALE * heightScale, 0]} rotation={[Math.PI / 2, 0, 0]}>
-          <cylinderGeometry args={[1 * SCALE, 1 * SCALE, 30 * SCALE]} />
-          <meshStandardMaterial color="#222" />
-        </mesh>
+        <group position={[0, rollOver ? motoShift : 0, 0]} rotation={[rollOver ? Math.PI : 0, 0, 0]} scale={[sizeScale, sizeScale, sizeScale]}>
+          <mesh position={[-w / 3, wheelRm, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow material={VEH_TIRE_MAT}>
+            <cylinderGeometry args={[wheelRm, wheelRm, wheelWm, 20]} />
+          </mesh>
+          <mesh position={[w / 3, wheelRm, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow material={VEH_TIRE_MAT}>
+            <cylinderGeometry args={[wheelRm, wheelRm, wheelWm, 20]} />
+          </mesh>
+          <mesh position={[-w / 3, wheelRm, 0]} rotation={[Math.PI / 2, 0, 0]} material={VEH_RIM_MAT}>
+            <cylinderGeometry args={[wheelRm * 0.5, wheelRm * 0.5, wheelWm * 1.05, 16]} />
+          </mesh>
+          <mesh position={[w / 3, wheelRm, 0]} rotation={[Math.PI / 2, 0, 0]} material={VEH_RIM_MAT}>
+            <cylinderGeometry args={[wheelRm * 0.5, wheelRm * 0.5, wheelWm * 1.05, 16]} />
+          </mesh>
+          <mesh position={[0, clr + 10 * S * hs, 0]} castShadow material={paintMat}>
+            <boxGeometry args={[w * 0.7, 15 * S * hs, 12 * S]} />
+          </mesh>
+          <mesh position={[-w / 10, clr + 26 * S * hs, 0]} castShadow material={VEH_TRIM_MAT}>
+            <boxGeometry args={[w * 0.42, 18 * S * hs, 9 * S]} />
+          </mesh>
+          <mesh position={[w / 4, clr + 34 * S * hs, 0]} rotation={[0, 0, -Math.PI / 6]} castShadow material={VEH_TRIM_MAT}>
+            <cylinderGeometry args={[1.5 * S, 1.5 * S, 20 * S * hs]} />
+          </mesh>
+          <mesh position={[w / 4, clr + 42 * S * hs, 0]} rotation={[Math.PI / 2, 0, 0]} material={VEH_TRIM_MAT}>
+            <cylinderGeometry args={[1 * S, 1 * S, 26 * S]} />
+          </mesh>
+          <mesh position={[w / 3 + 2 * S, clr + 12 * S * hs, d * 0.25]} material={VEH_HEADLIGHT_MAT}>
+            <sphereGeometry args={[2.2 * S, 10, 10]} />
+          </mesh>
         </group>
       </group>
     );
   }
 
-  const headlightR = 3 * SCALE;
-  const taillightR = 2.5 * SCALE;
-
-  // Ensure car is proportionally sized vs the road canvas
-  const minLengthUnits = Math.max(100, (targetHeightCm || 150) * 0.7 * SCALE);
-  const sizeScale = w < minLengthUnits ? minLengthUnits / w : 1;
-
-  // Devrilmiş araç: gövde uzun eksen (X) etrafında tavana çevrilir;
-  // kaydırma, model yüksekliği × ölçek kadardır ki tekerlekler yukarı bakarken
-  // çatı yere değsin (kullanıcı: "devrilmiş araç" sembolleri normal park
-  // edilmiş araç gibi çiziliyordu).
-  const rollShift = (groundClearance + bodyH + cabinH + 4 * SCALE) * sizeScale;
-
   return (
     <group position={[x, zOffset || 0, y]} rotation={[0, adjustedRad, 0]}>
       <group position={[0, rollOver ? rollShift : 0, 0]} rotation={[rollOver ? Math.PI : 0, 0, 0]} scale={[sizeScale, sizeScale, sizeScale]}>
-      {/* Chassis */}
-      <mesh position={[0, groundClearance - 2 * SCALE, 0]}>
-        <boxGeometry args={[w * 0.98, 4 * SCALE, d * 0.98]} />
-        <meshStandardMaterial color="#1a1a1a" roughness={0.9} />
-      </mesh>
-
-      {/* Extruded Body Shell */}
-      <group position={[0, 0, -d / 2]}>
-        <mesh castShadow receiveShadow>
-          <extrudeGeometry args={[bodyProfileShape, extrudeSettings]} />
-          <meshPhysicalMaterial color={color} metalness={0.6} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
+        {/* Şasi alt bloğu */}
+        <mesh position={[0, c - 2 * S, 0]} material={VEH_TRIM_MAT}>
+          <boxGeometry args={[w * 0.96, 4 * S, d * 0.9]} />
         </mesh>
-      </group>
 
-      {/* Body Panel Gap Lines (Hood & Trunk) */}
-      {!isTruck && !isBus && !isMotorcycle && (
-        <group>
-          {/* Hood gap */}
-          <mesh position={[w * 0.19, groundClearance + bodyH * 1.01, 0]}>
-            <boxGeometry args={[0.3 * SCALE, 0.3 * SCALE, d * 0.85]} />
-            <meshBasicMaterial color="#111" />
-          </mesh>
-          {/* Trunk gap */}
-          <mesh position={[-w * 0.18, groundClearance + bodyH * 1.01, 0]}>
-            <boxGeometry args={[0.3 * SCALE, 0.3 * SCALE, d * 0.85]} />
-            <meshBasicMaterial color="#111" />
-          </mesh>
-        </group>
-      )}
-
-      {/* Wheel Arch Fenders & Side Details */}
-      {!isTruck && !isBus && !isMotorcycle && (
-        <>
-          {/* Front wheel arch (left side) */}
-          <group position={[w / 3.2, groundClearance + bodyH * 0.65, d / 2 - 0.5 * SCALE]}>
-            <mesh>
-              <boxGeometry args={[8 * SCALE, wheelR * 1.1, 0.8 * SCALE]} />
-              <meshPhysicalMaterial color={color} metalness={0.6} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
+        {/* --- OTOMOBİL / SUV --- */}
+        {isCar && (
+          <>
+            <mesh geometry={bodyGeo!} material={paintMat} position={[0, 0, -d / 2]} castShadow receiveShadow />
+            <mesh geometry={canopyGeo!} material={VEH_GLASS_MAT} position={[0, 0, -canD / 2]} castShadow />
+            {/* Boya rengi çatı plakası */}
+            <mesh position={[(axRoofR + axRoofF) / 2, roofY + 0.6 * S, 0]} material={paintMat} castShadow>
+              <boxGeometry args={[axRoofF - axRoofR + w * 0.03, 3.5 * S, d * 0.92]} />
             </mesh>
-          </group>
-          {/* Front wheel arch (right side) */}
-          <group position={[w / 3.2, groundClearance + bodyH * 0.65, -d / 2 + 0.5 * SCALE]}>
-            <mesh>
-              <boxGeometry args={[8 * SCALE, wheelR * 1.1, 0.8 * SCALE]} />
-              <meshPhysicalMaterial color={color} metalness={0.6} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
-            </mesh>
-          </group>
-          {/* Rear wheel arch (left side) */}
-          <group position={[-w / 3.2, groundClearance + bodyH * 0.65, d / 2 - 0.5 * SCALE]}>
-            <mesh>
-              <boxGeometry args={[8 * SCALE, wheelR * 1.1, 0.8 * SCALE]} />
-              <meshPhysicalMaterial color={color} metalness={0.6} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
-            </mesh>
-          </group>
-          {/* Rear wheel arch (right side) */}
-          <group position={[-w / 3.2, groundClearance + bodyH * 0.65, -d / 2 + 0.5 * SCALE]}>
-            <mesh>
-              <boxGeometry args={[8 * SCALE, wheelR * 1.1, 0.8 * SCALE]} />
-              <meshPhysicalMaterial color={color} metalness={0.6} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
-            </mesh>
-          </group>
-          {/* Side sill / rocker panel strip (left) */}
-          <mesh position={[0, groundClearance + 3 * SCALE, d / 2 - 0.3 * SCALE]}>
-            <boxGeometry args={[w * 0.7, 1.5 * SCALE, 0.6 * SCALE]} />
-            <meshStandardMaterial color="#1a1a1a" roughness={0.8} />
-          </mesh>
-          {/* Side sill / rocker panel strip (right) */}
-          <mesh position={[0, groundClearance + 3 * SCALE, -d / 2 + 0.3 * SCALE]}>
-            <boxGeometry args={[w * 0.7, 1.5 * SCALE, 0.6 * SCALE]} />
-            <meshStandardMaterial color="#1a1a1a" roughness={0.8} />
-          </mesh>
-          {/* Exhaust pipe (rear left) */}
-          <mesh position={[-w / 2 + 2 * SCALE, groundClearance + 3 * SCALE, d * 0.25]}>
-            <cylinderGeometry args={[1.5 * SCALE, 2 * SCALE, 3 * SCALE, 12]} />
-            <meshStandardMaterial color="#7f8c8d" metalness={0.9} roughness={0.2} />
-          </mesh>
-        </>
-      )}
-
-      {/* Sedan Cabin Frame & Windshields */}
-      {!isTruck && !isBus && !isMotorcycle && !isSUV && (
-        <group>
-          {/* Roof */}
-          <mesh position={[-w * 0.025, groundClearance + bodyH + cabinH - 1 * SCALE, 0]} castShadow>
-            <boxGeometry args={[w * 0.45, 2 * SCALE, d * 0.95]} />
-            <meshPhysicalMaterial color={color} metalness={0.6} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
-          </mesh>
-          {/* Front windshield — glass + top/bottom frames, A-pillars are the side edges */}
-          <group position={[w * 0.275, groundClearance + bodyH + cabinH * 0.5, 0]} rotation={[0, 0, Math.PI / 4.5]}>
-            {/* Top Frame */}
-            <mesh position={[0, cabinH * 0.65, 0]}>
-              <boxGeometry args={[w * 0.03, 1.5 * SCALE, d * 0.92]} />
-              <meshStandardMaterial color="#1a1a1a" roughness={0.6} />
-            </mesh>
-            {/* Bottom Frame */}
-            <mesh position={[0, -cabinH * 0.65, 0]}>
-              <boxGeometry args={[w * 0.03, 1.5 * SCALE, d * 0.92]} />
-              <meshStandardMaterial color="#1a1a1a" roughness={0.6} />
-            </mesh>
-            {/* Glass Pane */}
-            <mesh position={[0, 0, 0]}>
-              <boxGeometry args={[w * 0.02, cabinH * 1.28, d * 0.92]} />
-              <meshPhysicalMaterial
-                color="#1e3a4a"
-                roughness={0.05}
-                metalness={0.0}
-                transparent
-                opacity={0.85}
-                side={THREE.DoubleSide}
-                envMapIntensity={1.5}
-              />
-            </mesh>
-          </group>
-
-          {/* A-Pillars (Front Frame — left and right edges of windshield) */}
-          <mesh position={[w * 0.275, groundClearance + bodyH + cabinH * 0.5, d / 2 - 0.15 * SCALE]} rotation={[0, 0, Math.PI / 4.5]}>
-            <boxGeometry args={[w * 0.04, cabinH * 1.4, 1.5 * SCALE]} />
-            <meshPhysicalMaterial color={color} metalness={0.6} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
-          </mesh>
-          <mesh position={[w * 0.275, groundClearance + bodyH + cabinH * 0.5, -d / 2 + 0.15 * SCALE]} rotation={[0, 0, Math.PI / 4.5]}>
-            <boxGeometry args={[w * 0.04, cabinH * 1.4, 1.5 * SCALE]} />
-            <meshPhysicalMaterial color={color} metalness={0.6} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
-          </mesh>
-
-          {/* Rear windshield — glass + top/bottom frames, C-pillars are the side edges */}
-          <group position={[-w * 0.315, groundClearance + bodyH + cabinH * 0.5, 0]} rotation={[0, 0, -Math.PI / 4]}>
-            {/* Top Frame */}
-            <mesh position={[0, cabinH * 0.65, 0]}>
-              <boxGeometry args={[w * 0.03, 1.5 * SCALE, d * 0.92]} />
-              <meshStandardMaterial color="#1a1a1a" roughness={0.6} />
-            </mesh>
-            {/* Bottom Frame */}
-            <mesh position={[0, -cabinH * 0.65, 0]}>
-              <boxGeometry args={[w * 0.03, 1.5 * SCALE, d * 0.92]} />
-              <meshStandardMaterial color="#1a1a1a" roughness={0.6} />
-            </mesh>
-            {/* Glass Pane */}
-            <mesh position={[0, 0, 0]}>
-              <boxGeometry args={[w * 0.02, cabinH * 1.28, d * 0.92]} />
-              <meshPhysicalMaterial
-                color="#1e3a4a"
-                roughness={0.05}
-                metalness={0.0}
-                transparent
-                opacity={0.85}
-                side={THREE.DoubleSide}
-                envMapIntensity={1.5}
-              />
-            </mesh>
-          </group>
-
-          {/* C-Pillars (Rear Frame — left and right edges of rear windshield) */}
-          <mesh position={[-w * 0.315, groundClearance + bodyH + cabinH * 0.5, d / 2 - 0.15 * SCALE]} rotation={[0, 0, -Math.PI / 4]}>
-            <boxGeometry args={[w * 0.05, cabinH * 1.4, 1.5 * SCALE]} />
-            <meshPhysicalMaterial color={color} metalness={0.6} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
-          </mesh>
-          <mesh position={[-w * 0.315, groundClearance + bodyH + cabinH * 0.5, -d / 2 + 0.15 * SCALE]} rotation={[0, 0, -Math.PI / 4]}>
-            <boxGeometry args={[w * 0.05, cabinH * 1.4, 1.5 * SCALE]} />
-            <meshPhysicalMaterial color={color} metalness={0.6} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
-          </mesh>
-
-          {/* B-Pillars (Center vertical posts) */}
-          <mesh position={[-w * 0.025, groundClearance + bodyH + cabinH * 0.5, d / 2 - 0.15 * SCALE]}>
-            <boxGeometry args={[w * 0.03, cabinH, 1.5 * SCALE]} />
-            <meshStandardMaterial color="#1a1a1a" roughness={0.7} />
-          </mesh>
-          <mesh position={[-w * 0.025, groundClearance + bodyH + cabinH * 0.5, -d / 2 + 0.15 * SCALE]}>
-            <boxGeometry args={[w * 0.03, cabinH, 1.5 * SCALE]} />
-            <meshStandardMaterial color="#1a1a1a" roughness={0.7} />
-          </mesh>
-        </group>
-      )}
-
-      {/* SUV / Ambulance Cabin Frame & Windshields */}
-      {isSUV && !isTruck && !isBus && !isMotorcycle && (
-        <group>
-          {/* Roof */}
-          <mesh position={[-w * 0.075, groundClearance + bodyH + cabinH - 1 * SCALE, 0]} castShadow>
-            <boxGeometry args={[w * 0.8, 2 * SCALE, d * 0.95]} />
-            <meshPhysicalMaterial color={color} metalness={0.6} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
-          </mesh>
-          {/* Front windshield — glass + top/bottom frames */}
-          <group position={[w * 0.387, groundClearance + bodyH + cabinH * 0.5, 0]} rotation={[0, 0, Math.PI / 4.2]}>
-            <mesh position={[0, cabinH * 0.65, 0]}>
-              <boxGeometry args={[w * 0.03, 1.5 * SCALE, d * 0.92]} />
-              <meshStandardMaterial color="#1a1a1a" roughness={0.6} />
-            </mesh>
-            <mesh position={[0, -cabinH * 0.65, 0]}>
-              <boxGeometry args={[w * 0.03, 1.5 * SCALE, d * 0.92]} />
-              <meshStandardMaterial color="#1a1a1a" roughness={0.6} />
-            </mesh>
-            <mesh position={[0, 0, 0]}>
-              <boxGeometry args={[w * 0.02, cabinH * 1.28, d * 0.92]} />
-              <meshPhysicalMaterial color="#1e3a4a" roughness={0.05} metalness={0.0} transparent opacity={0.85} side={THREE.DoubleSide} envMapIntensity={1.5} />
-            </mesh>
-          </group>
-
-          {/* A-Pillars */}
-          <mesh position={[w * 0.387, groundClearance + bodyH + cabinH * 0.5, d / 2 - 0.15 * SCALE]} rotation={[0, 0, Math.PI / 4.2]}>
-            <boxGeometry args={[w * 0.04, cabinH * 1.4, 1.5 * SCALE]} />
-            <meshPhysicalMaterial color={color} metalness={0.6} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
-          </mesh>
-          <mesh position={[w * 0.387, groundClearance + bodyH + cabinH * 0.5, -d / 2 + 0.15 * SCALE]} rotation={[0, 0, Math.PI / 4.2]}>
-            <boxGeometry args={[w * 0.04, cabinH * 1.4, 1.5 * SCALE]} />
-            <meshPhysicalMaterial color={color} metalness={0.6} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
-          </mesh>
-
-          {/* Rear windshield — flat back glass */}
-          <group position={[-w * 0.485, groundClearance + bodyH + cabinH * 0.5, 0]}>
-            <mesh position={[0, cabinH * 0.475, 0]}>
-              <boxGeometry args={[w * 0.03, 1.5 * SCALE, d * 0.92]} />
-              <meshStandardMaterial color="#1a1a1a" roughness={0.6} />
-            </mesh>
-            <mesh position={[0, -cabinH * 0.475, 0]}>
-              <boxGeometry args={[w * 0.03, 1.5 * SCALE, d * 0.92]} />
-              <meshStandardMaterial color="#1a1a1a" roughness={0.6} />
-            </mesh>
-            <mesh position={[0, 0, 0]}>
-              <boxGeometry args={[w * 0.02, cabinH * 0.93, d * 0.92]} />
-              <meshPhysicalMaterial color="#1e3a4a" roughness={0.05} metalness={0.0} transparent opacity={0.85} side={THREE.DoubleSide} envMapIntensity={1.5} />
-            </mesh>
-          </group>
-
-          {/* D-Pillars (Rear Flat Pillars) */}
-          <mesh position={[-w * 0.485, groundClearance + bodyH + cabinH * 0.5, d / 2 - 0.15 * SCALE]}>
-            <boxGeometry args={[w * 0.04, cabinH * 0.95, 1.5 * SCALE]} />
-            <meshPhysicalMaterial color={color} metalness={0.6} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
-          </mesh>
-          <mesh position={[-w * 0.485, groundClearance + bodyH + cabinH * 0.5, -d / 2 + 0.15 * SCALE]}>
-            <boxGeometry args={[w * 0.04, cabinH * 0.95, 1.5 * SCALE]} />
-            <meshPhysicalMaterial color={color} metalness={0.6} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
-          </mesh>
-
-          {/* B-Pillars */}
-          <mesh position={[w * 0.05, groundClearance + bodyH + cabinH * 0.5, d / 2 - 0.15 * SCALE]}>
-            <boxGeometry args={[w * 0.03, cabinH, 1.5 * SCALE]} />
-            <meshStandardMaterial color="#1a1a1a" roughness={0.7} />
-          </mesh>
-          <mesh position={[w * 0.05, groundClearance + bodyH + cabinH * 0.5, -d / 2 + 0.15 * SCALE]}>
-            <boxGeometry args={[w * 0.03, cabinH, 1.5 * SCALE]} />
-            <meshStandardMaterial color="#1a1a1a" roughness={0.7} />
-          </mesh>
-
-          {/* C-Pillars (Rear Quarter Pillars) */}
-          <mesh position={[-w * 0.22, groundClearance + bodyH + cabinH * 0.5, d / 2 - 0.15 * SCALE]}>
-            <boxGeometry args={[w * 0.03, cabinH, 1.5 * SCALE]} />
-            <meshStandardMaterial color="#1a1a1a" roughness={0.7} />
-          </mesh>
-          <mesh position={[-w * 0.22, groundClearance + bodyH + cabinH * 0.5, -d / 2 + 0.15 * SCALE]}>
-            <boxGeometry args={[w * 0.03, cabinH, 1.5 * SCALE]} />
-            <meshStandardMaterial color="#1a1a1a" roughness={0.7} />
-          </mesh>
-        </group>
-      )}
-
-      {/* Truck Cabin Frame & Windshields */}
-      {isTruck && (
-        <group>
-          {/* Cab Roof */}
-          <mesh position={[w * 0.235, groundClearance + bodyH + cabinH - 1 * SCALE, 0]} castShadow>
-            <boxGeometry args={[w * 0.23, 2 * SCALE, d * 0.95]} />
-            <meshPhysicalMaterial color={color} metalness={0.7} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
-          </mesh>
-          {/* Front windshield — glass + top/bottom frames */}
-          <group position={[w * 0.39, groundClearance + bodyH + cabinH * 0.5, 0]} rotation={[0, 0, Math.PI / 5]}>
-            <mesh position={[0, cabinH * 0.6, 0]}>
-              <boxGeometry args={[w * 0.03, 1.5 * SCALE, d * 0.92]} />
-              <meshStandardMaterial color="#1a1a1a" roughness={0.6} />
-            </mesh>
-            <mesh position={[0, -cabinH * 0.6, 0]}>
-              <boxGeometry args={[w * 0.03, 1.5 * SCALE, d * 0.92]} />
-              <meshStandardMaterial color="#1a1a1a" roughness={0.6} />
-            </mesh>
-            <mesh position={[0, 0, 0]}>
-              <boxGeometry args={[w * 0.02, cabinH * 1.18, d * 0.92]} />
-              <meshPhysicalMaterial color="#1e3a4a" roughness={0.05} metalness={0.0} transparent opacity={0.85} side={THREE.DoubleSide} envMapIntensity={1.5} />
-            </mesh>
-          </group>
-          {/* Rear Cab Wall & Window */}
-          <mesh position={[w * 0.11, groundClearance + bodyH + cabinH * 0.5, 0]}>
-            <boxGeometry args={[w * 0.02, cabinH, d * 0.9]} />
-            <meshPhysicalMaterial color={color} metalness={0.7} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
-          </mesh>
-          <mesh position={[w * 0.11, groundClearance + bodyH + cabinH * 0.6, 0]}>
-            <boxGeometry args={[w * 0.025, cabinH * 0.5, d * 0.5]} />
-            <meshPhysicalMaterial color="#1e3a4a" roughness={0.05} metalness={0.0} transparent opacity={0.85} side={THREE.DoubleSide} envMapIntensity={1.5} />
-          </mesh>
-          {/* A-Pillars (Front Frame) */}
-          <mesh position={[w * 0.39, groundClearance + bodyH + cabinH * 0.5, d / 2 - 0.15 * SCALE]} rotation={[0, 0, Math.PI / 5]}>
-            <boxGeometry args={[w * 0.04, cabinH * 1.3, 1.5 * SCALE]} />
-            <meshPhysicalMaterial color={color} metalness={0.7} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
-          </mesh>
-          <mesh position={[w * 0.39, groundClearance + bodyH + cabinH * 0.5, -d / 2 + 0.15 * SCALE]} rotation={[0, 0, Math.PI / 5]}>
-            <boxGeometry args={[w * 0.04, cabinH * 1.3, 1.5 * SCALE]} />
-            <meshPhysicalMaterial color={color} metalness={0.7} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
-          </mesh>
-        </group>
-      )}
-
-      {/* Bus Cabin Structure */}
-      {isBus && (
-        <group>
-          {/* Bus Roof */}
-          <mesh position={[0, groundClearance + bodyH - 1 * SCALE, 0]} castShadow>
-            <boxGeometry args={[w * 0.98, 2 * SCALE, d * 0.95]} />
-            <meshPhysicalMaterial color={color} metalness={0.6} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
-          </mesh>
-          {/* Bus Rear Glass & Frame */}
-          <mesh position={[-w / 2 + 1 * SCALE, groundClearance + bodyH * 0.775, 0]}>
-            <boxGeometry args={[0.2 * SCALE, bodyH * 0.45, d * 0.9]} />
-            <meshStandardMaterial 
-              color="#00d2d3" 
-              roughness={0.01} 
-              metalness={0.95} 
-              transparent 
-              opacity={0.65} 
-              side={THREE.DoubleSide} 
-            />
-          </mesh>
-          {/* Bus Corner Pillars */}
-          {/* Rear Left Corner Pillar */}
-          <mesh position={[-w / 2 + 1 * SCALE, groundClearance + bodyH * 0.775, d / 2 - 0.2 * SCALE]}>
-            <boxGeometry args={[w * 0.03, bodyH * 0.45, 0.4 * SCALE]} />
-            <meshPhysicalMaterial color={color} metalness={0.6} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
-          </mesh>
-          {/* Rear Right Corner Pillar */}
-          <mesh position={[-w / 2 + 1 * SCALE, groundClearance + bodyH * 0.775, -d / 2 + 0.2 * SCALE]}>
-            <boxGeometry args={[w * 0.03, bodyH * 0.45, 0.4 * SCALE]} />
-            <meshPhysicalMaterial color={color} metalness={0.6} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
-          </mesh>
-          {/* Front Left Corner Pillar */}
-          <mesh position={[w / 2 - 1 * SCALE, groundClearance + bodyH * 0.775, d / 2 - 0.2 * SCALE]}>
-            <boxGeometry args={[w * 0.03, bodyH * 0.45, 0.4 * SCALE]} />
-            <meshPhysicalMaterial color={color} metalness={0.6} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
-          </mesh>
-          {/* Front Right Corner Pillar */}
-          <mesh position={[w / 2 - 1 * SCALE, groundClearance + bodyH * 0.775, -d / 2 + 0.2 * SCALE]}>
-            <boxGeometry args={[w * 0.03, bodyH * 0.45, 0.4 * SCALE]} />
-            <meshPhysicalMaterial color={color} metalness={0.6} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
-          </mesh>
-        </group>
-      )}
-
-      {/* Interior seats and steering wheel */}
-      {!isBus && !isTruck && (
-        <group>
-          {/* Dashboard */}
-          <mesh position={[w * 0.22, groundClearance + bodyH * 0.52, 0]} castShadow>
-            <boxGeometry args={[w * 0.05, bodyH * 0.3, d * 0.82]} />
-            <meshStandardMaterial color="#1e272e" roughness={0.7} />
-          </mesh>
-
-          {/* Front Left Seat */}
-          {/* Cushion */}
-          <mesh position={[w * 0.02, groundClearance + 4 * SCALE, d * 0.22]} castShadow>
-            <boxGeometry args={[w * 0.12, 6 * SCALE, d * 0.28]} />
-            <meshStandardMaterial color="#2d3436" roughness={0.8} />
-          </mesh>
-          {/* Backrest */}
-          <mesh position={[-w * 0.035, groundClearance + 12 * SCALE, d * 0.22]} rotation={[0, 0, -Math.PI / 18]} castShadow>
-            <boxGeometry args={[w * 0.03, 16 * SCALE, d * 0.26]} />
-            <meshStandardMaterial color="#2d3436" roughness={0.8} />
-          </mesh>
-          {/* Headrest */}
-          <mesh position={[-w * 0.045, groundClearance + 21 * SCALE, d * 0.22]} castShadow>
-            <boxGeometry args={[w * 0.025, 4 * SCALE, d * 0.14]} />
-            <meshStandardMaterial color="#1e272e" roughness={0.9} />
-          </mesh>
-
-          {/* Front Right Seat */}
-          {/* Cushion */}
-          <mesh position={[w * 0.02, groundClearance + 4 * SCALE, -d * 0.22]} castShadow>
-            <boxGeometry args={[w * 0.12, 6 * SCALE, d * 0.28]} />
-            <meshStandardMaterial color="#2d3436" roughness={0.8} />
-          </mesh>
-          {/* Backrest */}
-          <mesh position={[-w * 0.035, groundClearance + 12 * SCALE, -d * 0.22]} rotation={[0, 0, -Math.PI / 18]} castShadow>
-            <boxGeometry args={[w * 0.03, 16 * SCALE, d * 0.26]} />
-            <meshStandardMaterial color="#2d3436" roughness={0.8} />
-          </mesh>
-          {/* Headrest */}
-          <mesh position={[-w * 0.045, groundClearance + 21 * SCALE, -d * 0.22]} castShadow>
-            <boxGeometry args={[w * 0.025, 4 * SCALE, d * 0.14]} />
-            <meshStandardMaterial color="#1e272e" roughness={0.9} />
-          </mesh>
-
-          {/* Rear Bench Seat */}
-          {/* Cushion */}
-          <mesh position={[-w * 0.16, groundClearance + 4 * SCALE, 0]} castShadow>
-            <boxGeometry args={[w * 0.12, 6 * SCALE, d * 0.82]} />
-            <meshStandardMaterial color="#2d3436" roughness={0.8} />
-          </mesh>
-          {/* Backrest */}
-          <mesh position={[-w * 0.21, groundClearance + 13 * SCALE, 0]} rotation={[0, 0, -Math.PI / 12]} castShadow>
-            <boxGeometry args={[w * 0.03, 18 * SCALE, d * 0.8]} />
-            <meshStandardMaterial color="#2d3436" roughness={0.8} />
-          </mesh>
-
-          {/* Steering Wheel & Column */}
-          <group position={[w * 0.12, groundClearance + bodyH * 0.62, d * 0.22]}>
-            {/* Column */}
-            <mesh position={[w * 0.05, -bodyH * 0.07, 0]} rotation={[0, 0, Math.PI / 4.5]}>
-              <cylinderGeometry args={[1 * SCALE, 1 * SCALE, 10 * SCALE, 8]} />
-              <meshStandardMaterial color="#2d3436" roughness={0.6} />
-            </mesh>
-            {/* Torus Wheel */}
-            <mesh rotation={[0, 0, Math.PI / 4]}>
-              <torusGeometry args={[5 * SCALE, 1.2 * SCALE, 8, 16]} />
-              <meshStandardMaterial color="#111" roughness={0.7} />
-            </mesh>
-          </group>
-        </group>
-      )}
-
-      {/* Truck Cabin Interior */}
-      {isTruck && (
-        <group>
-          {/* Dashboard */}
-          <mesh position={[w * 0.38, groundClearance + bodyH * 0.65, 0]} castShadow>
-            <boxGeometry args={[w * 0.04, bodyH * 0.25, d * 0.82]} />
-            <meshStandardMaterial color="#1e272e" roughness={0.7} />
-          </mesh>
-
-          {/* Front Left Seat */}
-          {/* Cushion */}
-          <mesh position={[w * 0.26, groundClearance + 4 * SCALE, d * 0.2]} castShadow>
-            <boxGeometry args={[w * 0.09, 6 * SCALE, d * 0.28]} />
-            <meshStandardMaterial color="#2d3436" roughness={0.8} />
-          </mesh>
-          {/* Backrest */}
-          <mesh position={[w * 0.21, groundClearance + 12 * SCALE, d * 0.2]} rotation={[0, 0, -Math.PI / 18]} castShadow>
-            <boxGeometry args={[w * 0.025, 16 * SCALE, d * 0.26]} />
-            <meshStandardMaterial color="#2d3436" roughness={0.8} />
-          </mesh>
-          {/* Headrest */}
-          <mesh position={[w * 0.20, groundClearance + 21 * SCALE, d * 0.2]} castShadow>
-            <boxGeometry args={[w * 0.02, 4 * SCALE, d * 0.14]} />
-            <meshStandardMaterial color="#1e272e" roughness={0.9} />
-          </mesh>
-
-          {/* Front Right Seat */}
-          {/* Cushion */}
-          <mesh position={[w * 0.26, groundClearance + 4 * SCALE, -d * 0.2]} castShadow>
-            <boxGeometry args={[w * 0.09, 6 * SCALE, d * 0.28]} />
-            <meshStandardMaterial color="#2d3436" roughness={0.8} />
-          </mesh>
-          {/* Backrest */}
-          <mesh position={[w * 0.21, groundClearance + 12 * SCALE, -d * 0.2]} rotation={[0, 0, -Math.PI / 18]} castShadow>
-            <boxGeometry args={[w * 0.025, 16 * SCALE, d * 0.26]} />
-            <meshStandardMaterial color="#2d3436" roughness={0.8} />
-          </mesh>
-          {/* Headrest */}
-          <mesh position={[w * 0.20, groundClearance + 21 * SCALE, -d * 0.2]} castShadow>
-            <boxGeometry args={[w * 0.02, 4 * SCALE, d * 0.14]} />
-            <meshStandardMaterial color="#1e272e" roughness={0.9} />
-          </mesh>
-
-          {/* Steering Wheel & Column */}
-          <group position={[w * 0.36, groundClearance + bodyH * 0.72, d * 0.2]}>
-            {/* Column */}
-            <mesh position={[w * 0.015, -bodyH * 0.07, 0]} rotation={[0, 0, Math.PI / 4.5]}>
-              <cylinderGeometry args={[1 * SCALE, 1 * SCALE, 6 * SCALE, 8]} />
-              <meshStandardMaterial color="#2d3436" roughness={0.6} />
-            </mesh>
-            {/* Torus Wheel */}
-            <mesh rotation={[0, 0, Math.PI / 4.5]}>
-              <torusGeometry args={[5 * SCALE, 1.2 * SCALE, 8, 16]} />
-              <meshStandardMaterial color="#111" roughness={0.7} />
-            </mesh>
-          </group>
-        </group>
-      )}
-
-      {/* Interactive Sedan / SUV Side Doors */}
-      {!isBus && !isTruck && (
-        <>
-          {/* Front Left Door */}
-          <group 
-            ref={leftDoorRef} 
-            position={[w * 0.2, 0, d / 2]} 
-            onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
-            onPointerOut={() => { document.body.style.cursor = 'auto'; }}
-          >
-            {/* Door Outer Panel (Car Color) */}
-            <mesh position={[-w * 0.11, groundClearance + bodyH * 0.275, 0.5 * SCALE]} castShadow onClick={toggleLeft}>
-              <boxGeometry args={[w * 0.22, bodyH * 0.55, 0.6 * SCALE]} />
-              <meshPhysicalMaterial color={color} metalness={0.7} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
-            </mesh>
-            
-            {/* Door Inner Lining Panel */}
-            <mesh position={[-w * 0.11, groundClearance + bodyH * 0.275, -0.2 * SCALE]} onClick={toggleLeft}>
-              <boxGeometry args={[w * 0.21, bodyH * 0.5, 0.4 * SCALE]} />
-              <meshStandardMaterial color="#2d3436" roughness={0.8} />
-            </mesh>
-
-            {/* Red Warning Reflector Light */}
-            {leftDoorOpen && (
-              <mesh position={[-w * 0.215, groundClearance + bodyH * 0.25, -0.2 * SCALE]} onClick={toggleLeft}>
-                <boxGeometry args={[w * 0.015, 3 * SCALE, 0.4 * SCALE]} />
-                <meshBasicMaterial color="#ff2222" />
-              </mesh>
-            )}
-
-            {/* Door Window Frame & Glass — at outer face of door */}
-            <group position={[-w * 0.11, groundClearance + bodyH * 0.55 + cabinH * 0.35, 0.55 * SCALE]}>
-              <WindowFrameAndGlass 
-                width={w * 0.20} 
-                height={cabinH * 0.68} 
-                thick={4 * SCALE} 
-                onClick={toggleLeft} 
-              />
-            </group>
-
-            {/* Door Handle */}
-            <mesh position={[-w * 0.19, groundClearance + bodyH * 0.4, 0.8 * SCALE]} onClick={toggleLeft}>
-              <boxGeometry args={[w * 0.03, 2 * SCALE, 0.5 * SCALE]} />
-              <meshStandardMaterial color="#dcdde1" metalness={0.9} roughness={0.1} />
-            </mesh>
-            {/* Side Mirror */}
-            <mesh position={[-w * 0.02, groundClearance + bodyH * 0.57, 1.2 * SCALE]} rotation={[0, 0.2, 0]} onClick={toggleLeft}>
-              <boxGeometry args={[w * 0.05, 3 * SCALE, 2 * SCALE]} />
-              <meshPhysicalMaterial color={color} metalness={0.7} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
-            </mesh>
-          </group>
-
-          {/* Front Left Door Sill Neon Warning Light */}
-          <mesh position={[w * 0.09, groundClearance + 0.6 * SCALE, d / 2 - 0.2 * SCALE]}>
-            <boxGeometry args={[w * 0.22, 1.2 * SCALE, 0.4 * SCALE]} />
-            <meshBasicMaterial color={leftDoorOpen ? "#ff3838" : "#2ed573"} />
-          </mesh>
-
-          {/* Rear Left Door */}
-          <group 
-            ref={leftRearDoorRef} 
-            position={[-w * 0.02, 0, d / 2]} 
-            onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
-            onPointerOut={() => { document.body.style.cursor = 'auto'; }}
-          >
-            {/* Door Outer Panel (Car Color) */}
-            <mesh position={[-w * 0.115, groundClearance + bodyH * 0.275, 0.5 * SCALE]} castShadow onClick={toggleLeftRear}>
-              <boxGeometry args={[w * 0.23, bodyH * 0.55, 0.6 * SCALE]} />
-              <meshPhysicalMaterial color={color} metalness={0.7} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
-            </mesh>
-            
-            {/* Door Inner Lining Panel */}
-            <mesh position={[-w * 0.115, groundClearance + bodyH * 0.275, -0.2 * SCALE]} onClick={toggleLeftRear}>
-              <boxGeometry args={[w * 0.22, bodyH * 0.5, 0.4 * SCALE]} />
-              <meshStandardMaterial color="#2d3436" roughness={0.8} />
-            </mesh>
-
-            {/* Red Warning Reflector Light */}
-            {leftRearDoorOpen && (
-              <mesh position={[-w * 0.225, groundClearance + bodyH * 0.25, -0.2 * SCALE]} onClick={toggleLeftRear}>
-                <boxGeometry args={[w * 0.015, 3 * SCALE, 0.4 * SCALE]} />
-                <meshBasicMaterial color="#ff2222" />
-              </mesh>
-            )}
-
-            {/* Door Window Frame & Glass — at outer face of door */}
-            <group position={[-w * 0.115, groundClearance + bodyH * 0.55 + cabinH * 0.35, 0.55 * SCALE]}>
-              <WindowFrameAndGlass 
-                width={w * 0.21} 
-                height={cabinH * 0.68} 
-                thick={4 * SCALE} 
-                onClick={toggleLeftRear} 
-              />
-            </group>
-
-            {/* Door Handle */}
-            <mesh position={[-w * 0.2, groundClearance + bodyH * 0.4, 0.8 * SCALE]} onClick={toggleLeftRear}>
-              <boxGeometry args={[w * 0.03, 2 * SCALE, 0.5 * SCALE]} />
-              <meshStandardMaterial color="#dcdde1" metalness={0.9} roughness={0.1} />
-            </mesh>
-          </group>
-
-          {/* Rear Left Door Sill Neon Warning Light */}
-          <mesh position={[-w * 0.135, groundClearance + 0.6 * SCALE, d / 2 - 0.2 * SCALE]}>
-            <boxGeometry args={[w * 0.23, 1.2 * SCALE, 0.4 * SCALE]} />
-            <meshBasicMaterial color={leftRearDoorOpen ? "#ff3838" : "#2ed573"} />
-          </mesh>
-
-          {/* Front Right Door */}
-          <group 
-            ref={rightDoorRef} 
-            position={[w * 0.2, 0, -d / 2]} 
-            onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
-            onPointerOut={() => { document.body.style.cursor = 'auto'; }}
-          >
-            {/* Door Outer Panel (Car Color) */}
-            <mesh position={[-w * 0.11, groundClearance + bodyH * 0.275, -0.5 * SCALE]} castShadow onClick={toggleRight}>
-              <boxGeometry args={[w * 0.22, bodyH * 0.55, 0.6 * SCALE]} />
-              <meshPhysicalMaterial color={color} metalness={0.7} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
-            </mesh>
-
-            {/* Door Inner Lining Panel */}
-            <mesh position={[-w * 0.11, groundClearance + bodyH * 0.275, 0.2 * SCALE]} onClick={toggleRight}>
-              <boxGeometry args={[w * 0.21, bodyH * 0.5, 0.4 * SCALE]} />
-              <meshStandardMaterial color="#2d3436" roughness={0.8} />
-            </mesh>
-
-            {/* Red Warning Reflector Light */}
-            {rightDoorOpen && (
-              <mesh position={[-w * 0.215, groundClearance + bodyH * 0.25, 0.2 * SCALE]} onClick={toggleRight}>
-                <boxGeometry args={[w * 0.015, 3 * SCALE, 0.4 * SCALE]} />
-                <meshBasicMaterial color="#ff2222" />
-              </mesh>
-            )}
-
-            {/* Door Window Frame & Glass — at outer face of door */}
-            <group position={[-w * 0.11, groundClearance + bodyH * 0.55 + cabinH * 0.35, -0.55 * SCALE]}>
-              <WindowFrameAndGlass 
-                width={w * 0.20} 
-                height={cabinH * 0.68} 
-                thick={4 * SCALE} 
-                onClick={toggleRight} 
-              />
-            </group>
-
-            {/* Door Handle */}
-            <mesh position={[-w * 0.19, groundClearance + bodyH * 0.4, -0.8 * SCALE]} onClick={toggleRight}>
-              <boxGeometry args={[w * 0.03, 2 * SCALE, 0.5 * SCALE]} />
-              <meshStandardMaterial color="#dcdde1" metalness={0.9} roughness={0.1} />
-            </mesh>
-            {/* Side Mirror */}
-            <mesh position={[-w * 0.02, groundClearance + bodyH * 0.57, -1.2 * SCALE]} rotation={[0, -0.2, 0]} onClick={toggleRight}>
-              <boxGeometry args={[w * 0.05, 3 * SCALE, 2 * SCALE]} />
-              <meshPhysicalMaterial color={color} metalness={0.7} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
-            </mesh>
-          </group>
-
-          {/* Front Right Door Sill Neon Warning Light */}
-          <mesh position={[w * 0.09, groundClearance + 0.6 * SCALE, -d / 2 + 0.2 * SCALE]}>
-            <boxGeometry args={[w * 0.22, 1.2 * SCALE, 0.4 * SCALE]} />
-            <meshBasicMaterial color={rightDoorOpen ? "#ff3838" : "#2ed573"} />
-          </mesh>
-
-          {/* Rear Right Door */}
-          <group 
-            ref={rightRearDoorRef} 
-            position={[-w * 0.02, 0, -d / 2]} 
-            onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
-            onPointerOut={() => { document.body.style.cursor = 'auto'; }}
-          >
-            {/* Door Outer Panel (Car Color) */}
-            <mesh position={[-w * 0.115, groundClearance + bodyH * 0.275, -0.5 * SCALE]} castShadow onClick={toggleRightRear}>
-              <boxGeometry args={[w * 0.23, bodyH * 0.55, 0.6 * SCALE]} />
-              <meshPhysicalMaterial color={color} metalness={0.7} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
-            </mesh>
-
-            {/* Door Inner Lining Panel */}
-            <mesh position={[-w * 0.115, groundClearance + bodyH * 0.275, 0.2 * SCALE]} onClick={toggleRightRear}>
-              <boxGeometry args={[w * 0.22, bodyH * 0.5, 0.4 * SCALE]} />
-              <meshStandardMaterial color="#2d3436" roughness={0.8} />
-            </mesh>
-
-            {/* Red Warning Reflector Light */}
-            {rightRearDoorOpen && (
-              <mesh position={[-w * 0.225, groundClearance + bodyH * 0.25, 0.2 * SCALE]} onClick={toggleRightRear}>
-                <boxGeometry args={[w * 0.015, 3 * SCALE, 0.4 * SCALE]} />
-                <meshBasicMaterial color="#ff2222" />
-              </mesh>
-            )}
-
-            {/* Door Window Frame & Glass — at outer face of door */}
-            <group position={[-w * 0.115, groundClearance + bodyH * 0.55 + cabinH * 0.35, -0.55 * SCALE]}>
-              <WindowFrameAndGlass 
-                width={w * 0.21} 
-                height={cabinH * 0.68} 
-                thick={4 * SCALE} 
-                onClick={toggleRightRear} 
-              />
-            </group>
-
-            {/* Door Handle */}
-            <mesh position={[-w * 0.2, groundClearance + bodyH * 0.4, -0.8 * SCALE]} onClick={toggleRightRear}>
-              <boxGeometry args={[w * 0.03, 2 * SCALE, 0.5 * SCALE]} />
-              <meshStandardMaterial color="#dcdde1" metalness={0.9} roughness={0.1} />
-            </mesh>
-          </group>
-
-          {/* Rear Right Door Sill Neon Warning Light */}
-          <mesh position={[-w * 0.135, groundClearance + 0.6 * SCALE, -d / 2 + 0.2 * SCALE]}>
-            <boxGeometry args={[w * 0.23, 1.2 * SCALE, 0.4 * SCALE]} />
-            <meshBasicMaterial color={rightRearDoorOpen ? "#ff3838" : "#2ed573"} />
-          </mesh>
-        </>
-      )}
-
-      {/* Interactive Truck Cabin Doors */}
-      {isTruck && (
-        <>
-          {/* Left Door */}
-          <group 
-            ref={truckDoorLeftRef} 
-            position={[w * 0.35, 0, d / 2]} 
-            onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
-            onPointerOut={() => { document.body.style.cursor = 'auto'; }}
-          >
-            {/* Lower Panel */}
-            <mesh position={[-w * 0.1, groundClearance + bodyH * 0.35, 0.5 * SCALE]} castShadow onClick={toggleTruck}>
-              <boxGeometry args={[w * 0.2, bodyH * 0.7, 0.6 * SCALE]} />
-              <meshPhysicalMaterial color={color} metalness={0.7} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
-            </mesh>
-            {/* Inner Lining Panel */}
-            <mesh position={[-w * 0.1, groundClearance + bodyH * 0.35, -0.2 * SCALE]} onClick={toggleTruck}>
-              <boxGeometry args={[w * 0.18, bodyH * 0.65, 0.4 * SCALE]} />
-              <meshStandardMaterial color="#2d3436" roughness={0.8} />
-            </mesh>
-            {/* Red Warning Reflector */}
-            {truckDoorOpen && (
-              <mesh position={[-w * 0.19, groundClearance + bodyH * 0.35, -0.2 * SCALE]} onClick={toggleTruck}>
-                <boxGeometry args={[w * 0.015, 3 * SCALE, 0.4 * SCALE]} />
-                <meshBasicMaterial color="#ff2222" />
-              </mesh>
-            )}
-            {/* Window Frame & Glass */}
-            <group position={[-w * 0.1, groundClearance + bodyH + cabinH * 0.35, 0.1 * SCALE]}>
-              <WindowFrameAndGlass 
-                width={w * 0.2} 
-                height={cabinH * 0.7} 
-                thick={0.6 * SCALE} 
-                onClick={toggleTruck} 
-              />
-            </group>
-            {/* Side Mirror */}
-            <group position={[0, groundClearance + bodyH * 0.7, 1.5 * SCALE]}>
-              <mesh onClick={toggleTruck}>
-                <boxGeometry args={[2 * SCALE, 10 * SCALE, 1 * SCALE]} />
-                <meshStandardMaterial color="#111" roughness={0.8} />
-              </mesh>
-              <mesh position={[-0.1, 0, -0.4 * SCALE]} onClick={toggleTruck}>
-                <boxGeometry args={[1.8 * SCALE, 9.6 * SCALE, 0.1]} />
-                <meshStandardMaterial color="#dcdde1" metalness={0.9} roughness={0.1} />
-              </mesh>
-            </group>
-          </group>
-
-          {/* Left Truck Sill Neon Plate */}
-          <mesh position={[w * 0.35 - w * 0.1, groundClearance + 0.6 * SCALE, d / 2 - 0.2 * SCALE]}>
-            <boxGeometry args={[w * 0.2, 1.2 * SCALE, 0.4 * SCALE]} />
-            <meshBasicMaterial color={truckDoorOpen ? "#ff3838" : "#2ed573"} />
-          </mesh>
-
-          {/* Right Door */}
-          <group 
-            ref={truckDoorRightRef} 
-            position={[w * 0.35, 0, -d / 2]} 
-            onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
-            onPointerOut={() => { document.body.style.cursor = 'auto'; }}
-          >
-            {/* Lower Panel */}
-            <mesh position={[-w * 0.1, groundClearance + bodyH * 0.35, -0.5 * SCALE]} castShadow onClick={toggleTruck}>
-              <boxGeometry args={[w * 0.2, bodyH * 0.7, 0.6 * SCALE]} />
-              <meshPhysicalMaterial color={color} metalness={0.7} roughness={0.15} clearcoat={0.3} clearcoatRoughness={0.25} />
-            </mesh>
-            {/* Inner Lining Panel */}
-            <mesh position={[-w * 0.1, groundClearance + bodyH * 0.35, 0.2 * SCALE]} onClick={toggleTruck}>
-              <boxGeometry args={[w * 0.18, bodyH * 0.65, 0.4 * SCALE]} />
-              <meshStandardMaterial color="#2d3436" roughness={0.8} />
-            </mesh>
-            {/* Red Warning Reflector */}
-            {truckDoorOpen && (
-              <mesh position={[-w * 0.19, groundClearance + bodyH * 0.35, 0.2 * SCALE]} onClick={toggleTruck}>
-                <boxGeometry args={[w * 0.015, 3 * SCALE, 0.4 * SCALE]} />
-                <meshBasicMaterial color="#ff2222" />
-              </mesh>
-            )}
-            {/* Window Frame & Glass */}
-            <group position={[-w * 0.1, groundClearance + bodyH + cabinH * 0.35, -0.1 * SCALE]}>
-              <WindowFrameAndGlass 
-                width={w * 0.2} 
-                height={cabinH * 0.7} 
-                thick={0.6 * SCALE} 
-                onClick={toggleTruck} 
-              />
-            </group>
-            {/* Side Mirror */}
-            <group position={[0, groundClearance + bodyH * 0.7, -1.5 * SCALE]}>
-              <mesh onClick={toggleTruck}>
-                <boxGeometry args={[2 * SCALE, 10 * SCALE, 1 * SCALE]} />
-                <meshStandardMaterial color="#111" roughness={0.8} />
-              </mesh>
-              <mesh position={[-0.1, 0, 0.4 * SCALE]} onClick={toggleTruck}>
-                <boxGeometry args={[1.8 * SCALE, 9.6 * SCALE, 0.1]} />
-                <meshStandardMaterial color="#dcdde1" metalness={0.9} roughness={0.1} />
-              </mesh>
-            </group>
-          </group>
-
-          {/* Right Truck Sill Neon Plate */}
-          <mesh position={[w * 0.35 - w * 0.1, groundClearance + 0.6 * SCALE, -d / 2 + 0.2 * SCALE]}>
-            <boxGeometry args={[w * 0.2, 1.2 * SCALE, 0.4 * SCALE]} />
-            <meshBasicMaterial color={truckDoorOpen ? "#ff3838" : "#2ed573"} />
-          </mesh>
-        </>
-      )}
-
-      {/* Interactive Bus Entrance Door */}
-      {isBus && (
-        <>
-          <group 
-            ref={busDoorRef} 
-            position={[w * 0.38, 0, -d / 2]} 
-            onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
-            onPointerOut={() => { document.body.style.cursor = 'auto'; }}
-          >
-            {/* Entrance Door Panel */}
-            <mesh position={[-w * 0.05, groundClearance + bodyH * 0.45, -0.2 * SCALE]} castShadow onClick={toggleBus}>
-              <boxGeometry args={[w * 0.1, bodyH * 0.85, 0.6 * SCALE]} />
-              <meshStandardMaterial color="#2d3436" roughness={0.5} />
-            </mesh>
-            {/* Glass panel inside entrance door */}
-            <group position={[-w * 0.05, groundClearance + bodyH * 0.65, -0.2 * SCALE]}>
-              <WindowFrameAndGlass 
-                width={w * 0.08} 
-                height={bodyH * 0.4} 
-                thick={0.7 * SCALE} 
-                onClick={toggleBus} 
-              />
-            </group>
-          </group>
-
-          {/* Bus Door Sill Neon Light */}
-          <mesh position={[w * 0.38 - w * 0.05, groundClearance + 0.3 * SCALE, -d / 2 + 0.2 * SCALE]}>
-            <boxGeometry args={[w * 0.1, 0.6 * SCALE, 0.4 * SCALE]} />
-            <meshBasicMaterial color={busDoorOpen ? "#ff3838" : "#2ed573"} />
-          </mesh>
-
-          {/* Bus Side Windows - Beautiful hollow frames with tinted refractive glass! */}
-          {[-w/3.5, -w/6, 0, w/6, w/3.5].map((wx, idx) => (
-            <group key={idx}>
-              <group position={[wx, groundClearance + bodyH * 0.6, d / 2 - 0.15 * SCALE]}>
-                <WindowFrameAndGlass 
-                  width={w * 0.12} 
-                  height={bodyH * 0.4} 
-                  thick={0.3 * SCALE} 
-                />
+            {/* A / C / B direkleri + aynalar */}
+            {[1, -1].map((sgn) => (
+              <group key={'p' + sgn}>
+                <mesh position={[(axAbase + axRoofF) / 2, (belt + roofY) / 2, sgn * pilZ]} rotation={[0, 0, angA]} material={paintMat}>
+                  <boxGeometry args={[2.6 * S, lenA, 1.6 * S]} />
+                </mesh>
+                <mesh position={[(axCbase + axRoofR) / 2, (belt + roofY) / 2, sgn * pilZ]} rotation={[0, 0, angC]} material={paintMat}>
+                  <boxGeometry args={[3.6 * S, lenC, 1.6 * S]} />
+                </mesh>
+                <mesh position={[-w * 0.06, belt + cabH / 2, sgn * pilZ]} material={paintMat}>
+                  <boxGeometry args={[2.6 * S, cabH, 1.6 * S]} />
+                </mesh>
+                <mesh position={[w * 0.10, belt - 1 * S, sgn * (d / 2 + 1.5 * S)]} material={VEH_TRIM_MAT}>
+                  <boxGeometry args={[3 * S, 2.5 * S, 5 * S]} />
+                </mesh>
+                <mesh position={[w * 0.10, belt + 1.5 * S, sgn * (d / 2 + 4.5 * S)]} material={paintMat} castShadow>
+                  <boxGeometry args={[7 * S, 4.5 * S, 5.5 * S]} />
+                </mesh>
               </group>
-              <group position={[wx, groundClearance + bodyH * 0.6, -d / 2 + 0.15 * SCALE]}>
-                <WindowFrameAndGlass 
-                  width={w * 0.12} 
-                  height={bodyH * 0.4} 
-                  thick={0.3 * SCALE} 
-                />
+            ))}
+            {/* Tamponlar + ızgara */}
+            <mesh position={[w / 2 - 2.5 * S, c + 3 * S, 0]} material={VEH_TRIM_MAT}>
+              <boxGeometry args={[5 * S, 8 * S, d * 0.94]} />
+            </mesh>
+            <mesh position={[-w / 2 + 2.5 * S, c + 3 * S, 0]} material={VEH_TRIM_MAT}>
+              <boxGeometry args={[5 * S, 8 * S, d * 0.94]} />
+            </mesh>
+            <mesh position={[w / 2 - 0.8 * S, c + b * 0.36, 0]} material={VEH_TRIM_MAT}>
+              <boxGeometry args={[2 * S, 8 * S, d * 0.26]} />
+            </mesh>
+            {/* Farlar / stoplar */}
+            {[1, -1].map((sgn) => (
+              <group key={'l' + sgn}>
+                <mesh position={[w / 2 - 1.8 * S, c + b * 0.50, sgn * d * 0.30]} material={VEH_HEADLIGHT_MAT}>
+                  <boxGeometry args={[3 * S, 6 * S, d * 0.16]} />
+                </mesh>
+                <mesh position={[-w / 2 + 1.5 * S, c + b * 0.62, sgn * d * 0.30]} material={VEH_TAILLIGHT_MAT}>
+                  <boxGeometry args={[2.5 * S, 5.5 * S, d * 0.15]} />
+                </mesh>
               </group>
-            </group>
-          ))}
+            ))}
+            {/* Arka plaka (TR şeridi) */}
+            <mesh position={[-w / 2 + 0.6 * S, c + b * 0.38, 0]} material={VEH_PLATE_MAT}>
+              <boxGeometry args={[0.7 * S, 9 * S, 22 * S]} />
+            </mesh>
+            <mesh position={[-w / 2 + 0.65 * S, c + b * 0.38, -8.5 * S]}>
+              <boxGeometry args={[0.9 * S, 9 * S, 2.5 * S]} />
+              <meshBasicMaterial color="#1c6dd0" />
+            </mesh>
+            {/* Polis / ambulans yan şeridi */}
+            {typeLower.includes('police') || typeLower.includes('polis')
+              ? [1, -1].map((sgn) => (
+                  <mesh key={'st' + sgn} position={[0, c + b * 0.50, sgn * (d / 2 + bevel + 0.5 * S)]} material={VEH_STRIPE_WHITE_MAT}>
+                    <boxGeometry args={[w * 0.45, b * 0.35, 0.8 * S]} />
+                  </mesh>
+                ))
+              : null}
+            {typeLower.includes('ambulance') || typeLower.includes('ambulans')
+              ? [1, -1].map((sgn) => (
+                  <mesh key={'st' + sgn} position={[0, c + b * 0.45, sgn * (d / 2 + bevel + 0.5 * S)]} material={VEH_STRIPE_RED_MAT}>
+                    <boxGeometry args={[w * 0.60, b * 0.28, 0.8 * S]} />
+                  </mesh>
+                ))
+              : null}
+            {/* Tabela (tepe lambası) */}
+            {isSiren && (
+              <group position={[-w * 0.05, roofY + 2.5 * S, 0]}>
+                <mesh material={VEH_TRIM_MAT}>
+                  <boxGeometry args={[w * 0.10, 3.5 * S, d * 0.40]} />
+                </mesh>
+                <mesh position={[0, 2.6 * S, d * 0.10]}>
+                  <boxGeometry args={[w * 0.07, 2.8 * S, d * 0.14]} />
+                  <meshBasicMaterial color="#2255ff" />
+                </mesh>
+                <mesh position={[0, 2.6 * S, -d * 0.10]}>
+                  <boxGeometry args={[w * 0.07, 2.8 * S, d * 0.14]} />
+                  <meshBasicMaterial color="#ff2222" />
+                </mesh>
+              </group>
+            )}
+          </>
+        )}
 
-          {/* Bus Front Windshield - Large Tinted Specular Pane */}
-          <mesh position={[w / 2 - 1 * SCALE, groundClearance + bodyH * 0.55, 0]}>
-            <boxGeometry args={[0.2 * SCALE, bodyH * 0.6, d * 0.9]} />
-            <meshStandardMaterial 
-              color="#00d2d3" 
-              roughness={0.01} 
-              metalness={0.95} 
-              transparent 
-              opacity={0.65} 
-              side={THREE.DoubleSide} 
-            />
-          </mesh>
-        </>
-      )}
+        {/* --- KAMYON --- */}
+        {isTruck && (
+          <>
+            <mesh geometry={truckCabGeo!} material={paintMat} position={[0, 0, -d * 0.47]} castShadow receiveShadow />
+            <mesh position={[-w * 0.17, c + (truckTop - c) / 2, 0]} material={isFire ? paintMat : VEH_CARGO_MAT} castShadow receiveShadow>
+              <boxGeometry args={[w * 0.58, truckTop - c, d * 0.96]} />
+            </mesh>
+            <mesh position={[w * 0.462, c + (truckTop - c) * 0.66, 0]} rotation={[0, 0, -0.18]} material={VEH_GLASS_MAT}>
+              <boxGeometry args={[3 * S, (truckTop - c) * 0.30, d * 0.80]} />
+            </mesh>
+            {[1, -1].map((sgn) => (
+              <group key={'tk' + sgn}>
+                <mesh position={[w * 0.28, c + (truckTop - c) * 0.75, sgn * d * 0.47]} material={VEH_GLASS_MAT}>
+                  <boxGeometry args={[w * 0.10, (truckTop - c) * 0.22, 2.5 * S]} />
+                </mesh>
+                <mesh position={[w / 2 - 1.5 * S, c + (truckTop - c) * 0.12, sgn * d * 0.32]} material={VEH_HEADLIGHT_MAT}>
+                  <boxGeometry args={[3 * S, 6 * S, d * 0.14]} />
+                </mesh>
+              </group>
+            ))}
+            {isSiren && (
+              <group position={[w * 0.30, truckTop + 2.5 * S, 0]}>
+                <mesh material={VEH_TRIM_MAT}>
+                  <boxGeometry args={[w * 0.10, 3.5 * S, d * 0.40]} />
+                </mesh>
+                <mesh position={[0, 2.6 * S, d * 0.10]}>
+                  <boxGeometry args={[w * 0.07, 2.8 * S, d * 0.14]} />
+                  <meshBasicMaterial color="#2255ff" />
+                </mesh>
+                <mesh position={[0, 2.6 * S, -d * 0.10]}>
+                  <boxGeometry args={[w * 0.07, 2.8 * S, d * 0.14]} />
+                  <meshBasicMaterial color="#ff2222" />
+                </mesh>
+              </group>
+            )}
+          </>
+        )}
 
-      {/* Realistic Wheels with Spoked Rims */}
-      {[
-        { px: w / 3.2, pz: d / 2 - wheelW / 4 },
-        { px: w / 3.2, pz: -d / 2 + wheelW / 4 },
-        { px: -w / 3.2, pz: d / 2 - wheelW / 4 },
-        { px: -w / 3.2, pz: -d / 2 + wheelW / 4 },
-        ...(isTruck ? [
-          { px: -w / 8, pz: d / 2 - wheelW / 4 },
-          { px: -w / 8, pz: -d / 2 + wheelW / 4 }
-        ] : [])
-      ].map((pos, idx) => (
-        <group key={idx} position={[pos.px, wheelR, pos.pz]} rotation={[Math.PI / 2, 0, 0]}>
-          {/* Tire */}
-          <mesh castShadow>
-            <cylinderGeometry args={[wheelR, wheelR, wheelW, 24]} />
-            <meshStandardMaterial color="#1a1a1a" roughness={0.95} />
-          </mesh>
-          {/* Tire sidewall ring */}
-          <mesh position={[0, 0, wheelW * 0.46]}>
-            <torusGeometry args={[wheelR * 0.82, wheelR * 0.08, 8, 24]} />
-            <meshStandardMaterial color="#222" roughness={0.9} />
-          </mesh>
-          {/* Rim outer lip (front) */}
-          <mesh position={[0, 0, -wheelW * 0.42]}>
-            <torusGeometry args={[wheelR * 0.58, wheelR * 0.06, 8, 24]} />
-            <meshStandardMaterial color="#bdc3c7" metalness={0.85} roughness={0.15} />
-          </mesh>
-          {/* Rim outer lip (back) */}
-          <mesh position={[0, 0, wheelW * 0.42]}>
-            <torusGeometry args={[wheelR * 0.58, wheelR * 0.06, 8, 24]} />
-            <meshStandardMaterial color="#bdc3c7" metalness={0.85} roughness={0.15} />
-          </mesh>
-          {/* Rim barrel */}
-          <mesh>
-            <cylinderGeometry args={[wheelR * 0.58, wheelR * 0.58, wheelW * 0.45, 20]} />
-            <meshStandardMaterial color="#95a5a6" metalness={0.8} roughness={0.2} />
-          </mesh>
-          {/* Spokes (5-spoke design) */}
-          {(() => {
-            const spokeLen = wheelR * 0.42;
-            const spokeW = wheelR * 0.06;
-            const spokes = [];
-            for (let si = 0; si < 5; si++) {
-              const ang = (si / 5) * Math.PI * 2;
-              const cx = Math.cos(ang) * spokeLen * 0.45;
-              const cy = Math.sin(ang) * spokeLen * 0.45;
-              spokes.push(
-                <group key={si}>
-                  {/* Spoke arm */}
-                  <mesh position={[cy, cx, 0]} rotation={[0, 0, ang]}>
-                    <boxGeometry args={[spokeW, spokeLen * 0.8, wheelW * 0.25]} />
-                    <meshStandardMaterial color="#bdc3c7" metalness={0.85} roughness={0.15} />
-                  </mesh>
-                  {/* Spoke split (Y-shape toward rim) */}
-                  <mesh position={[cy * 1.7, cx * 1.7, 0]} rotation={[0, 0, ang + 0.25]}>
-                    <boxGeometry args={[spokeW * 0.7, spokeLen * 0.35, wheelW * 0.18]} />
-                    <meshStandardMaterial color="#bdc3c7" metalness={0.85} roughness={0.15} />
-                  </mesh>
-                  <mesh position={[cy * 1.7, cx * 1.7, 0]} rotation={[0, 0, ang - 0.25]}>
-                    <boxGeometry args={[spokeW * 0.7, spokeLen * 0.35, wheelW * 0.18]} />
-                    <meshStandardMaterial color="#bdc3c7" metalness={0.85} roughness={0.15} />
-                  </mesh>
-                </group>
-              );
-            }
-            return spokes;
-          })()}
-          {/* Center hub cap */}
-          <mesh position={[0, 0, -wheelW * 0.1]}>
-            <cylinderGeometry args={[wheelR * 0.1, wheelR * 0.12, wheelW * 0.35, 16]} />
-            <meshStandardMaterial color="#7f8c8d" metalness={0.9} roughness={0.1} />
-          </mesh>
-          {/* Lug nuts */}
-          {[0, 1, 2, 3, 4].map(li => {
-            const lang = (li / 5) * Math.PI * 2;
-            return (
-              <mesh key={li} position={[Math.sin(lang) * wheelR * 0.16, Math.cos(lang) * wheelR * 0.16, -wheelW * 0.2]}>
-                <cylinderGeometry args={[wheelR * 0.025, wheelR * 0.03, wheelW * 0.12, 8]} />
-                <meshStandardMaterial color="#dcdde1" metalness={0.9} roughness={0.1} />
+        {/* --- OTOBÜS --- */}
+        {isBus && (
+          <>
+            <mesh position={[0, c + busH / 2, 0]} material={paintMat} castShadow receiveShadow>
+              <boxGeometry args={[w * 0.98, busH, d * 0.94]} />
+            </mesh>
+            <mesh position={[-w * 0.01, busTop - 75 * S * hs, 0]} material={VEH_GLASS_MAT}>
+              <boxGeometry args={[w * 0.90, 58 * S * hs, d * 1.005]} />
+            </mesh>
+            <mesh position={[w * 0.49, busTop - 72 * S * hs, 0]} material={VEH_GLASS_MAT}>
+              <boxGeometry args={[3 * S, 80 * S * hs, d * 0.82]} />
+            </mesh>
+            <mesh position={[-w * 0.49, busTop - 82 * S * hs, 0]} material={VEH_GLASS_MAT}>
+              <boxGeometry args={[2.5 * S, 62 * S * hs, d * 0.80]} />
+            </mesh>
+            {[1, -1].map((sgn) => (
+              <mesh key={'bf' + sgn} position={[w * 0.492, c + busH * 0.18, sgn * d * 0.30]} material={VEH_HEADLIGHT_MAT}>
+                <boxGeometry args={[2.5 * S, 6 * S, d * 0.14]} />
               </mesh>
-            );
-          })}
-        </group>
-      ))}
+            ))}
+            <mesh position={[-w * 0.492, c + busH * 0.25, 0]} material={VEH_PLATE_MAT}>
+              <boxGeometry args={[0.7 * S, 9 * S, 22 * S]} />
+            </mesh>
+          </>
+        )}
 
-      {/* Headlights - Emissive */}
-      <mesh position={[w * 0.5 - 1 * SCALE, groundClearance + bodyH * 0.35, d * 0.35]}>
-        <sphereGeometry args={[headlightR, 12, 12]} />
-        <meshPhysicalMaterial color="#ffffcc" emissive="#ffffaa" emissiveIntensity={1.5} roughness={0.1} metalness={0.0} />
-      </mesh>
-      <mesh position={[w * 0.5 - 1 * SCALE, groundClearance + bodyH * 0.35, -d * 0.35]}>
-        <sphereGeometry args={[headlightR, 12, 12]} />
-        <meshPhysicalMaterial color="#ffffcc" emissive="#ffffaa" emissiveIntensity={1.5} roughness={0.1} metalness={0.0} />
-      </mesh>
-      {/* Headlight housings */}
-      <mesh position={[w * 0.5 - 0.5 * SCALE, groundClearance + bodyH * 0.35, d * 0.35]}>
-        <boxGeometry args={[0.8 * SCALE, headlightR * 2.5, headlightR * 2.5]} />
-        <meshStandardMaterial color="#1a1a1a" roughness={0.9} />
-      </mesh>
-      <mesh position={[w * 0.5 - 0.5 * SCALE, groundClearance + bodyH * 0.35, -d * 0.35]}>
-        <boxGeometry args={[0.8 * SCALE, headlightR * 2.5, headlightR * 2.5]} />
-        <meshStandardMaterial color="#1a1a1a" roughness={0.9} />
-      </mesh>
-
-      {/* Front Radiator Grille */}
-      <group position={[w * 0.5 - 0.2 * SCALE, groundClearance + bodyH * 0.35, 0]}>
-        {/* Grille Backing */}
-        <mesh>
-          <boxGeometry args={[0.4 * SCALE, bodyH * 0.3, d * 0.5]} />
-          <meshStandardMaterial color="#1e272e" roughness={0.9} />
-        </mesh>
-        {/* Chrome Center Bar */}
-        <mesh position={[0.1 * SCALE, 0, 0]}>
-          <boxGeometry args={[0.3 * SCALE, 1 * SCALE, d * 0.48]} />
-          <meshStandardMaterial color="#dcdde1" metalness={0.95} roughness={0.05} />
-        </mesh>
-      </group>
-
-      {/* Taillights - Emissive */}
-      <mesh position={[-w * 0.5 + 1 * SCALE, groundClearance + bodyH * 0.4, d * 0.35]}>
-        <boxGeometry args={[2 * SCALE, taillightR * 2, taillightR * 2]} />
-        <meshBasicMaterial color="#ff2222" />
-      </mesh>
-      <mesh position={[-w * 0.5 + 1 * SCALE, groundClearance + bodyH * 0.4, -d * 0.35]}>
-        <boxGeometry args={[2 * SCALE, taillightR * 2, taillightR * 2]} />
-        <meshBasicMaterial color="#ff2222" />
-      </mesh>
-
-      {/* Rear License Plate (White/Blue European style) */}
-      <group position={[-w * 0.5 + 0.2 * SCALE, groundClearance + bodyH * 0.3, 0]}>
-        {/* White Plate Plate */}
-        <mesh>
-          <boxGeometry args={[0.2 * SCALE, 4 * SCALE, 12 * SCALE]} />
-          <meshStandardMaterial color="#ffffff" roughness={0.7} />
-        </mesh>
-        {/* Blue TR-Style Strip */}
-        <mesh position={[-0.05 * SCALE, 0, -5.5 * SCALE]}>
-          <boxGeometry args={[0.3 * SCALE, 4 * SCALE, 1 * SCALE]} />
-          <meshBasicMaterial color="#0984e3" />
-        </mesh>
-      </group>
-
-      {/* Siren Module */}
-      {isSiren && (
-        <group position={[isTruck ? w * 0.22 : 0, groundClearance + bodyH + cabinH + 2 * SCALE, 0]}>
-          <mesh>
-            <boxGeometry args={[w * 0.08, 4 * SCALE, d * 0.45]} />
-            <meshStandardMaterial color="#222" metalness={0.8} />
+        {/* Tekerlekler + gölge kavisleri */}
+        {axles.map((p, i) => <VehWheel key={'w' + i} px={p[0]} pz={p[1]} R={wheelR} W={wheelW} />)}
+        {axles.map((p, i) => (
+          <mesh key={'a' + i} position={[p[0], wheelR, Math.sign(p[1]) * (Math.abs(p[1]) - wheelW * 0.6)]} rotation={[Math.PI / 2, 0, 0]} material={VEH_ARCH_MAT}>
+            <cylinderGeometry args={[wheelR * 1.05, wheelR * 1.05, 0.8 * S, 24]} />
           </mesh>
-          <mesh position={[0, 3 * SCALE, d * 0.12]}>
-            <boxGeometry args={[w * 0.06, 3 * SCALE, d * 0.16]} />
-            <meshBasicMaterial color="#0055ff" />
-          </mesh>
-          <mesh position={[0, 3 * SCALE, -d * 0.12]}>
-            <boxGeometry args={[w * 0.06, 3 * SCALE, d * 0.16]} />
-            <meshBasicMaterial color="#ff0000" />
-          </mesh>
-        </group>
-      )}
-
-      {/* Police decals */}
-      {typeLower.includes('police') && (
-        <group>
-          <mesh position={[0, groundClearance + bodyH / 2, d / 2 + 0.15]}>
-            <boxGeometry args={[w * 0.5, bodyH * 0.3, 0.1]} />
-            <meshStandardMaterial color="#0033aa" metalness={0.5} />
-          </mesh>
-          <mesh position={[0, groundClearance + bodyH / 2, -d / 2 - 0.15]}>
-            <boxGeometry args={[w * 0.5, bodyH * 0.3, 0.1]} />
-            <meshStandardMaterial color="#0033aa" metalness={0.5} />
-          </mesh>
-        </group>
-      )}
-
-      {/* Ambulance decals */}
-      {typeLower.includes('ambulance') && (
-        <group>
-          <mesh position={[0, groundClearance + bodyH / 2, d / 2 + 0.15]}>
-            <boxGeometry args={[w * 0.7, bodyH * 0.25, 0.1]} />
-            <meshStandardMaterial color="#cc0000" />
-          </mesh>
-          <mesh position={[0, groundClearance + bodyH / 2, -d / 2 - 0.15]}>
-            <boxGeometry args={[w * 0.7, bodyH * 0.25, 0.1]} />
-            <meshStandardMaterial color="#cc0000" />
-          </mesh>
-        </group>
-      )}
-
-      {/* Interior dome point light that turns on when any door is open */}
-      {(leftDoorOpen || rightDoorOpen || truckDoorOpen || busDoorOpen) && (
-        <pointLight 
-          position={[0, groundClearance + bodyH * 0.7, 0]} 
-          intensity={4} 
-          distance={30 * SCALE} 
-          color="#ffeb3b" 
-        />
-      )}
+        ))}
       </group>
     </group>
   );
@@ -6363,6 +5400,7 @@ const Scene = ({ objects, viewMode, selectedId, setSelectedId, onCaptureRef }: a
       <hemisphereLight intensity={0.65} color="#e3edf7" groundColor="#8f9296" />
       <ambientLight intensity={0.5} />
       <directionalLight position={[100, 200, 100]} intensity={1} castShadow />
+      <SceneEnvironment />
       
       <group ref={contentGroupRef}>
         {allWalls.map((wall: any, idx: number) => (
