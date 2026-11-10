@@ -2064,6 +2064,11 @@ const Symbol3D = ({ obj, wallThickness, realObj, allWalls, visualObjects, upload
     return <CalloutDecal3D obj={{ ...actualObj, width: width / SCALE, height: height / SCALE }} />;
   }
   if (isMarkerAnn) {
+    // Yüzeye yapışmış numaratör (pencere/duvardaki izin yanındaysa):
+    // çadır yerine aynı yüzeyde, izin yüksekliğinde sarı numara plakası.
+    if ((actualObj as any).surfaceDecal) {
+      return <FindingPlate3D no={String(actualObj.findingNo || '')} width={width} height={height} zHeight={zHeight} thickness={currentWallThickness} />;
+    }
     // Bulgu numaratörü: klasik 3B çadır delil işaretçisi (numara iki yüzde de okunur)
     return <FindingMarker3D no={String(actualObj.findingNo || '')} width={width} height={height} rad={rad} square={sIdLower === 'ev-square'} />;
   }
@@ -2082,6 +2087,13 @@ const Symbol3D = ({ obj, wallThickness, realObj, allWalls, visualObjects, upload
   }
 
   const textureSrc = textureSrcRaw.startsWith('data:image/svg+xml') ? textureSrcRaw.replace(/#/g, '%23') : withBase(textureSrcRaw);
+
+  // Dikey yüzey decalleri: pencere/duvara yapışan parmak izi vb. izler —
+  // zemin decali yerine yüzeyde dikey olarak çizilir.
+  if ((actualObj as any).surfaceDecal) {
+    return <VerticalDecal3D textureSrc={textureSrc} width={width} height={height} zHeight={zHeight} thickness={currentWallThickness} />;
+  }
+
   const autoHeight = getStandardHeight(effSymbolId);
 
   // 6. Volumetric Rendering
@@ -3501,6 +3513,56 @@ const GlassImpact3D = ({ textureSrc, zHeight, wallThickness }: any) => {
           map={tex}
           transparent
           alphaTest={0.01}
+          side={THREE.DoubleSide}
+          depthWrite={false}
+          depthTest={false}
+        />
+      </mesh>
+    </group>
+  );
+};
+
+// Dikey yüzey decali — parmak izi/el izi/alet izi gibi izler 2B'de pencere veya
+// duvar üzerine konulduysa 3B'de zeminde yatay decal yerine, o yüzeyin üzerinde
+// DİKEY plane olarak çizilir. GlassImpact3D ile aynı offset/depth mantığı
+// (depthTest=false sayesinde cam arkasından da görünür).
+const VerticalDecal3D = ({ textureSrc, width, height, zHeight, thickness }: any) => {
+  const tex = useTexture(textureSrc) as THREE.Texture;
+  const hUnits = (zHeight || 120) * SCALE;
+  const offsetZ = (thickness ? thickness / 2 : 5 * SCALE) + 0.2 * SCALE;
+  return (
+    <group position={[0, hUnits, offsetZ]}>
+      <mesh renderOrder={999}>
+        <planeGeometry args={[width, height]} />
+        <meshBasicMaterial
+          map={tex}
+          transparent
+          alphaTest={0.01}
+          side={THREE.DoubleSide}
+          depthWrite={false}
+          depthTest={false}
+        />
+      </mesh>
+    </group>
+  );
+};
+
+// Bulgu numarası plakası — iz pencere/duvara yapışmışsa numaratör çadırı yerine
+// aynı yüzeyde, izin yüksekliğinde sarı numara plakası olarak görünür.
+const FindingPlate3D = ({ no, width, height, zHeight, thickness }: any) => {
+  const tex = useTentTexture(no);
+  useEffect(() => () => { tex?.dispose(); }, [tex]);
+  const w = Math.max(width, 16 * SCALE);
+  const h = Math.max(height, 12 * SCALE);
+  const hUnits = (zHeight || 120) * SCALE;
+  const offsetZ = (thickness ? thickness / 2 : 5 * SCALE) + 0.2 * SCALE;
+  return (
+    <group position={[0, hUnits, offsetZ]}>
+      <mesh renderOrder={999}>
+        <planeGeometry args={[w, h]} />
+        <meshBasicMaterial
+          map={tex || undefined}
+          transparent
           side={THREE.DoubleSide}
           depthWrite={false}
           depthTest={false}
@@ -5839,6 +5901,85 @@ const Scene = ({ objects, viewMode, selectedId, setSelectedId, onCaptureRef }: a
       }
     });
 
+    // --- DİKEY YÜZEY İZLERİ (pencere/duvara yapışan parmak izi vb.) ---
+    // 2B'de pencere/duvar üzerine konulan parmak izi, kanlı el izi, eldiven izi ve
+    // alet izi 3B'de zeminde DEĞİL, bulunduğu yüzeyin üzerinde dikey decal olarak
+    // çizilir. Böyle bir izin yakınına konan bulgu numaratörü (ev-circle/ev-square)
+    // de aynı yüzeye, izin yüksekliğine asılır — "penceredeki parmak izi + bulgu
+    // numarası" 3B'de birlikte ve doğru yerde görünür.
+    const VERTICAL_TRACE_IDS = new Set(['tr-3', 'tr-bloody-handprint', 'tr-glove-print', 'tr-tool-mark']);
+    const TRACE_ATTACH_DIST = 35;   // cm — iz, yüzeyin üzerinde sayılma mesafesi
+    const MARKER_LINK_DIST = 160;   // cm — numaratör, izin bu kadar yakınındaysa yüzeye asılır
+    const surfaceTraceAttach = new Map<string, any>();
+    others.forEach((o: any) => {
+      const sIdL = o.symbolId?.toLowerCase() || '';
+      if (!VERTICAL_TRACE_IDS.has(sIdL)) return;
+      let best: any = null; let bestDist = Infinity; let bestIsWindow = false;
+      openings.forEach((op: any) => {
+        if (!isWindow(op)) return;
+        const d = Math.hypot(o.cx - op.cx, o.cy - op.cy);
+        if (d < bestDist) { bestDist = d; best = op; bestIsWindow = true; }
+      });
+      processedWalls.forEach((w: any) => {
+        const d = Math.hypot(o.cx - w.cx, o.cy - w.cy);
+        if (d < bestDist) { bestDist = d; best = w; bestIsWindow = false; }
+      });
+      if (!best || bestDist > TRACE_ATTACH_DIST) return;
+      const rot = best.wallRot !== undefined ? best.wallRot : (best.rotation || 0);
+      let zCm: number;
+      if (bestIsWindow) {
+        const wh = best.zHeight !== undefined ? best.zHeight : 120;
+        const sill = best.sillH !== undefined ? best.sillH : Math.max(0, 125 - wh / 2);
+        zCm = sill + wh / 2; // cam yüzeyinin dikey merkezi
+      } else {
+        zCm = 120;
+      }
+      if (o.zHeight !== undefined && o.zHeight > 5) zCm = o.zHeight; // kullanıcı yüksekliği önceliklidir
+      zCm = Math.max(10, Math.min(zCm, wallHOpt - 5));
+      // İz, yüzey ekseni üzerine projeksiyonlanır (cam/duvar düzleminde kalır)
+      const local = toLocal(o, best, scale);
+      const pos = fromLocal(local.x, 0, best, centerX, centerY, scale);
+      const { width: refW } = getEffectiveSize(best);
+      const { width: trW } = getEffectiveSize(o);
+      surfaceTraceAttach.set(o.id, {
+        rotation: rot, zHeight: zCm, x: pos.x, y: pos.z,
+        ref: best, refHalfW: (refW * scale) / 2,
+        traceLX: local.x, traceHalfW: (trW * scale) / 2
+      });
+    });
+
+    // Bulgu numaratörleri: yakınında yüzeye yapışmış bir iz varsa aynı yüzeye,
+    // izin yüksekliğine asılır; plaka iz decaliyle çakışmasın diye eksen boyunca kaydırılır
+    const surfaceMarkerAttach = new Map<string, any>();
+    if (surfaceTraceAttach.size > 0) {
+      others.forEach((o: any) => {
+        const sIdL = o.symbolId?.toLowerCase() || '';
+        if (sIdL !== 'ev-circle' && sIdL !== 'ev-square') return;
+        let bestAtt: any = null; let bestD = Infinity;
+        others.forEach((t: any) => {
+          const att = surfaceTraceAttach.get(t.id);
+          if (!att) return;
+          const d = Math.hypot(o.cx - t.cx, o.cy - t.cy);
+          if (d < bestD) { bestD = d; bestAtt = att; }
+        });
+        if (!bestAtt || bestD > MARKER_LINK_DIST) return;
+        const local = toLocal(o, bestAtt.ref, scale);
+        const maxLX = Math.max(10 * scale, bestAtt.refHalfW - 8 * scale);
+        let lx = Math.max(-maxLX, Math.min(local.x, maxLX));
+        const { width: mW } = getEffectiveSize(o);
+        const mHalfW = Math.max(mW * scale, 16 * scale) / 2;
+        const clearW = bestAtt.traceHalfW + mHalfW + 1 * scale;
+        if (Math.abs(lx - bestAtt.traceLX) < clearW) {
+          const dir = lx >= bestAtt.traceLX ? 1 : -1;
+          let cand = bestAtt.traceLX + dir * clearW;
+          if (cand > maxLX || cand < -maxLX) cand = bestAtt.traceLX - dir * clearW;
+          lx = Math.max(-maxLX, Math.min(cand, maxLX));
+        }
+        const pos = fromLocal(lx, 0, bestAtt.ref, centerX, centerY, scale);
+        surfaceMarkerAttach.set(o.id, { ...bestAtt, x: pos.x, y: pos.z });
+      });
+    }
+
     // --- DIRECT 1:1 MIRROR MAPPING ---
     // Zero-physics, zero-drift positioning for absolute parity
     const resolvedObjects = [...others, ...openings].map((obj: any) => {
@@ -5939,6 +6080,31 @@ const Scene = ({ objects, viewMode, selectedId, setSelectedId, onCaptureRef }: a
             };
           }
         }
+      }
+
+      // Pencere/duvara yapışan yüzey izleri ve bağlı numaratörler: konum, rotasyon
+      // ve yükseklik yüzeyden alınır; render dikey decal/plaka olarak yapılır.
+      if (surfaceTraceAttach.has(obj.id)) {
+        const att = surfaceTraceAttach.get(obj.id);
+        return {
+          ...obj,
+          x: att.x, y: att.y, rotation: att.rotation,
+          width: effW * scale, height: effH * scale,
+          zHeight: att.zHeight,
+          yOffset: obj.yOffset || 0,
+          surfaceDecal: true
+        };
+      }
+      if (surfaceMarkerAttach.has(obj.id)) {
+        const att = surfaceMarkerAttach.get(obj.id);
+        return {
+          ...obj,
+          x: att.x, y: att.y, rotation: att.rotation,
+          width: effW * scale, height: effH * scale,
+          zHeight: att.zHeight,
+          yOffset: obj.yOffset || 0,
+          surfaceDecal: true
+        };
       }
 
       let fX = (obj.cx - centerX) * scale;
