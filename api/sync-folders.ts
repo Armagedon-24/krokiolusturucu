@@ -738,13 +738,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
       }
       const scan = await collectEmptyFolders(authHeader, undefined, nodeScan.nodes);
+      const prunable = scan.empties.filter((n) => !isExpectedFolder(n)); // ayna: beklenen boş klasörler budanmaz
       return res.status(200).json({
         moved: 0, cleaned: 0, remaining: Math.max(total, missingFoldersRemaining), total,
         movedEntries: [], failed: [],
         orphansRemaining: 0,
         prunedFolders: 0,
-        prunedFolderList: scan.empties.slice(0, 300),
-        emptyFoldersRemaining: scan.error && scan.nodes === 0 ? -1 : scan.empties.length,
+        prunedFolderList: prunable.slice(0, 300),
+        emptyFoldersRemaining: scan.error && scan.nodes === 0 ? -1 : prunable.length,
         folderNodes: scan.nodes,
         folderScanError: scan.error || undefined,
         missingFolders: missingFolders.slice(0, 200),
@@ -1036,13 +1037,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     try {
       if (!dry && Date.now() < deadline) {
         const scan = await collectEmptyFolders(authHeader, undefined, nodeScan.nodes);
-        emptyFoldersRemaining = scan.error && scan.nodes === 0 ? -1 : scan.empties.length;
-        for (const n of scan.empties) {
+        // AYNA KURALI: beklenen (uygulamanın istediği) klasörler bilinçli olarak
+        // BOŞ olabilir (ör. 'Hava Deniz Araçları') — onlar budama planına GİRMEZ ve
+        // sayaç da saymaz; aksi halde istemci döngüsü 'budanacak var' sanıp boşuna döner.
+        const prunable = scan.empties.filter((n) => !isExpectedFolder(n));
+        emptyFoldersRemaining = scan.error && scan.nodes === 0 ? -1 : prunable.length;
+        for (const n of prunable) {
           if (Date.now() >= deadline) break;
           if (n === 'kroki-olusturucu' || n.startsWith('kroki-olusturucu/objects')) continue;
-          // BEKLENEN KLASÖR KORUMASI: uygulama yerleşimi bu klasörü istiyor (veya
-          // altında beklenen bir klasör var) → silme.
-          if (isExpectedFolder(n)) continue;
           const attempt = async (): Promise<{ ok: boolean; error: string }> => {
             try {
               const fr = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/folders/${n.split('/').map(encodeURIComponent).join('/')}`, {
