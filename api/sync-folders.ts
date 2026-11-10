@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from './_vercel-shim';
 import crypto from 'crypto';
-import { verifyAuth, secretsMatch } from './_auth.js';
+import { verifyAuth } from './_auth.js';
 
 export const maxDuration = 60;
 
@@ -29,10 +29,6 @@ export const maxDuration = 60;
 
 const CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME || 'dzen3qvgp';
 const PREFIX_CONST = 'kroki-olusturucu/';
-
-// GEÇİCİ işlem anahtarı: tek seferlik DAĞITIM (distribute) işlemini tetiklemek için.
-// Dağıtım doğrulanınca HEMEN sonraki commit ile kaldırılır.
-const ONCE_TOKEN = '3436f8619633d080f18d99b1877e7974c47b8275f0d2a75c7ad3e48365347a56';
 
 /** İstemcideki publicIdFromUrl ile aynı kurallar: transform + sürüm segmentlerini at. */
 function publicIdFromUrl(url: string): string | null {
@@ -326,13 +322,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Cache-Control', 'no-store');
 
   try {
-    // Auth: ya app admin token'ı (x-auth-token) ya da GEÇİCİ işlem anahtarı
-    // (x-once-token — tek seferlik dağıtım tetiklemesi; sonradan kaldırılacak).
-    const onceHdr = req.headers['x-once-token'];
-    const onceStr = Array.isArray(onceHdr) ? onceHdr[0] : onceHdr;
-    if (!onceStr || !secretsMatch(onceStr, ONCE_TOKEN)) {
-      if (!verifyAuth(req, res)) return;
-    }
+    // Auth: yalnızca uygulama admin token'ı (x-auth-token). Dağıtımda kullanılan
+    // geçici x-once-token kaldırıldı — uç nokta kalıcı olarak verifyAuth ile korunur.
+    if (!verifyAuth(req, res)) return;
 
     const API_KEY = process.env.CLOUDINARY_API_KEY;
     const API_SECRET = process.env.CLOUDINARY_API_SECRET;
