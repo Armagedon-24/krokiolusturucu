@@ -332,7 +332,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({ error: 'Cloudinary API anahtarları eksik.' });
     }
     const authHeader = 'Basic ' + Buffer.from(API_KEY + ':' + API_SECRET).toString('base64');
-    const bodyAll = (req.body as { dry?: boolean; mode?: string; category?: string } | undefined) || {};
+    const bodyAll = (req.body as { dry?: boolean; mode?: string; category?: string; map?: Record<string, string> } | undefined) || {};
     const dry = Boolean(bodyAll.dry);
     const syncMode = String(bodyAll.mode || 'sync');
     const distCategory = String(bodyAll.category || 'Araçlar');
@@ -449,6 +449,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const distMoves: { id: string; name: string; group: string; from: string; to: string; score: number }[] = [];
       const distRelabels: { id: string; name: string; group: string; newGroup: string }[] = [];
       const distUnmatched: { id: string; name: string; group: string; reason: string }[] = [];
+      // AÇIK EŞLEME (grup → hedef klasör): kullanıcı Media Library'de klasörleri
+      // yeniden adlandırdıysa Admin indeksi gecikmeli eski adları gösterebilir —
+      // bulanık eşleşme o zaman YANLIŞ (eski) klasöre götürür. Ekran alıntısından
+      // okunan eşleme doğrudan uygulanır; eşlemede olmayan gruplar bulanık yol ile
+      // değerlendirilir. Hedef klasör henüz yoksa RENAME yolu klasörü örtük oluşturur.
+      const distMap = new Map<string, string>(
+        Object.entries(bodyAll.map || {})
+          .filter(([k, v]) => k && v)
+          .map(([k, v]) => [normName(k), String(v)]),
+      );
 
       uploads.forEach((im, idx) => {
         if (String(im?.category || '') !== catId && String(im?.category || '') !== distCategory) return;
@@ -478,24 +488,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (seen.has(actualPid)) return;
         seen.add(actualPid);
 
-        // Aday puanlama: ad + dosya adı + mevcut grup → en iyi klasör
+        // Aday puanlama: (1) açık eşleme varsa doğrudan, (2) ad + dosya adı +
+        // mevcut grup ile en iyi klasör.
+        const mapped = distMap.get(normName(String(im?.group || '')));
         let best: { name: string; score: number; empty: boolean } | null = null;
-        for (const f of folderDefs) {
-          const base = Math.max(
-            matchScore(String(im?.name || ''), f.name),
-            matchScore(baseName, f.name),
-            matchScore(String(im?.group || ''), f.name),
-          );
-          if (base < 70) continue;
-          const empty = (occ.get(normName(f.name)) || 0) === 0;
-          const score = base + (empty ? 40 : 0);
-          const better = !best || score > best.score
-            || (score === best.score && (empty && !best.empty || (empty === best.empty && f.name.length > best.name.length)));
-          if (better) best = { name: f.name, score, empty };
-        }
-        if (!best) {
-          distUnmatched.push({ id: String(im?.id || pid), name: String(im?.name || baseName), group: String(im?.group || ''), reason: 'isme uyan klasör yok' });
-          return;
+        if (mapped) {
+          best = { name: mapped, score: 200, empty: false };
+        } else {
+          for (const f of folderDefs) {
+            const base = Math.max(
+              matchScore(String(im?.name || ''), f.name),
+              matchScore(baseName, f.name),
+              matchScore(String(im?.group || ''), f.name),
+            );
+            if (base < 70) continue;
+            const empty = (occ.get(normName(f.name)) || 0) === 0;
+            const score = base + (empty ? 40 : 0);
+            const better = !best || score > best.score
+              || (score === best.score && (empty && !best.empty || (empty === best.empty && f.name.length > best.name.length)));
+            if (better) best = { name: f.name, score, empty };
+          }
+          if (!best) {
+            distUnmatched.push({ id: String(im?.id || pid), name: String(im?.name || baseName), group: String(im?.group || ''), reason: 'isme uyan klasör yok' });
+            return;
+          }
         }
         // Hedef mevcut fiziksel klasörün yalnızca büyük/küçük harf varyantı ise
         // taşıma YOK — yalnızca config etiketi güncellenir (Suv → SUV gibi).
