@@ -1622,8 +1622,8 @@ export const useStore = create<StoreState>()(
               folderPruned += heal.prunedFolders || 0;
               folderFailed += (heal.failed || []).length;
               applyMovedSrcs(set as unknown as (p: any) => void, heal.movedEntries);
-              // Eski kopya temizliği (cleaned) ve boş klasör budaması (prunedFolders)
-              // ilerlemesi de döngüyü sürdürür.
+              // Eski kopya temizliği (cleaned), boş klasör budaması (prunedFolders)
+              // ve eksik klasör oluşturma (remaining'e dahil) ilerlemesi de döngüyü sürdürür.
               const foldersPending = (heal.emptyFoldersRemaining || 0) > 0;
               if (!heal.remaining && !heal.orphansRemaining && !foldersPending) break;
               if (!heal.moved && !heal.cleaned && !heal.prunedFolders) break; // ilerleme yok — sonraki senkronda denemeye devam
@@ -1701,6 +1701,7 @@ export const useStore = create<StoreState>()(
         let moved = 0;
         let cleaned = 0;
         let pruned = 0;
+        let createdFolders = 0;
         let failedCount = 0;
         let noProgress = 0;
         let lastError = '';
@@ -1727,6 +1728,7 @@ export const useStore = create<StoreState>()(
             moved += heal.moved || 0;
             cleaned += heal.cleaned || 0;
             pruned += heal.prunedFolders || 0;
+            createdFolders += heal.createdFolderList?.length || 0;
             failedCount += (heal.failed || []).length;
             if (failedCount > 0 && !lastError) {
               lastError = `${failedCount} görsel taşınamadı: ${(heal.failed || [])[0]?.error || 'bilinmeyen hata'}`;
@@ -1747,14 +1749,15 @@ export const useStore = create<StoreState>()(
         } finally {
           _healBusy = false;
         }
-        if (moved > 0 || pruned > 0) {
+        if (moved > 0 || pruned > 0 || createdFolders > 0) {
           get().addNotification({
             type: 'success',
             force: true,
             message: 'Bulut Klasörleri Eşitlendi',
             description: `${moved} görsel uygulamadaki kategori/alt kategori düzenine göre doğru klasöre taşındı` +
               (cleaned > 0 ? `, ${cleaned} eski kopya temizlendi` : '') +
-              (pruned > 0 ? `, ${pruned} boş klasör silindi` : '') +
+              (pruned > 0 ? `, ${pruned} fazla boş klasör silindi` : '') +
+              (createdFolders > 0 ? `, ${createdFolders} eksik klasör oluşturuldu` : '') +
               (failedCount > 0 ? `; ${failedCount} görsel şu an taşınamadı (tekrar EŞİTLE'ye basın)` : '') +
               '. Cloudinary klasör ağacını yenileyerek görebilirsiniz.'
           });

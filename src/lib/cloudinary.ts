@@ -369,6 +369,14 @@ export const cloudinary = {
     prunedFolderList?: string[];
     /** Hâlâ boş klasör kaldıysa >0; listeleme yapılamadıysa -1 (bilinmiyor). */
     emptyFoldersRemaining?: number;
+    /** Klasör aynası: bu çağrıda OLUŞTURULAN eksik klasörler ('klasör yoksa üret'). */
+    createdFolderList?: string[];
+    /** Oluşturulamayan klasörler + hata mesajları. */
+    folderErrors?: { folder: string; error: string }[];
+    /** Hâlâ oluşturulması gereken beklenen klasör sayısı (remaining'e dahildir). */
+    missingFoldersRemaining?: number;
+    /** Uygulama yerleşiminin beklediği ama bulutta olmayan klasörler (dry/plan). */
+    missingFolders?: string[];
     /** Sunucu/HTTP hatası durumunda dolu gelir — istemci kullanıcıya gösterebilir. */
     error?: string;
   } | null> => {

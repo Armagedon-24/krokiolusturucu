@@ -23,8 +23,19 @@ export const maxDuration = 60;
  * Taşınanların src'si yapılandırmaya işlenip (config) geri yazılır; böylece
  * sonraki okumalarda görsel 'yerinde' görünür ve yeniden taşınmaz.
  *
+ * AYNA MODU (v2): uç nokta artık yalnızca taşımakla kalmaz, bulut klasör ağacını
+ * uygulama yerleşiminin AYNASINA çevirir: config'ten (kategori + alt kategori)
+ * beklenen klasör seti türetilir; bulutta eksik olanlar Folders Admin API ile
+ * OLUŞTURULUR ('klasör yoksa üret' — ör. 'Hasarlı Araçlar', 'Hava\Deniz
+ * Araçları' alt kategorileri). Sette OLMAYAN ve varlıksız olan klasörler
+ * budanır ('fazla ise sil'); beklenen klasörler BOŞ olsalar bile korunur.
+ * Ayrıca süpürme fazı ağaç DIŞI kök varlıkları da tarar: yapılandırmada hiç
+ * referansı olmayan ve adı referanslı tek bir varlıkla birebir aynı olan kök
+ * dosyalar (klasörsüz eski kopyalar) silinir.
+ *
  * Gövde: {} (parametre yok). Yanıt:
- * { moved, remaining, total, movedEntries: [{id, secureUrl}], failed: [{id, error}] }
+ * { moved, remaining, total, movedEntries: [{id, secureUrl}], failed: [{id, error}],
+ *   createdFolderList, folderErrors, missingFoldersRemaining, prunedFolders, ... }
  */
 
 const CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME || 'dzen3qvgp';
@@ -100,6 +111,65 @@ function physKey(s: string): string {
   return String(s || '').normalize('NFC').toLowerCase().replace(/\u0307/g, '');
 }
 
+/** Klasör yolu eşitlik anahtarı — physKey ile aynı. Modül düzeyinde: hem taşıma
+ *  karşılaştırması hem klasör aynası/budama aynı kuralı kullanır. */
+function foldKey(s: string): string {
+  return String(s || '').normalize('NFC').toLowerCase().replace(/\u0307/g, '');
+}
+
+/**
+ * KLASÖR AYNASI — BEKLENEN SET: uygulama yerleşimi (kütüphane kategorileri +
+ * alt kategori/grup etiketleri + yüklenen görsellerin kategori/grupları)
+ * config'ten türetilir. Bulutta BU setin aynalanması hedeflenir: eksik klasör
+ * oluşturulur ('klasör yoksa üret'), sette olmayan ve varlıksız klasörler
+ * budanır ('fazla ise sil'). Setteki klasörler BOŞ olsalar bile korunur —
+ * uygulamanın elle açtığı alt kategoriler ('Hasarlı Araçlar', 'Hava\Deniz
+ * Araçları' gibi) bulutta da görünür kalmalıdır.
+ */
+function expectedFoldersFromConfig(config: unknown, nameById: Record<string, string>): string[] {
+  const out = new Set<string>();
+  const cfg = (config || {}) as {
+    allSymbols?: { id?: string; name?: string; symbols?: { group?: string }[] }[];
+    uploadedImages?: { category?: string; group?: string }[];
+  };
+  for (const c of cfg.allSymbols || []) {
+    const cf = safeFolder(c?.name || c?.id || '');
+    if (!cf) continue;
+    out.add(`${PREFIX_CONST}${cf}`);
+    for (const s of c?.symbols || []) {
+      const g = safeFolder(String(s?.group || '').trim());
+      if (g && g !== 'uncategorized') out.add(`${PREFIX_CONST}${cf}/${g}`);
+    }
+  }
+  for (const im of cfg.uploadedImages || []) {
+    const cf = safeFolder(nameById[im?.category || ''] || im?.category || 'uncategorized');
+    out.add(`${PREFIX_CONST}${cf}`);
+    const g = safeFolder(String(im?.group || '').trim());
+    if (g && g !== 'uncategorized') out.add(`${PREFIX_CONST}${cf}/${g}`);
+  }
+  out.delete(PREFIX_CONST.slice(0, -1)); // kök kendisi hedef klasör değildir
+  return [...out];
+}
+
+/** Cloudinary Admin API ile boş klasör OLUŞTURUR (POST /folders/{path}).
+ *  'zaten var' yanıtı başarı sayılır (idempotent). */
+async function createCloudFolder(authHeader: string, path: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const r = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/folders/${path.split('/').map(encodeURIComponent).join('/')}`, {
+      method: 'POST',
+      headers: { Authorization: authHeader },
+      signal: AbortSignal.timeout(8000),
+    });
+    const d = await r.json().catch(() => null);
+    if (r.ok && d && !(d as { error?: unknown }).error) return { ok: true };
+    const msg = String((d as { error?: { message?: string } })?.error?.message || `HTTP ${r.status}`);
+    if (/already exist/i.test(msg)) return { ok: true };
+    return { ok: false, error: msg };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'klasör oluşturma hatası' };
+  }
+}
+
 /** İsim ↔ klasör eşleştirme puanı: 100 birebir, 80 tam-ön-ek, 70 tüm-token
  *  ön-ek, 60 tek-token ön-ek (≥3 harf), 0 eşleşmez. */
 function matchScore(name: string, folder: string): number {
@@ -127,52 +197,40 @@ function nameKey(basename: string): string {
   return b;
 }
 
-/**
- * BOŞ KLASÖR TARAMASI: kroki-olusturucu/** altındaki klasör düğümlerini
- * (Folders Admin API) BFS ile listeler; hiç varlık içermeyenleri (ne kendisi
- * ne alt dalları) döndürür. Bunlar eski isimlendirmelerin kabuklarıdır
- * ('CG\'ler', 'kantı' gibi) — Media Library'de 'boş klasör' kirliliğidir.
- * Folders API'nin iki istek biçimi de denenir (path-sonda / of_folder_path).
- */
-async function collectEmptyFolders(authHeader: string, prelisted?: string[]): Promise<{ nodes: number; empties: string[]; error: string | null }> {
-  let listed: string[] = [];
-  if (prelisted && prelisted.length) {
-    listed = prelisted;
-  } else {
-    // GÖRSEL DIŞI KAYNAKLAR DA SAYILIR (raw/video): klasörde eski bir JSON/ses
-    // kalıntısı varsa yalnızca image listelesek klasörü 'boş' sanıp silmeye
-    // çalışırduk; Cloudinary ise 'Folder is not empty' ile reddederdi ve budama
-    // o klasörde SONSUZA DEK başarısız olurdu. (Kanıt: 'symbols', 'Kategorisiz'
-    // gibi 5 klasör tam bu tuzağa düşmüştü.)
-    for (const rtype of ['image', 'raw', 'video'] as const) {
-      let cursor: string | undefined = undefined;
-      for (let page = 0; page < 20; page++) {
-        const u = new URL(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/resources/${rtype}/upload`);
-        u.searchParams.set('prefix', PREFIX_CONST);
-        u.searchParams.set('max_results', '500');
-        if (cursor) u.searchParams.set('next_cursor', cursor);
+/** TÜM varlık yollarını listeler (image+raw+video, upload alt tipi, kroki-olusturucu
+ *  öneki). GÖRSEL DIŞI KAYNAKLAR DA SAYILIR (raw/video): klasörde eski bir JSON/ses
+ *  kalıntısı varsa yalnızca image listelesek klasörü 'boş' sanıp silmeye
+ *  çalışırduk; Cloudinary ise 'Folder is not empty' ile reddederdi ve budama
+ *  o klasörde SONSUZA DEK başarısız olurdu. (Kanıt: 'symbols', 'Kategorisiz'
+ *  gibi 5 klasör tam bu tuzağa düşmüştü.) */
+async function listAllAssetPids(authHeader: string): Promise<{ pids: string[]; error: string | null }> {
+  const pids: string[] = [];
+  for (const rtype of ['image', 'raw', 'video'] as const) {
+    let cursor: string | undefined = undefined;
+    for (let page = 0; page < 20; page++) {
+      const u = new URL(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/resources/${rtype}/upload`);
+      u.searchParams.set('prefix', PREFIX_CONST);
+      u.searchParams.set('max_results', '500');
+      if (cursor) u.searchParams.set('next_cursor', cursor);
+      try {
         const lr = await fetch(u.toString(), { headers: { Authorization: authHeader }, signal: AbortSignal.timeout(8000) });
-        if (!lr.ok) return { nodes: 0, empties: [], error: `varlık listeleme HTTP ${lr.status} (${rtype})` };
+        if (!lr.ok) return { pids: [], error: `varlık listeleme HTTP ${lr.status} (${rtype})` };
         const ld = await lr.json().catch(() => null);
-        if (!ld || !Array.isArray(ld.resources)) return { nodes: 0, empties: [], error: 'varlık listeleme yanıtı geçersiz' };
-        for (const r of ld.resources) listed.push(String(r.public_id));
-        cursor = ld.next_cursor;
+        if (!ld || !Array.isArray(ld.resources)) return { pids: [], error: 'varlık listeleme yanıtı geçersiz' };
+        for (const r of ld.resources) pids.push(String(r.public_id));
+        cursor = (ld as { next_cursor?: string }).next_cursor;
         if (!cursor) break;
+      } catch (e) {
+        return { pids: [], error: e instanceof Error ? e.message : 'varlık listeleme hatası' };
       }
     }
   }
-  const assetFolders = new Set<string>();
-  for (const p of listed) {
-    // NFC NORMALİZASYONU: aynı Türkçe ad iki farklı bayt dizisiyle yazılabilir
-    // ('ş' U+015F ↔ 's'+U+0327). Folders API düğümü ile varlık yolu farklı
-    // normalizasyonda ise startsWith eşleşmez → klasör HATALI 'boş' sayılır,
-    // silmeye çalışılır, Cloudinary 'not empty' ile reddeder (kanıt:
-    // 'Trafik işaretleri' altındaki görünmez kaynak). Her iki taraf NFC'ye çevrilir.
-    const parts = p.normalize('NFC').split('/');
-    parts.pop();
-    for (let i = 1; i <= parts.length; i++) assetFolders.add(parts.slice(0, i).join('/'));
-  }
+  return { pids, error: null };
+}
 
+/** Klasör düğümlerini (Folders Admin API) BFS ile listeler — kroki-olusturucu
+ *  altı, objects/ hariç. Hem boş taraması hem klasör aynası bunu paylaşır. */
+async function bfsFolderNodes(authHeader: string): Promise<{ nodes: string[]; error: string | null }> {
   const encPath = (p: string) => p.split('/').map(encodeURIComponent).join('/');
   let queryShape: boolean | null = null; // hangi istek biçimi çalıştı?
   const listSub = async (path: string): Promise<string[]> => {
@@ -222,19 +280,48 @@ async function collectEmptyFolders(authHeader: string, prelisted?: string[]): Pr
         next.push(full);
       }
     }
-    if (error && nodes.length === 0) return { nodes: 0, empties: [], error };
+    if (error && nodes.length === 0) return { nodes: [], error };
     level = next;
   }
   if (nodes.length === 0) {
-    return { nodes: 0, empties: [], error: error || 'klasör ağacı boş döndü (Folders API biçimi uyuşmadı)' };
+    return { nodes: [], error: error || 'klasör ağacı boş döndü (Folders API biçimi uyuşmadı)' };
   }
+  return { nodes, error: null };
+}
+
+/**
+ * BOŞ KLASÖR TARAMASI: kroki-olusturucu/** altındaki klasör düğümlerini BFS ile
+ * listeler; hiç varlık içermeyenleri (ne kendisi ne alt dalları) döndürür.
+ * Bunlar eski isimlendirmelerin kabuklarıdır — Media Library'de 'boş klasör'
+ * kirliliğidir. Düğüm/varlık listeleri çağıran tarafından önceden verilmişse
+ * yeniden istek atılmaz (rate limit dostu).
+ */
+async function collectEmptyFolders(authHeader: string, prelistedAssets?: string[], prelistedNodes?: string[]): Promise<{ nodes: number; empties: string[]; error: string | null }> {
+  const assetsRes = prelistedAssets && prelistedAssets.length ? { pids: prelistedAssets, error: null as string | null } : await listAllAssetPids(authHeader);
+  if (assetsRes.error) return { nodes: 0, empties: [], error: assetsRes.error };
+  const nodesRes = prelistedNodes && prelistedNodes.length ? { nodes: prelistedNodes, error: null as string | null } : await bfsFolderNodes(authHeader);
+  if (nodesRes.error && nodesRes.nodes.length === 0) return { nodes: 0, empties: [], error: nodesRes.error };
+  const listed = assetsRes.pids;
+  const nodes = nodesRes.nodes;
+  const assetFolders = new Set<string>();
+  for (const p of listed) {
+    // NFC NORMALİZASYONU: aynı Türkçe ad iki farklı bayt dizisiyle yazılabilir
+    // ('ş' U+015F ↔ 's'+U+0327). Folders API düğümü ile varlık yolu farklı
+    // normalizasyonda ise startsWith eşleşmez → klasör HATALI 'boş' sayılır,
+    // silmeye çalışılır, Cloudinary 'not empty' ile reddeder (kanıt:
+    // 'Trafik işaretleri' altındaki görünmez kaynak). Her iki taraf NFC'ye çevrilir.
+    const parts = p.normalize('NFC').split('/');
+    parts.pop();
+    for (let i = 1; i <= parts.length; i++) assetFolders.add(parts.slice(0, i).join('/'));
+  }
+
   // Cloudinary klasör yolları büyük/küçük harf DUYARSIZ, ama karşılaştırmada
   // TÜRKÇE tuzağı var: 'İ' (U+0130) toLowerCase() ile 'i'+BİRLEŞEN NOKTA (U+0307)
   // üretir — iki kod noktası! Düz 'i' ile eşleşmez (kanıt: 'Trafik İşaretleri'
   // kaynağı, 'Trafik işaretleri' düğümüyle eşleşememişti → klasör hatalı 'boş'
   // sanılıp silinmeye çalışılıyordu). foldKey: NFC + toLowerCase + U+0307 temizliği
   // → 'İşaretleri' ≡ 'işaretleri' garanti edilir. (Gerçek harfler — ş, ç, ı — korunur.)
-  const foldKey = (s: string) => s.normalize('NFC').toLowerCase().replace(/\u0307/g, '');
+  // foldKey modül düzeyindedir (taşıma karşılaştırmasıyla aynı kural).
   const lowerAssetFolders = new Set([...assetFolders].map(foldKey));
   const empties = nodes.filter((n) => {
     const nn = foldKey(n);
@@ -380,6 +467,53 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const seen = new Set<string>();
     const queue: { idx: number; id: string; fromPid: string; toPid: string; deliveredPid: string; newGroup?: string }[] = [];
     const claimedTargets = new Set<string>();
+
+    // Yumuşak süre bütçesi: uç nokta maxDuration=60 bildirir; aynalama + taşıma +
+    // süpürme + budama fazlarının tamamı 45 sn'lik tek bütçede çalışır. Her fetch
+    // ayrıca kendi zaman aşımıyla korunur (asılı istek yok).
+    const deadline = Date.now() + 45000;
+
+    // 2b) KLASÖR AYNASI — 'klasör yoksa üret, fazla ise sil':
+    // Uygulama yerleşiminin (kütüphane kategorileri + alt kategori etiketleri +
+    // yükleme kategori/grupları) istediği klasör seti config'ten türetilir.
+    // Bulutta eksik olanlar Folders Admin API ile OLUŞTURULUR (ör. 'Hasarlı
+    // Araçlar', 'Hava Deniz Araçları' — sembolleri yerel kaynaklı olsa bile alt
+    // kategori Media Library'de görünür olur). Sette olmayan ve varlıksız
+    // klasörler budama fazında silinir; beklenenler BOŞ olsalar da korunur.
+    const expectedFolders = expectedFoldersFromConfig(config, nameById);
+    const expectedKeys = expectedFolders.map(foldKey);
+    const isExpectedFolder = (n: string): boolean => {
+      const nn = foldKey(n);
+      return expectedKeys.some((k) => k === nn || k.startsWith(nn + '/'));
+    };
+    const nodeScan = await bfsFolderNodes(authHeader);
+    const missingFolders = nodeScan.error
+      ? []
+      : expectedFolders.filter((f) => !nodeScan.nodes.some((n) => foldKey(n) === foldKey(f)));
+    missingFolders.sort((a, b) => a.split('/').length - b.split('/').length); // ata önce
+    const createdFolderList: string[] = [];
+    const folderErrors: { folder: string; error: string }[] = [];
+    const knownKeys = new Set(nodeScan.nodes.map(foldKey));
+    if (!dry && missingFolders.length > 0) {
+      for (const path of missingFolders) {
+        if (Date.now() >= deadline) break;
+        const segs = path.split('/');
+        for (let i = 1; i < segs.length; i++) {
+          const sub = segs.slice(0, i + 1).join('/');
+          const k = foldKey(sub);
+          if (knownKeys.has(k)) continue;
+          const r = await createCloudFolder(authHeader, sub);
+          if (r.ok) {
+            knownKeys.add(k);
+            createdFolderList.push(sub);
+          } else {
+            folderErrors.push({ folder: sub, error: r.error || '?' });
+            break; // bu yolun daha derin seviyeleri denenmez
+          }
+        }
+      }
+    }
+    const missingFoldersRemaining = missingFolders.filter((f) => !knownKeys.has(foldKey(f))).length;
 
     let groupChanges = 0;
     let distPlan: {
@@ -585,14 +719,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           relabels: distPlan.relabels,
           unmatched: distPlan.unmatched,
           total,
-          remaining: total,
+          remaining: Math.max(total, missingFoldersRemaining),
           moved: 0, cleaned: 0, movedEntries: [], failed: [],
           orphansRemaining: 0, prunedFolders: 0, prunedFolderList: [],
+          missingFolders: missingFolders.slice(0, 200),
+          missingFoldersRemaining,
+          createdFolderList: [],
+          folderErrors,
         });
       }
-      const scan = await collectEmptyFolders(authHeader);
+      const scan = await collectEmptyFolders(authHeader, undefined, nodeScan.nodes);
       return res.status(200).json({
-        moved: 0, cleaned: 0, remaining: total, total,
+        moved: 0, cleaned: 0, remaining: Math.max(total, missingFoldersRemaining), total,
         movedEntries: [], failed: [],
         orphansRemaining: 0,
         prunedFolders: 0,
@@ -600,6 +738,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         emptyFoldersRemaining: scan.error && scan.nodes === 0 ? -1 : scan.empties.length,
         folderNodes: scan.nodes,
         folderScanError: scan.error || undefined,
+        missingFolders: missingFolders.slice(0, 200),
+        missingFoldersRemaining,
+        createdFolderList: [],
+        folderErrors,
         dry: true,
       });
     }
@@ -607,10 +749,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // 3) Yumuşak süre bütçesiyle taşı (eşzamanlılık 3)
     const movedEntries: { id: string; secureUrl: string }[] = [];
     const failed: { id: string; error: string }[] = [];
-    // Yumuşak süre bütçesi: uç nokta maxDuration=60 bildirir; taşıma + süpürme +
-    // budama fazlarının tamamı 45 sn'lik tek bütçede çalışır. Her fetch ayrıca
-    // kendi zaman aşımıyla korunur (asılı istek yok).
-    const deadline = Date.now() + 45000;
     let cursor = 0;
 
     // REFERANS DENETİMİ: eski public_id sahne/verilerde geçiyorsa eski kopya
@@ -618,7 +756,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Hiç referans yoksa Cloudinary RENAME (sunucu tarafı anında taşıma) kullanılır:
     // eski kopya kalmaz (Cloudinary'de 'alakasız klasörde resim' kirliliği biter) ve
     // indirme/yükleme yaplmadığı için çok hızlıdır.
-    const scenesBlob = JSON.stringify(config.scenes || []) + JSON.stringify(config.projectState || {});
+    // GÖRSEL AYARLARI DA KAPSAR: arka plan haritası vb. visualSettings kaynaklı bir
+    // adres varsa taşımalar onu bozmamalı.
+    const scenesBlob = JSON.stringify(config.scenes || []) + JSON.stringify(config.projectState || {}) + JSON.stringify(config.visualSettings || {});
     const uploadsSrcBlob = JSON.stringify(uploads.map((u) => String(u?.src || '')));
     const isReferencedElsewhere = (fromPid: string): boolean =>
       scenesBlob.includes(fromPid) || uploadsSrcBlob.split(fromPid).length - 1 > 1;
@@ -766,6 +906,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             if (p) referenced.add(storedPid(p));
           }
         }
+        // EK KORUMA: config'in TAMAMI taranır (scenes, projectState, visualSettings,
+        // arka plan haritası...). İçinde geçen HER Cloudinary adresi referanslıdır —
+        // aksi halde sahnede çizili ama uploads listesinde olmayan bir görsel
+        // yanlışlıkla 'yetim' sayılabilirdi.
+        try {
+          const cfgText = JSON.stringify(config);
+          for (const m of cfgText.matchAll(/\/image\/upload\/([^"\\\s]+)/g)) {
+            const p = publicIdFromUrl(`https://res.cloudinary.com/x/image/upload/${m[1]}`);
+            if (p) referenced.add(storedPid(p));
+          }
+        } catch { /* metin taraması başarısız olursa temel referanslarla devam */ }
         const baseMap = new Map<string, string[]>();
         for (const p of referenced) {
           const b = nameKey(p.split('/').pop() || '');
@@ -774,13 +925,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           baseMap.get(b)!.push(p);
         }
 
-        // Bulut ağacını listele (en fazla 2 sayfa = 1000 varlık yeterli)
+        // AĞAÇ + KÖK listelemesi (ön ek YOK): kroki-olusturucu/** yanı sıra
+        // klasörsüz (kökte) duran eski kopyalar da temizlensin. 3 sayfa = 1500 varlık.
         const listed: string[] = [];
         let nextCursor: string | undefined = undefined;
         let listedAnyPage = false; // en az bir sayfa başarıyla listelendi mi?
-        for (let page = 0; page < 2 && Date.now() < deadline; page++) {
+        for (let page = 0; page < 3 && Date.now() < deadline; page++) {
           const listUrl = new URL(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/resources/image/upload`);
-          listUrl.searchParams.set('prefix', 'kroki-olusturucu/');
           listUrl.searchParams.set('max_results', '500');
           if (nextCursor) listUrl.searchParams.set('next_cursor', nextCursor);
           const lr = await fetch(listUrl.toString(), {
@@ -792,13 +943,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           const ld = await lr.json().catch(() => null);
           if (!ld || !Array.isArray(ld.resources)) break;
           for (const r of ld.resources) listed.push(String(r.public_id));
-          nextCursor = ld.next_cursor;
+          nextCursor = (ld as { next_cursor?: string }).next_cursor;
           if (!nextCursor) break;
         }
 
         const orphans: string[] = [];
         for (const p of listed) {
-          if (!p.startsWith('kroki-olusturucu/') || p.startsWith('kroki-olusturucu/objects/')) continue;
+          if (p.startsWith('kroki-olusturucu/objects/')) continue;
+          const isKrokiTree = p.startsWith('kroki-olusturucu/');
+          const isRoot = !p.includes('/'); // klasörsüz kök varlığı
+          // Yalnızca kroki ağacı + KÖK taranır; başka klasörlerdeki (samples/ vb.)
+          // varlıklara dokunulmaz.
+          if (!isKrokiTree && !isRoot) continue;
           if (referenced.has(p) || scenesBlob.includes(p)) continue; // referanslı → kesinlikle korunur
           const b = nameKey(p.split('/').pop() || '');
           const matches = baseMap.get(b) || [];
@@ -848,22 +1004,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.warn('sync-folders: eski kopya temizliği atlandı:', sweepErr);
     }
 
-    // 3c) BOŞ KLASÖR BUDAMA: taşımalar + eski kopya süpürmesinden sonra varlıksız
-    // kalan klasör düğümleri (eski isimlendirmelerin kabukları — 'CG\'ler', 'kantı'
-    // gibi) Media Library'de 'boş klasör' kirliliği yaratır. Varlık İÇERMEYEN
-    // düğümler aşağıdan yukarıya silinir; silme öncesi alt ağaç varlık sayısı
-    // yeniden doğrulanır, kroki-olusturucu kökü ve objects/ ASLA silinmez.
+    // 3c) BOŞ KLASÖR BUDAMA (FAZLAYI SİL): taşımalar + eski kopya süpürmesinden
+    // sonra varlıksız kalan ve uygulama yerleşiminin BEKLEMEDEĞİ klasör düğümleri
+    // aşağıdan yukarıya silinir. AYNA KURALI: beklenen set'teki klasörler (ve onların
+    // ataları) BOŞ olsalar DAHİL korunur — uygulamanın elle açtığı alt kategoriler
+    // ('Hasarlı Araçlar', 'Hava Deniz Araçları'...) bulutta kalıcıdır. Silme
+    // öncesi alt ağaç varlık sayısı yeniden doğrulanır; kroki-olusturucu kökü ve
+    // objects/ ASLA silinmez.
     let prunedFolders = 0;
     let emptyFoldersRemaining = 0;
     const prunedFolderList: string[] = [];
     let pruneErrors: { folder: string; error: string }[] = [];
     try {
       if (!dry && Date.now() < deadline) {
-        const scan = await collectEmptyFolders(authHeader);
+        const scan = await collectEmptyFolders(authHeader, undefined, nodeScan.nodes);
         emptyFoldersRemaining = scan.error && scan.nodes === 0 ? -1 : scan.empties.length;
         for (const n of scan.empties) {
           if (Date.now() >= deadline) break;
           if (n === 'kroki-olusturucu' || n.startsWith('kroki-olusturucu/objects')) continue;
+          // BEKLENEN KLASÖR KORUMASI: uygulama yerleşimi bu klasörü istiyor (veya
+          // altında beklenen bir klasör var) → silme.
+          if (isExpectedFolder(n)) continue;
           const attempt = async (): Promise<{ ok: boolean; error: string }> => {
             try {
               const fr = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/folders/${n.split('/').map(encodeURIComponent).join('/')}`, {
@@ -934,7 +1095,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({
       moved: movedEntries.length,
       cleaned,
-      remaining: Math.max(0, total - movedEntries.length),
+      // remaining: taşınacak görseller + henüz oluşturulamamış beklenen klasörler.
+      // İstemci döngüsü her ikisi bitene dek sürdürür.
+      remaining: Math.max(0, total - movedEntries.length, missingFoldersRemaining),
       orphansRemaining,
       total,
       movedEntries,
@@ -943,6 +1106,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       prunedFolderList,
       pruneErrors,
       emptyFoldersRemaining,
+      missingFolders: missingFolders.slice(0, 200),
+      missingFoldersRemaining,
+      createdFolderList,
+      folderErrors,
       ...(distPlan ? { distribute: { category: distPlan.category, folders: distPlan.folders, relabels: distPlan.relabels, unmatched: distPlan.unmatched } } : {}),
       _revAt: revAt || undefined,
     });
