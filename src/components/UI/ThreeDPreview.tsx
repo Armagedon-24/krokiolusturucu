@@ -1802,9 +1802,6 @@ const FlatDecal3D = ({ x, y, rad, wWorld, hWorld, texture, elev = 0.08, renderOr
 // çizgi + yol adı etiketi) yüksek çözünürlükte canvas'a çizip zemine yatırır.
 // Böylece kıvrım, kesikli çizgi periyodu ve yol adı 2B görünümle birebir olur.
 const ROAD_ENGINE_IDS_3D = new Set(['st-1', 'st-cadde', 'st-sokak']);
-// Çizgi-motorlu (fill'siz, yalnızca stroke) iki tekerliler: alfa silueti ekstrüzyona
-// uygun değil — eski prosedürel 3B modelde kalır.
-const VEHICLE_LINEART_IDS_3D = new Set(['v-motor', 'v-bicycle', 'v-scooter']);
 const RoadDecal3D = ({ obj, width, height }: any) => {
   const w2d = Math.max(20, width / SCALE);
   const h2d = Math.max(20, height / SCALE);
@@ -2060,10 +2057,7 @@ const CalloutDecal3D = ({ obj }: any) => {
 const Symbol3D = ({ obj, wallThickness, realObj, allWalls, visualObjects, uploadedImages, stageWidth, stageHeight }: any) => {
   const actualObj = realObj || obj;
   const { x, y, rotation, symbolId, src, fill } = obj;
-  // SVG yüksek çözünürlük rasteri — hook kuralları gereği koşulsuz en üstte çağrılır;
-  // SVG olmayan kaynaklar için no-op'tur. Araç üst yüzü + zemin decallerinde kullanılır.
-  const svgHiRes = useSvgHiResTexture(typeof src === 'string' ? src : undefined);
-  
+
   // 1. Dimensions and Identifiers
   const width = (actualObj.width || 0) * (actualObj.scaleX || 1);
   const height = (actualObj.height || 0) * (actualObj.scaleY || 1);
@@ -2289,27 +2283,26 @@ const Symbol3D = ({ obj, wallThickness, realObj, allWalls, visualObjects, upload
   if (isBalloon) return <Balloon3D x={posX} y={posZ} width={finalW} height={finalH} rad={rad} fill={fill} zOffset={yOff} />;
   if (isBoat) return <Boat3D x={posX} y={posZ} width={finalW} height={finalH} rad={rad} variant={sIdLower === 'v-rowboat' ? 'rowboat' : sIdLower === 'v-motorboat' ? 'motorboat' : 'jetski'} fill={fill} zOffset={yOff} />;
   if (isVehicle) {
-    // Kara taşıtları (v-*): 2B'deki temiz SVG üst görünüm alfa ekstrüzyonuyla
-    // hacme çevrilir — kuşbakışında 2B çizimle birebir ("SVG gibi" temiz görünüm),
-    // yanlardan gerçek hacimli gövde. Geometri üretilemeyen dokularda eski
-    // prosedürel 3B modele düşer. Çizgi-motorlu iki tekerliler eski modelde kalır.
-    if (sIdLower.startsWith('v-') && !VEHICLE_LINEART_IDS_3D.has(sIdLower)) {
-      return (
-        <ExtrudedSymbol3D
-          x={posX}
-          y={posZ}
-          rad={rad}
-          width={finalW}
-          height={finalH}
-          textureSrc={textureSrc}
-          hiResTexture={svgHiRes}
-          heightCm={getExtrudeHeightCm(sIdLower)}
-          zOffset={totalOffset}
-          fallback={<Vehicle3D x={posX} y={posZ} width={finalW} height={finalH} rad={rad} type={sIdLower + ' ' + nameLower} fill={fill} zOffset={yOff} zHeight={actualObj.zHeight} />}
-        />
-      );
-    }
-    return <Vehicle3D x={posX} y={posZ} width={finalW} height={finalH} rad={rad} type={sIdLower + ' ' + nameLower} fill={fill} zOffset={yOff} zHeight={actualObj.zHeight} />;
+    // Kara taşıtları: 2B semboller karakalem YAN/¾ görünüş çizimlerdir; alfa
+    // siluetini yukarı presleyen ekstrüzyon tepede yatık araç çizimi bırakıyordu
+    // ("araç 3B'de yan yatmış gibi görünüyor" — kullanıcı raporu). Bu yüzden
+    // TÜM kara taşıtları gerçekçi prosedürel 3B modelle çizilir; gövde rengi
+    // 2B çiziminin mürekkep renginden türetilir (2B'deki araç rengiyle uyumlu).
+    // Devrilmiş/yatık araçlar kendi uzun ekseni etrafında çevrilerek çizilir.
+    return (
+      <InkVehicle3D
+        x={posX}
+        y={posZ}
+        width={finalW}
+        height={finalH}
+        rad={rad}
+        type={sIdLower + ' ' + nameLower}
+        fill={fill}
+        textureSrc={textureSrc}
+        zOffset={yOff}
+        zHeight={actualObj.zHeight}
+      />
+    );
   }
   if (isTree) return <Tree3D x={posX} y={posZ} width={finalW} height={finalH} rad={rad} type={sIdLower} zOffset={yOff} />;
   if (isCone) return <TrafficCone3D x={posX} y={posZ} zOffset={yOff} />;
@@ -3808,7 +3801,51 @@ const WindowFrameAndGlass = ({ width, height, thick, onClick }: WindowProps) => 
   );
 };
 
-const Vehicle3D = ({ x, y, width, height, rad, type, fill, zOffset, zHeight }: any) => {
+/** Mürekkep rengini 3B boya rengine çevirir: simsiyah çizimler için koyu
+ *  antrasit (metalik boya parlaklığı kaybolmasın), bembeyaz için açık gri. */
+const liftInkColor = (c?: string | null): string | null => {
+  if (!c || !/^#[0-9a-fA-F]{6}$/.test(c)) return null;
+  const r = parseInt(c.slice(1, 3), 16), g = parseInt(c.slice(3, 5), 16), b = parseInt(c.slice(5, 7), 16);
+  const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  if (lum < 0.075) return '#2a2e33';
+  if (lum > 0.93) return '#e8eaec';
+  return c;
+};
+
+/** Sembol görselinin mürekkep (opak piksellerin ortalama) rengini çıkarır;
+ *  sonucu _alphaMaskCache'e yazar (ekstrüzyon yoluyla paylaşılır). */
+const useInkColor = (src: string): string | null => {
+  const [color, setColor] = useState<string | null>(() => _alphaMaskCache.get(src)?.color ?? null);
+  useEffect(() => {
+    const cached = _alphaMaskCache.get(src);
+    if (cached !== undefined) { setColor(cached?.color ?? null); return; }
+    let alive = true;
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      if (!alive) return;
+      const m = extractAlphaMask(img);
+      _alphaMaskCache.set(src, m);
+      setColor(m?.color ?? null);
+    };
+    img.onerror = () => { if (alive) setColor(null); };
+    img.src = src;
+    return () => { alive = false; };
+  }, [src]);
+  return color;
+};
+
+/** Kara taşıtı sarmalayıcı: gövde rengini 2B çizimin mürekkepinden alır ve
+ *  devrilmiş/yatık taşıtları (takla, yatık motosiklet...) kendi uzun ekseni
+ *  etrafında çevirerek gerçekçi çizer. */
+const InkVehicle3D = (props: any) => {
+  const ink = useInkColor(props.textureSrc || '');
+  const t = String(props.type || '').toLowerCase();
+  const rollOver = t.includes('overturned') || t.includes('fallen') || t.includes('devrilmi') || t.includes('takla') || t.includes('yatık') || t.includes('devrik');
+  return <Vehicle3D {...props} fill={props.fill || liftInkColor(ink) || undefined} rollOver={rollOver} />;
+};
+
+const Vehicle3D = ({ x, y, width, height, rad, type, fill, zOffset, zHeight, rollOver }: any) => {
   const isVerticalIn2D = height > width;
   const w = isVerticalIn2D ? height : width;
   const d = isVerticalIn2D ? width : height;
@@ -3816,7 +3853,7 @@ const Vehicle3D = ({ x, y, width, height, rad, type, fill, zOffset, zHeight }: a
 
   const typeLower = (type || '').toLowerCase();
   
-  let color = fill || "#34495e";
+  let color = fill || "#3a4046";
   if (typeLower.includes('itfaiye') || typeLower.includes('fire')) {
     color = "#cc0000";
   } else if (typeLower.includes('taksi') || typeLower.includes('taxi')) {
@@ -3988,8 +4025,11 @@ const Vehicle3D = ({ x, y, width, height, rad, type, fill, zOffset, zHeight }: a
   }), [d]);
 
   if (isMotorcycle) {
+    // Devrilmiş/yatık motosiklet: tüm içerik uzun eksen (X) etrafında çevrilir
+    const motoShift = groundClearance + 45 * SCALE * heightScale + wheelR;
     return (
       <group position={[x, zOffset || 0, y]} rotation={[0, adjustedRad, 0]}>
+        <group position={[0, rollOver ? motoShift : 0, 0]} rotation={[rollOver ? Math.PI : 0, 0, 0]}>
         {/* Wheels */}
         <mesh position={[-w / 3, wheelR, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow>
           <cylinderGeometry args={[wheelR, wheelR, wheelW, 16]} />
@@ -4016,6 +4056,7 @@ const Vehicle3D = ({ x, y, width, height, rad, type, fill, zOffset, zHeight }: a
           <cylinderGeometry args={[1 * SCALE, 1 * SCALE, 30 * SCALE]} />
           <meshStandardMaterial color="#222" />
         </mesh>
+        </group>
       </group>
     );
   }
@@ -4027,8 +4068,15 @@ const Vehicle3D = ({ x, y, width, height, rad, type, fill, zOffset, zHeight }: a
   const minLengthUnits = Math.max(100, (targetHeightCm || 150) * 0.7 * SCALE);
   const sizeScale = w < minLengthUnits ? minLengthUnits / w : 1;
 
+  // Devrilmiş araç: gövde uzun eksen (X) etrafında tavana çevrilir;
+  // kaydırma, model yüksekliği × ölçek kadardır ki tekerlekler yukarı bakarken
+  // çatı yere değsin (kullanıcı: "devrilmiş araç" sembolleri normal park
+  // edilmiş araç gibi çiziliyordu).
+  const rollShift = (groundClearance + bodyH + cabinH + 4 * SCALE) * sizeScale;
+
   return (
-    <group position={[x, zOffset || 0, y]} rotation={[0, adjustedRad, 0]} scale={[sizeScale, sizeScale, sizeScale]}>
+    <group position={[x, zOffset || 0, y]} rotation={[0, adjustedRad, 0]}>
+      <group position={[0, rollOver ? rollShift : 0, 0]} rotation={[rollOver ? Math.PI : 0, 0, 0]} scale={[sizeScale, sizeScale, sizeScale]}>
       {/* Chassis */}
       <mesh position={[0, groundClearance - 2 * SCALE, 0]}>
         <boxGeometry args={[w * 0.98, 4 * SCALE, d * 0.98]} />
@@ -5089,6 +5137,7 @@ const Vehicle3D = ({ x, y, width, height, rad, type, fill, zOffset, zHeight }: a
           color="#ffeb3b" 
         />
       )}
+      </group>
     </group>
   );
 };
