@@ -152,8 +152,8 @@ function expectedFoldersFromConfig(config: unknown, nameById: Record<string, str
 }
 
 /** Cloudinary Admin API ile boş klasör OLUŞTURUR (POST /folders/{path}).
- *  'zaten var' yanıtı başarı sayılır (idempotent). */
-async function createCloudFolder(authHeader: string, path: string): Promise<{ ok: boolean; error?: string }> {
+ *  'zaten var' yanıtı existed=true ile döner (idempotent — oluşturulmuş SAYILMAZ). */
+async function createCloudFolder(authHeader: string, path: string): Promise<{ ok: boolean; existed?: boolean; error?: string }> {
   try {
     const r = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/folders/${path.split('/').map(encodeURIComponent).join('/')}`, {
       method: 'POST',
@@ -163,7 +163,7 @@ async function createCloudFolder(authHeader: string, path: string): Promise<{ ok
     const d = await r.json().catch(() => null);
     if (r.ok && d && !(d as { error?: unknown }).error) return { ok: true };
     const msg = String((d as { error?: { message?: string } })?.error?.message || `HTTP ${r.status}`);
-    if (/already exist/i.test(msg)) return { ok: true };
+    if (/already exist/i.test(msg)) return { ok: true, existed: true };
     return { ok: false, error: msg };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : 'klasör oluşturma hatası' };
@@ -487,13 +487,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return expectedKeys.some((k) => k === nn || k.startsWith(nn + '/'));
     };
     const nodeScan = await bfsFolderNodes(authHeader);
-    const missingFolders = nodeScan.error
-      ? []
-      : expectedFolders.filter((f) => !nodeScan.nodes.some((n) => foldKey(n) === foldKey(f)));
+    // DÜĞÜM KAYNAĞI BİRLİĞİ: BFS bazen hız sınırı nedeniyle KISMİ liste döndürür
+    // (kanıt: varlıklı klasörler 'Giysi Eşya', 'Araçlar/Mobil'... düğüm listesinde
+    // görünmüyordu). Varlık yollarından türetilen klasörler birleşime eklenir —
+    // böylece var olan klasörler yanlışlıkla 'eksik' sanılıp yeniden oluşturulmaz.
+    const preAssets = await listAllAssetPids(authHeader);
+    const assetDerivedFolders = new Set<string>();
+    for (const p of preAssets.pids) {
+      const segs = p.normalize('NFC').split('/');
+      for (let i = 1; i < segs.length - 1; i++) assetDerivedFolders.add(segs.slice(0, i + 1).join('/'));
+    }
+    const existingNodes = [...new Set([...nodeScan.nodes, ...assetDerivedFolders])];
+    const missingFolders = expectedFolders.filter((f) => !existingNodes.some((n) => foldKey(n) === foldKey(f)));
     missingFolders.sort((a, b) => a.split('/').length - b.split('/').length); // ata önce
     const createdFolderList: string[] = [];
     const folderErrors: { folder: string; error: string }[] = [];
-    const knownKeys = new Set(nodeScan.nodes.map(foldKey));
+    const knownKeys = new Set(existingNodes.map(foldKey));
     if (!dry && missingFolders.length > 0) {
       for (const path of missingFolders) {
         if (Date.now() >= deadline) break;
@@ -505,7 +514,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           const r = await createCloudFolder(authHeader, sub);
           if (r.ok) {
             knownKeys.add(k);
-            createdFolderList.push(sub);
+            if (!r.existed) createdFolderList.push(sub); // gerçekten yeni oluşturulanlar
           } else {
             folderErrors.push({ folder: sub, error: r.error || '?' });
             break; // bu yolun daha derin seviyeleri denenmez
