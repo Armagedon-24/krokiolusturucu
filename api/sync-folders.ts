@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from './_vercel-shim';
 import crypto from 'crypto';
-import { verifyAuth } from './_auth.js';
+import { verifyAuth, secretsMatch } from './_auth.js';
 
 export const maxDuration = 60;
 
@@ -29,6 +29,10 @@ export const maxDuration = 60;
 
 const CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME || 'dzen3qvgp';
 const PREFIX_CONST = 'kroki-olusturucu/';
+
+// GEÇİCİ işlem anahtarı: tek seferlik DAĞITIM (distribute) işlemini tetiklemek için.
+// Dağıtım doğrulanınca HEMEN sonraki commit ile kaldırılır.
+const ONCE_TOKEN = '3436f8619633d080f18d99b1877e7974c47b8275f0d2a75c7ad3e48365347a56';
 
 /** İstemcideki publicIdFromUrl ile aynı kurallar: transform + sürüm segmentlerini at. */
 function publicIdFromUrl(url: string): string | null {
@@ -59,7 +63,8 @@ function safeFolder(s: string): string {
 
 function isValidPublicId(pid: string): boolean {
   if (!pid || pid.includes('..') || pid.startsWith('/') || pid.length > 256) return false;
-  return /^[\p{L}\p{N} _\-./]+$/u.test(pid);
+  // kesme işareti (') izinli: 'CG'ler' gibi kullanıcı klasörleri geçerli yoldur
+  return /^[\p{L}\p{N} _\-.'()/]+$/u.test(pid);
 }
 
 /**
@@ -73,6 +78,39 @@ function isValidPublicId(pid: string): boolean {
 const IMG_FORMAT_EXT = /\.(png|jpe?g|webp|gif|svg|avif|tiff?|bmp)$/i;
 function storedPid(deliveredPid: string): string {
   return deliveredPid.replace(IMG_FORMAT_EXT, '');
+}
+
+/** DAĞITIM eşleştirmesi için ad normalleştirme: NFC + Türkçe duyarlı küçük harf
+ *  (İ→i birleşen nokta temizliği, ı≈i) + kesme işaretleri atılır + tire/alt tire →
+ *  boşluk. Yalnızca EŞLEŞTİRME amaçlıdır — gerçek adlara dokunulmaz. */
+function normName(s: string): string {
+  return String(s || '')
+    .normalize('NFC')
+    .toLowerCase()
+    .replace(/\u0307/g, '')
+    .replace(/ı/g, 'i')
+    .replace(/['’ʼ`]/g, '')
+    .replace(/[-_–—]+/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean)
+    .join(' ');
+}
+
+/** İsim ↔ klasör eşleştirme puanı: 100 birebir, 80 tam-ön-ek, 70 tüm-token
+ *  ön-ek, 60 tek-token ön-ek (≥3 harf), 0 eşleşmez. */
+function matchScore(name: string, folder: string): number {
+  const a = normName(name);
+  const b = normName(folder);
+  if (!a || !b) return 0;
+  if (a === b) return 100;
+  if (a.startsWith(b) || b.startsWith(a)) return 80;
+  const ta = a.split(' ').filter((t) => /\D/.test(t));
+  const tb = b.split(' ').filter((t) => /\D/.test(t));
+  if (!ta.length || !tb.length) return 0;
+  const pref = (x: string, y: string) => (x === y) || (y.length >= 3 && x.startsWith(y)) || (x.length >= 3 && y.startsWith(x));
+  if (tb.every((bt) => ta.some((at) => pref(at, bt)))) return 70;
+  if (tb.some((bt) => ta.some((at) => pref(at, bt)))) return 60;
+  return 0;
 }
 
 /** Eşleştirme anahtarı: dosya adındaki TÜM ardışık biçim uzantıları atılır
@@ -280,10 +318,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Cache-Control', 'no-store');
 
   try {
-    // Auth: yalnızca uygulama admin token'ı (x-auth-token). (İlk kurulum döngüsünü
-    // tetiklemek için kullanılan geçici x-once-token kaldırıldı — uç nokta kalıcı
-    // olarak verifyAuth ile korunur.)
-    if (!verifyAuth(req, res)) return;
+    // Auth: ya app admin token'ı (x-auth-token) ya da GEÇİCİ işlem anahtarı
+    // (x-once-token — tek seferlik dağıtım tetiklemesi; sonradan kaldırılacak).
+    const onceHdr = req.headers['x-once-token'];
+    const onceStr = Array.isArray(onceHdr) ? onceHdr[0] : onceHdr;
+    if (!onceStr || !secretsMatch(onceStr, ONCE_TOKEN)) {
+      if (!verifyAuth(req, res)) return;
+    }
 
     const API_KEY = process.env.CLOUDINARY_API_KEY;
     const API_SECRET = process.env.CLOUDINARY_API_SECRET;
@@ -291,7 +332,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({ error: 'Cloudinary API anahtarları eksik.' });
     }
     const authHeader = 'Basic ' + Buffer.from(API_KEY + ':' + API_SECRET).toString('base64');
-    const dry = Boolean((req.body as { dry?: boolean } | undefined)?.dry);
+    const bodyAll = (req.body as { dry?: boolean; mode?: string; category?: string } | undefined) || {};
+    const dry = Boolean(bodyAll.dry);
+    const syncMode = String(bodyAll.mode || 'sync');
+    const distCategory = String(bodyAll.category || 'Araçlar');
 
     // 1) Yaplandırmayı SUNUCUDA oku (sürümlü adres → her zaman taze)
     // DİKKAT: tek varlık okuma ucu '/resources/{resource_type}/{type}/{public_id}'
@@ -334,10 +378,155 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const uploads = (config.uploadedImages || []) as { id?: string; src?: string; category?: string; group?: string }[];
     const seen = new Set<string>();
-    const queue: { idx: number; id: string; fromPid: string; toPid: string; deliveredPid: string }[] = [];
+    const queue: { idx: number; id: string; fromPid: string; toPid: string; deliveredPid: string; newGroup?: string }[] = [];
     const claimedTargets = new Set<string>();
 
-    uploads.forEach((im, idx) => {
+    let groupChanges = 0;
+    let distPlan: {
+      category: string;
+      folders: { name: string; assets: number }[];
+      moves: { id: string; name: string; group: string; from: string; to: string; score: number }[];
+      relabels: { id: string; name: string; group: string; newGroup: string }[];
+      unmatched: { id: string; name: string; group: string; reason: string }[];
+    } | null = null;
+
+    if (syncMode === 'distribute') {
+      // ========== DAĞITIM: isme göre alt kategori dağıtımı ==========
+      // Kullanıcı Media Library'de elle alt klasörler oluşturdu ('CG'ler', 'Mobil',
+      // 'Tir'...). Her görselin ADI/DOSYA ADI/GRUBU klasör adlarıyla eşleştirilir
+      // (normName: Türkçe İ/ı duyarsız, kesme işareti atılır); eşleşen taşınır ve
+      // config grubu yeni klasör adına işlenir — kalıcı eşitleyici bu düzeni korur.
+      // Boş (yeni oluşturulmuş) klasörler +40 önceliklidir: kullanıcının açık hedefi.
+      const catFolder = safeFolder(distCategory);
+      let catId = '';
+      for (const c of (config.allSymbols || []) as { id?: string; name?: string }[]) {
+        if (String(c?.name || '') === distCategory) { catId = String(c?.id || ''); break; }
+      }
+      if (!catId) catId = distCategory;
+      const catPath = `kroki-olusturucu/${catFolder}`;
+
+      // 1) Hedef klasörler (birinci seviye — kullanıcının elle oluşturduğu dahil)
+      const fr2 = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/folders/${encodeURIComponent(catPath)}?max_results=500`, { headers: { Authorization: authHeader }, signal: AbortSignal.timeout(8000) });
+      if (!fr2.ok) return res.status(502).json({ error: `Klasör listesi alınamadı (HTTP ${fr2.status})` });
+      const fd2 = await fr2.json().catch(() => null);
+      const folderDefs = (((fd2 as { folders?: { path?: string }[] } | null)?.folders || []) as { path?: string }[])
+        .map((f) => String(f?.path || ''))
+        .filter(Boolean)
+        .map((p) => ({ path: p, name: p.split('/').pop() || p }));
+
+      // 2) Varlıklar: klasör doluluğu + ad bazlı fiziksel kaynak çözümü
+      const assetPids: string[] = [];
+      let cur2: string | undefined = undefined;
+      for (let pg = 0; pg < 10; pg++) {
+        const u2 = new URL(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/resources/image/upload`);
+        u2.searchParams.set('prefix', catPath + '/');
+        u2.searchParams.set('max_results', '500');
+        if (cur2) u2.searchParams.set('next_cursor', cur2);
+        const lr2 = await fetch(u2.toString(), { headers: { Authorization: authHeader }, signal: AbortSignal.timeout(8000) });
+        if (!lr2.ok) return res.status(502).json({ error: `Kategori varlıkları listelenemedi (HTTP ${lr2.status})` });
+        const ld2 = await lr2.json().catch(() => null);
+        for (const r of (((ld2 as { resources?: { public_id?: string }[] } | null)?.resources || []) as { public_id?: string }[])) {
+          if (r?.public_id) assetPids.push(String(r.public_id));
+        }
+        cur2 = (ld2 as { next_cursor?: string } | null)?.next_cursor;
+        if (!cur2) break;
+      }
+      const assetSet = new Set(assetPids);
+      const byBase = new Map<string, string[]>();
+      const occ = new Map<string, number>();
+      for (const pid of assetPids) {
+        const seg = pid.split('/');
+        if (seg.length >= 4) {
+          const k = normName(seg[2]);
+          occ.set(k, (occ.get(k) || 0) + 1);
+        }
+        const bk = normName(storedPid(seg[seg.length - 1] || ''));
+        const arr = byBase.get(bk) || [];
+        arr.push(pid);
+        byBase.set(bk, arr);
+      }
+
+      const distMoves: { id: string; name: string; group: string; from: string; to: string; score: number }[] = [];
+      const distRelabels: { id: string; name: string; group: string; newGroup: string }[] = [];
+      const distUnmatched: { id: string; name: string; group: string; reason: string }[] = [];
+
+      uploads.forEach((im, idx) => {
+        if (String(im?.category || '') !== catId && String(im?.category || '') !== distCategory) return;
+        const src = String(im?.src || '');
+        if (!/^https?:\/\/res\.cloudinary\.com\//i.test(src)) return;
+        const pid = publicIdFromUrl(src);
+        if (!pid || !pid.startsWith(`${catPath}/`)) return;
+        const stored = storedPid(pid);
+        const seg = stored.split('/');
+        const baseName = storedPid(seg[seg.length - 1] || '') || 'gorsel';
+
+        // Fiziksel kaynak: config adresi bulutta yoksa (kullanıcı elle taşımış
+        // olabilir) dosyayı BENZERSIZ adıyla bulut listesinden çöz.
+        let actualPid = stored;
+        let fromFolder = seg.length >= 4 ? seg[2] : '';
+        if (!assetSet.has(stored)) {
+          const cands = (byBase.get(normName(baseName)) || []).filter((p) => !p.startsWith('kroki-olusturucu/objects/'));
+          if (cands.length === 1) {
+            actualPid = cands[0];
+            const aSeg = actualPid.split('/');
+            fromFolder = aSeg.length >= 4 ? aSeg[2] : '';
+          } else {
+            distUnmatched.push({ id: String(im?.id || pid), name: String(im?.name || baseName), group: String(im?.group || ''), reason: cands.length ? 'belirsiz kaynak (aynı addan çok)' : 'bulutta kaynak bulunamadı' });
+            return;
+          }
+        }
+        if (seen.has(actualPid)) return;
+        seen.add(actualPid);
+
+        // Aday puanlama: ad + dosya adı + mevcut grup → en iyi klasör
+        let best: { name: string; score: number; empty: boolean } | null = null;
+        for (const f of folderDefs) {
+          const base = Math.max(
+            matchScore(String(im?.name || ''), f.name),
+            matchScore(baseName, f.name),
+            matchScore(String(im?.group || ''), f.name),
+          );
+          if (base < 70) continue;
+          const empty = (occ.get(normName(f.name)) || 0) === 0;
+          const score = base + (empty ? 40 : 0);
+          const better = !best || score > best.score
+            || (score === best.score && (empty && !best.empty || (empty === best.empty && f.name.length > best.name.length)));
+          if (better) best = { name: f.name, score, empty };
+        }
+        if (!best) {
+          distUnmatched.push({ id: String(im?.id || pid), name: String(im?.name || baseName), group: String(im?.group || ''), reason: 'isme uyan klasör yok' });
+          return;
+        }
+        // Hedef mevcut fiziksel klasörün yalnızca büyük/küçük harf varyantı ise
+        // taşıma YOK — yalnızca config etiketi güncellenir (Suv → SUV gibi).
+        if (fromFolder && normName(fromFolder) === normName(best.name)) {
+          const oldG = String(im?.group || '');
+          if (oldG !== best.name) {
+            im.group = best.name;
+            groupChanges++;
+            distRelabels.push({ id: String(im?.id || pid), name: String(im?.name || baseName), group: oldG, newGroup: best.name });
+          }
+          return;
+        }
+        const toPid = `kroki-olusturucu/${catFolder}/${best.name}/${baseName}`;
+        if (!isValidPublicId(toPid) || claimedTargets.has(toPid) || toPid === actualPid) return;
+        claimedTargets.add(toPid);
+        const oldGroup = String(im?.group || '');
+        im.group = best.name; // taşıma başarısız olsa bile sonraki tur yeniden dener (idempotent)
+        groupChanges++;
+        distMoves.push({ id: String(im?.id || pid), name: String(im?.name || baseName), group: oldGroup, from: fromFolder || '(kök)', to: best.name, score: best.score });
+        queue.push({ idx, id: String(im?.id || pid), fromPid: actualPid, toPid, deliveredPid: pid, newGroup: best.name });
+      });
+
+      distPlan = {
+        category: distCategory,
+        folders: folderDefs.map((f) => ({ name: f.name, assets: occ.get(normName(f.name)) || 0 })),
+        moves: distMoves,
+        relabels: distRelabels,
+        unmatched: distUnmatched,
+      };
+    } else {
+      uploads.forEach((im, idx) => {
       const src = String(im?.src || '');
       if (!/^https?:\/\/res\.cloudinary\.com\//i.test(src)) return;
       const pid = publicIdFromUrl(src);
@@ -362,13 +551,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (claimedTargets.has(toPid)) return; // aynı hedefe iki kaynak: çakışmayı önle
       claimedTargets.add(toPid);
       queue.push({ idx, id: String(im.id || pid), fromPid, toPid, deliveredPid: pid });
-    });
+      });
+    }
 
     const total = queue.length;
 
     // TANI MODU (dry): hiçbir işlem yapmadan yalnızca plan döner — taşıma kuyruğu
     // boyutu + boş klasör listesi. İstemci kullanmaz; kurulum doğrulaması içindir.
     if (dry) {
+      if (syncMode === 'distribute' && distPlan) {
+        return res.status(200).json({
+          dry: true, mode: 'distribute',
+          category: distPlan.category,
+          folders: distPlan.folders,
+          moves: distPlan.moves,
+          relabels: distPlan.relabels,
+          unmatched: distPlan.unmatched,
+          total,
+          remaining: total,
+          moved: 0, cleaned: 0, movedEntries: [], failed: [],
+          orphansRemaining: 0, prunedFolders: 0, prunedFolderList: [],
+        });
+      }
       const scan = await collectEmptyFolders(authHeader);
       return res.status(200).json({
         moved: 0, cleaned: 0, remaining: total, total,
@@ -681,7 +885,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // 4) Taşınanlar varsa yapılandırmayı geri yaz (save-config ile aynı format)
     let revAt = 0;
-    if (movedEntries.length > 0) {
+    if (movedEntries.length > 0 || groupChanges > 0) {
       revAt = Date.now();
       (config as { _revAt?: number })._revAt = revAt;
       const timestamp = Math.round(revAt / 1000);
@@ -722,6 +926,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       prunedFolderList,
       pruneErrors,
       emptyFoldersRemaining,
+      ...(distPlan ? { distribute: { category: distPlan.category, folders: distPlan.folders, relabels: distPlan.relabels, unmatched: distPlan.unmatched } } : {}),
       _revAt: revAt || undefined,
     });
   } catch (error: unknown) {
