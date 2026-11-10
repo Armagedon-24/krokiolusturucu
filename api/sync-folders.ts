@@ -967,7 +967,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           if (referenced.has(p) || scenesBlob.includes(p)) continue; // referanslı → kesinlikle korunur
           const b = nameKey(p.split('/').pop() || '');
           const matches = baseMap.get(b) || [];
-          if (matches.length === 1 && matches[0] !== p) orphans.push(p); // bilinen taşınmanın eski kopyası
+          if (matches.length === 1 && matches[0] !== p) { orphans.push(p); continue; } // bilinen taşınmanın eski kopyası
+          // KÖK varlıklar (klasörsüz): geçiş dönemi eski kopyaları. Kökte duran,
+          // hiç referansı olmayan ve adı kroki ağacındaki (objects/ hariç) bir
+          // referanslı varlıkla BİREBİR aynı olan dosya silinir — ikizi ağaçta
+          // yaşar, hiçbir kayıp yoktur. (Kök kopyaların adları bazen hem upload
+          // hem sahne referansıyla eşleştiği için 'tek eşleşme' kuralı onları
+          // koruyordu ve yüzlerce eski kopya kökte birikiyordu.)
+          if (isRoot && matches.some((m) => m.startsWith('kroki-olusturucu/') && !m.startsWith('kroki-olusturucu/objects/'))) {
+            orphans.push(p);
+          }
         }
         orphansRemaining = orphans.length;
 
