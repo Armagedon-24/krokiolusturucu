@@ -96,6 +96,14 @@ function normName(s: string): string {
     .join(' ');
 }
 
+/** FİZİKSEL yol eşitlik anahtarı: NFC + küçük harf + İ birleşen nokta temizliği.
+ *  EŞLEŞTİRME normalleştirmesinden (normName) FARKLIDIR: ı≈i KATILMAZ, kesme
+ *  işareti/tire dönüştürülmez — 'Tır' ≠ 'Tir' (farklı klasörler!), 'Suv' ≡ 'SUV'
+ *  (yalnızca büyük/küçük harf). Taşıma gerekip gerekmediği BUNUNLA karar verilir. */
+function physKey(s: string): string {
+  return String(s || '').normalize('NFC').toLowerCase().replace(/\u0307/g, '');
+}
+
 /** İsim ↔ klasör eşleştirme puanı: 100 birebir, 80 tam-ön-ek, 70 tüm-token
  *  ön-ek, 60 tek-token ön-ek (≥3 harf), 0 eşleşmez. */
 function matchScore(name: string, folder: string): number {
@@ -513,9 +521,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             return;
           }
         }
-        // Hedef mevcut fiziksel klasörün yalnızca büyük/küçük harf varyantı ise
-        // taşıma YOK — yalnızca config etiketi güncellenir (Suv → SUV gibi).
-        if (fromFolder && normName(fromFolder) === normName(best.name)) {
+        // Hedef mevcut fiziksel klasörle FİZİKSEL olarak aynıysa (yalnızca büyük/
+        // küçük harf farkı — 'Suv' ≡ 'SUV') taşıma YOK, yalnızca config etiketi
+        // güncellenir. DİKKAT: normName DEĞİL physKey — 'Tır' ≠ 'Tir' gerçek taşımadır!
+        if (fromFolder && physKey(fromFolder) === physKey(best.name)) {
           const oldG = String(im?.group || '');
           if (oldG !== best.name) {
             im.group = best.name;
@@ -562,7 +571,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const toPid = grp && grp !== 'uncategorized'
         ? `kroki-olusturucu/${catFolder}/${grp}/${fileName}`
         : `kroki-olusturucu/${catFolder}/${fileName}`;
-      if (toPid === fromPid) return; // zaten yerinde
+      if (toPid === fromPid || physKey(toPid) === physKey(fromPid)) return; // zaten yerinde (büyük/küçük harf varyantı dahil)
       if (!isValidPublicId(toPid)) return; // geçersiz hedef adı — kayıt korunur
       if (claimedTargets.has(toPid)) return; // aynı hedefe iki kaynak: çakışmayı önle
       claimedTargets.add(toPid);
