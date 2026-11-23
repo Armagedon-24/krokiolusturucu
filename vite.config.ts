@@ -17,7 +17,8 @@ export default defineConfig({
       // CSP uyumu: kayıt betiği satır içi DEĞİL, harici dosya olarak eklenir
       // (index.html'deki script-src 'self' kuralı satır içi betiği engeller).
       injectRegister: 'script-defer',
-      includeAssets: ['favicon.png', 'logo.png', 'icons.svg', 'icon-512.png'],
+      // TEMİZLİK: png göçünden kalan bayat adlar güncellendi (favicon.webp/logo.webp)
+      includeAssets: ['favicon.webp', 'logo.webp', 'icons.svg', 'icon-512.png'],
       manifest: {
         name: 'Kroki Oluşturucu - Olay Yeri Dokümantasyon',
         short_name: 'Kroki',
@@ -37,13 +38,31 @@ export default defineConfig({
         // çalışma-anı önbelleğine alınır (aşağıda). Not: Vite bundle çıktısı da
         // dist/assets/ altına yazıldığı için yalnızca symbols/ ve fonts/ dizinleri
         // hariç tutulur; aksi halde uygulama kodu precache'den düşer.
+        // HIZ (2): Yalnızca LAZY olan ve büyük parçalar (vendor-three ~960 KB 3D,
+        // vendor-map ~160 KB harita, ThreeDPreview ~160 KB) da precache DIŞINDA:
+        // açılışta hiç kullanılmadıkları için ilk kurulumda boşa bant genişliği
+        // harcıyorlardı (precache 3.7 MB → ~2.4 MB). İlk gerçek kullanımda
+        // CacheFirst çalışma-anı önbelleğine alınırlar (aşağıdaki kroki-code).
         globPatterns: ['**/*.{js,css,html,ico}'],
-        globIgnores: ['**/assets/symbols/**', '**/assets/fonts/**'],
+        globIgnores: ['**/assets/symbols/**', '**/assets/fonts/**', '**/vendor-three-*.js', '**/vendor-map-*.js', '**/vendor-map-*.css', '**/ThreeDPreview-*.js'],
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         skipWaiting: true,
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         runtimeCaching: [
+          {
+            // HIZ: lazy JS/CSS parçaları (3D, harita, modallar, hesaplayıcılar) ilk
+            // kullanımda kalıcı önbelleğe alınır — sonraki açılışlar ağa gitmez.
+            // (Precache edilen parçalar önceliklidir; bu kural yalnızca precache
+            // dışındakileri yakalar.)
+            urlPattern: ({ request, url }) => url.pathname.startsWith('/assets/') && (request.destination === 'script' || request.destination === 'style'),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'kroki-code-v1',
+              expiration: { maxEntries: 160, maxAgeSeconds: 60 * 60 * 24 * 180 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
           {
             // Sembol PNG/SVG + fontlar: bir kez indirilen dosya kalıcı önbellekte
             urlPattern: ({ request, url }) => url.pathname.startsWith('/assets/') && (request.destination === 'image' || request.destination === 'font' || request.destination === ''),

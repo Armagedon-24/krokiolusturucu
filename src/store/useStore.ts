@@ -4,7 +4,10 @@ import type { CanvasObject, CanvasState, ProjectInfo, Symbol, ScaleCalibration, 
 import { v4 as uuidv4 } from 'uuid';
 import { SYMBOL_CATEGORIES } from '../constants/symbols';
 import { createKrokiTemplate, createDiagramTemplate } from '../constants/templates';
-import { buildScenarioObjects, type KrokiScenario } from '../data/krokiScenarios';
+// HIZ: senaryo verisi (~128 KB kaynak) açılış bundle'ından çıkarıldı — yalnızca
+// tip importu kalır; buildScenarioObjects loadKrokiScenario içinde dinamik import
+// ile yüklenir (Örnek Olaylar paneli zaten lazy chunk).
+import type { KrokiScenario } from '../data/krokiScenarios';
 import { cloudinary as cloud, publicIdFromUrl, normKey, mapCloudCategoryToId, ensureCategoryForFolder, mapCloudGroupLabel } from '../lib/cloudinary';
 import { migrateLegacyAssetUrl } from '../utils/assetMigration';
 
@@ -1328,7 +1331,10 @@ export const useStore = create<StoreState>()(
         get().saveHistory();
       },
 
-      loadKrokiScenario: (scenario) => {
+      loadKrokiScenario: async (scenario) => {
+        // HIZ: senaryo verisi dinamik import — açılış bundle'ına girmez, yalnızca
+        // kullanıcı Örnek Olaylar panelinden bir senaryo yüklediğinde indirilir.
+        const { buildScenarioObjects } = await import('../data/krokiScenarios');
         // Senaryolar yatay (landscape) kroki şablonu için tasarlanmıştır.
         const width = 1400;
         const height = 1000;
