@@ -38,6 +38,7 @@ import { FallAnimationCanvas } from './FallAnimationCanvas';
 import { PedestrianLaunchCanvas } from './PedestrianLaunchCanvas';
 import { PageControlBar } from './PageControlBar';
 import type { CanvasObject } from '../../types';
+import { computeWallSnap, DOORLIKE_SNAP_IDS, WALLLIKE_IDS } from '../../utils/wallSnap';
 import { drawTiledImage, tilePatternParams, SYMBOL_TILE_MODES, getTextureInfo, resolveConcreteTileMode, drawStripCaps, composeStripCanvas } from '../../utils/tiledRender';
 import { migrateLegacyAssetUrl, withBase } from '../../utils/assetMigration';
 
@@ -795,10 +796,8 @@ const EXTRA_ARCH_IDS = [
   'arch-colon-k', 'arch-colon-y', 'arch-garden-wall', 'arch-garden-gate',
   'arch-balcony', 'arch-pool', 'arch-well', 'arch-bsection',
 ];
-/** Kapı/pencere gibi duvara hizalanan semboller (sürükleme sırasında rotasyon duvara uyar) */
-const DOORLIKE_SNAP_IDS = ['arch-d1r', 'arch-d1l', 'arch-win', 'arch-d2', 'arch-d3-slide', 'arch-garden-gate', 'arch-kepenk', 'arch-opening'];
-/** Duvar gibi uç uca yapışan semboller */
-const WALLLIKE_IDS = ['arch-w1', 'arch-w1v', 'arch-w1i', 'arch-w1vi', 'arch-w-square', 'arch-garden-wall', 'arch-parapet'];
+// DOORLIKE_SNAP_IDS / WALLLIKE_IDS artık src/utils/wallSnap.ts'ten import edilir
+// (mıknatıs motoru ile TEK kaynaktan yönetilir — bkz. computeWallSnap).
 
 /** Export (ctx) tarafı — ekrandaki ExtraArchShapes ile birebir aynı geometri. */
 const drawExtraArch = (ctx: CanvasRenderingContext2D, symbolId: string, w: number, h: number): boolean => {
@@ -1307,7 +1306,9 @@ export const drawExportObject = (ctx: CanvasRenderingContext2D, obj: any, img: H
   //     + kapı imajı kutuyu birebir doldurur (kaydırma yok → duvar çizgisiyle hizalı).
   if (symbolId === 'arch-d1r' || symbolId === 'arch-d1l' || symbolId === 'arch-d2') {
     ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, h * 0.85, w, h * 0.15);
+    // Dikey çevrili (scaleY=-1) kapıda dış aynalama bandı da çevirir: bandı
+    // üstten çiz → PDF'te band editördeki gibi ALTTA görünür (aynı taraf).
+    ctx.fillRect(0, obj.scaleY === -1 ? 0 : h * 0.85, w, h * 0.15);
     if (obj.src && img) ctx.drawImage(img, 0, 0, w, h);
     return;
   }
@@ -2006,11 +2007,11 @@ const IndividualObject = ({
       const maxSize = 120;
 
       if (isWallH) {
-        initialWidth = 250;
+        initialWidth = 200;
         initialHeight = 10;
       } else if (isWallV) {
         initialWidth = 10;
-        initialHeight = 250;
+        initialHeight = 200;
       } else if (isWindow) {
         // Pencereler için varsayılan: boy 50, en 10
         initialWidth = 50;
@@ -2404,26 +2405,36 @@ const IndividualObject = ({
             const myY = e.target.y();
 
             if (isSnapTarget) {
-              for (const other of allObjects) {
-                if (other.id === shapeProps.id) continue;
-                const isOtherWall = WALLLIKE_IDS.includes(other.symbolId || '');
-                if (!isOtherWall) continue;
-
-                const dx = myX - other.x;
-                const dy = myY - other.y;
-                const dist = Math.sqrt(dx*dx + dy*dy);
-                
-                if (dist < 100) {
-                  const isWallVertical = other.symbolId?.includes('v');
-                  const wallBaseRot = (other.rotation || 0);
-                  const wallLineAngle = (wallBaseRot + (isWallVertical ? 90 : 0)) % 360;
-                  const currentRot = (e.target.rotation() % 360 + 360) % 360;
-                  const relAngle = (currentRot - wallLineAngle + 360) % 360;
-                  let targetRot = wallLineAngle;
-                  if (relAngle > 90 && relAngle < 270) targetRot = (wallLineAngle + 180) % 360;
-                  e.target.rotation(targetRot);
-                  break;
-                }
+              // MİKNATIS (konum + açı): kapı/pencere/kepenk en yakın duvar çizgisine
+              // TAM DÜZ oturtulur — kasa hattı merkezi duvar merkez çizgisine 0 px
+              // kaymayla yerleşir, açı duvarın açısına kilitlenir, kapı hangi
+              // açıda ise duvara en yakın yüzü seçilir. Duvardan uzaklaşınca
+              // serbest kalır; bırakılan yer ve açı aynen korunur.
+              const snD = (() => {
+                // Girdi: nesnenin GERÇEK DÜNYA KUTU MERKEZİ (dönüşü hesaba katar)
+                // + anchorMode=1 → snap penceresi ±30 px simetrik ölçülür; sonuç
+                // yine de gerçek pivot (kasa hattı merkezi) çizgiye 0 px oturur.
+                const qW = shapeProps.width || 60;
+                const qH = shapeProps.height || 60;
+                const qRr = ((e.target.rotation() || 0) * Math.PI) / 180;
+                const qCx = myX + (qW / 2) * Math.cos(qRr) - (qH / 2) * Math.sin(qRr);
+                const qCy = myY + (qW / 2) * Math.sin(qRr) + (qH / 2) * Math.cos(qRr);
+                return computeWallSnap(
+                  shapeProps.symbolId || '',
+                  qCx,
+                  qCy,
+                  qW,
+                  qH,
+                  e.target.rotation() || 0,
+                  allObjects,
+                  shapeProps.id,
+                  1,
+                );
+              })();
+              if (snD) {
+                e.target.rotation(snD.rotation);
+                e.target.x(snD.x);
+                e.target.y(snD.y);
               }
             } else if (isWall) {
               // Duvar-Duvar Yapışma (Uç uca ekleme)
@@ -3034,12 +3045,21 @@ const IndividualObject = ({
             )}
           </Group>
         ) : EXTRA_ARCH_IDS.includes(shapeProps.symbolId || '') ? (
-          // MİMARİ EK SEMBOLLER — prosedürel çizim (uzatmaya dayanıklı)
-          <ExtraArchShapes
-            symbolId={shapeProps.symbolId || ''}
-            width={shapeProps.width}
-            height={shapeProps.height}
-          />
+          // MİMARİ EK SEMBOLLER — prosedürel çizim (uzatmaya dayanıklı).
+          // AYNALAMA: kepenk/bahçe kapısı vb. Yatay/Dikey Çevir'de editörde de
+          // aynalanır (eskiden yalnızca PDF çeviriyordu → editör-PDF uyumsuzdu).
+          <Group
+            scaleX={shapeProps.scaleX || 1}
+            scaleY={shapeProps.scaleY || 1}
+            offsetX={(shapeProps.scaleX === -1) ? shapeProps.width : 0}
+            offsetY={(shapeProps.scaleY === -1) ? shapeProps.height : 0}
+          >
+            <ExtraArchShapes
+              symbolId={shapeProps.symbolId || ''}
+              width={shapeProps.width}
+              height={shapeProps.height}
+            />
+          </Group>
         ) : shapeProps.type === 'rect' ? (
           <Rect
             width={shapeProps.width}
@@ -4808,6 +4828,15 @@ const IndividualObject = ({
       {isSelected && (!shapeProps.isTemplate || (shapeProps.id === 'corporate-logo' && isAdmin)) && (
         <Transformer
           ref={trRef}
+          // DÖNDÜRME TUTAMAÇLI SEMBOLLERDE 45° ADIMLARINA YAPIŞMA (±14°): kapı/
+          // pencere/kepenk/duvar çevirince 87.3° gibi eğik artıklar kalmaz,
+          // her zaman tam düz durur. Diğer sembollerde serbest açı aynen korunur.
+          rotationSnaps={
+            [...DOORLIKE_SNAP_IDS, ...WALLLIKE_IDS].includes(shapeProps.symbolId || '')
+              ? [0, 45, 90, 135, 180, 225, 270, 315]
+              : []
+          }
+          rotationSnapTolerance={14}
           rotateEnabled={
             shapeProps.type !== 'rect' && 
             shapeProps.type !== 'line' && 
@@ -5693,7 +5722,7 @@ export const CanvasArea: React.FC = () => {
 
             // Apply transform matching Konva node origin
             if (rot !== 0 || ox !== 0 || oy !== 0) {
-              ctx.translate(x + ox, y + oy);
+              ctx.translate(x, y);
               ctx.rotate(rot);
               ctx.scale(obj.scaleX ?? 1, obj.scaleY ?? 1);
               ctx.translate(-ox, -oy);
@@ -5927,6 +5956,10 @@ export const CanvasArea: React.FC = () => {
     // Register both local callback ref in the store and event listener for window
     useStore.setState({ exportPDFRef: handleExportPDF });
     window.addEventListener('export-pdf', handleExportPDF);
+    // Test kancaları: otomatik doğrulama (Playwright) sahneye ve store'a erişsin
+    (window as any).__krokiStage = stageRef.current;
+    (window as any).__krokiStore = useStore;
+    (window as any).__krokiWallSnap = computeWallSnap;
 
     // Register fall animation canvas export handler
     const handleFallExport = async () => {
@@ -6122,7 +6155,7 @@ export const CanvasArea: React.FC = () => {
           const oy = (obj.scaleY === -1) ? h : 0;
 
           if (rot !== 0 || ox !== 0 || oy !== 0) {
-            ctx.translate(x + ox, y + oy);
+            ctx.translate(x, y);
             ctx.rotate(rot);
             ctx.scale(obj.scaleX ?? 1, obj.scaleY ?? 1);
             ctx.translate(-ox, -oy);
@@ -6323,6 +6356,13 @@ export const CanvasArea: React.FC = () => {
           finalY = Math.max(drawingArea.y, Math.min(finalY, drawingArea.y + drawingArea.height - h));
         }
 
+        // DUVAR MIKNATISI (yerleştirme anı — genel mimari dal): kapı/pencere/kepenk
+        // ailesi bırakılan noktada bir duvara yakınsa tam düz oturtulur (kasa çizgisi
+        // duvar merkez çizgisine 0 px kaymayla); ızgara oturtması skipGrid ile
+        // atlanır. Kapı dışı sembollerde computeWallSnap null döner → davranış eski.
+        const snArch = computeWallSnap(symbol.id || '', finalX + w / 2, finalY + h / 2, w, h, 0, objects, undefined, 1);
+        if (snArch) { finalX = snArch.x; finalY = snArch.y; }
+
         addObject({
           ...symbol,
           symbolId: symbol.id,
@@ -6333,7 +6373,8 @@ export const CanvasArea: React.FC = () => {
           y: finalY,
           width: w,
           height: h,
-          rotation: 0,
+          rotation: snArch ? snArch.rotation : 0,
+          skipGrid: snArch ? true : undefined,
           scaleX: 1,
           scaleY: 1
         });
@@ -6536,7 +6577,7 @@ export const CanvasArea: React.FC = () => {
         const isWindow = symbol.id === 'arch-win';
         const isWall = ['arch-w1', 'arch-w1v', 'arch-w1i', 'arch-w1vi'].includes(symbol.id);
         
-        let finalWidth = symbol.id === 'arch-d2' ? 120 : (isDoor ? 60 : (symbol.width || 100));
+        let finalWidth = isDoor ? 60 : (symbol.width || 100);
         let finalHeight = isDoor ? 60 : (symbol.height || 100);
 
         if (isWindow) {
@@ -6545,8 +6586,8 @@ export const CanvasArea: React.FC = () => {
         } else if (isWall) {
           if (symbol.id === 'arch-w1') { finalWidth = 200; finalHeight = 10; }
           else if (symbol.id === 'arch-w1v') { finalWidth = 10; finalHeight = 200; }
-          else if (symbol.id === 'arch-w1i') { finalWidth = 250; finalHeight = 10; }
-          else if (symbol.id === 'arch-w1vi') { finalWidth = 10; finalHeight = 250; }
+          else if (symbol.id === 'arch-w1i') { finalWidth = 200; finalHeight = 10; }
+          else if (symbol.id === 'arch-w1vi') { finalWidth = 10; finalHeight = 200; }
         }
 
         let finalX = pos.x - finalWidth / 2;
@@ -6557,6 +6598,14 @@ export const CanvasArea: React.FC = () => {
           finalY = Math.max(drawingArea.y, Math.min(finalY, drawingArea.y + drawingArea.height - finalHeight));
         }
 
+        // DUVAR MIKNATISI (yerleştirme anı): bırakılan noktada bir duvara yakınsa
+        // kapı/pencere tam düz oturtulur (kasa çizgisi duvar merkezine 0 px); ızgara
+        // oturtması skipGrid ile atlanır — kullanıcının bıraktığı yer aynen kalır.
+        // Girdi KUTU MERKEZİ + anchorMode=1: snap penceresi bırakılan noktadan ölçülür,
+        // sonuç yine de gerçek pivot (kasa hattı merkezi) çizgiye oturacak şekilde döner.
+        const snP = computeWallSnap(symbol.id || '', finalX + finalWidth / 2, finalY + finalHeight / 2, finalWidth, finalHeight, 0, objects, undefined, 1);
+        if (snP) { finalX = snP.x; finalY = snP.y; }
+
         const newObjId = uuidv4();
         addObject({
           ...symbol,
@@ -6566,7 +6615,8 @@ export const CanvasArea: React.FC = () => {
           y: finalY,
           width: finalWidth,
           height: finalHeight,
-          rotation: 0,
+          rotation: snP ? snP.rotation : 0,
+          skipGrid: snP ? true : undefined,
           scaleX: 1,
           scaleY: 1,
           distanceColor: '#000000',
@@ -7880,7 +7930,24 @@ export const CanvasArea: React.FC = () => {
                         <button onClick={() => updateObject(selectedId, { scaleX: (selectedObj.scaleX || 1) * -1 })} className="w-8 h-8 bg-[#111] border border-[#333] rounded-md hover:border-[#F5C518] flex items-center justify-center text-gray-300" title="Yatay Çevir"><FlipHorizontal2 size={13} /></button>
                         <button onClick={() => updateObject(selectedId, { scaleY: (selectedObj.scaleY || 1) * -1 })} className="w-8 h-8 bg-[#111] border border-[#333] rounded-md hover:border-[#F5C518] flex items-center justify-center text-gray-300" title="Dikey Çevir"><FlipVertical2 size={13} /></button>
                         {!['arch-1', 'arch-1v'].includes(selectedObj.symbolId || '') && (
-                          <button onClick={() => updateObject(selectedId, { rotation: ((selectedObj.rotation || 0) + 90) % 360 })} className="w-8 h-8 bg-[#111] border border-[#333] rounded-md hover:border-[#F5C518] flex items-center justify-center text-gray-300" title="90 Derece Döndür"><RotateCw size={13} /></button>
+                          <button onClick={() => {
+                            // YERİNDE 90° DÖNDÜRME: dönme, kapının KASA HATTI MERKEZİ
+                            // (alt bandın ortası) etrafında yapılır — duvara yapışık
+                            // kapı duvarın üzerinde kalır, yalnızca yönü değişir
+                            // (köşeden dönseydi kapı fırlayıp giderdi).
+                            const qW = selectedObj.width || 60;
+                            const qH = selectedObj.height || 60;
+                            const qD = ['arch-d1r', 'arch-d1l', 'arch-d2', 'arch-garden-gate'].includes(selectedObj.symbolId || '');
+                            const qA = qD ? qH * 0.925 : qH / 2;
+                            const q0 = ((selectedObj.rotation || 0) % 360 + 360) % 360;
+                            const q1 = (q0 + 90) % 360;
+                            const a0 = q0 * Math.PI / 180;
+                            const a1 = q1 * Math.PI / 180;
+                            const qC = qW / 2;
+                            const qDX = (qC * Math.cos(a0) - qA * Math.sin(a0)) - (qC * Math.cos(a1) - qA * Math.sin(a1));
+                            const qDY = (qC * Math.sin(a0) + qA * Math.cos(a0)) - (qC * Math.sin(a1) + qA * Math.cos(a1));
+                            updateObject(selectedId, { rotation: q1, x: (selectedObj.x || 0) + qDX, y: (selectedObj.y || 0) + qDY });
+                          }} className="w-8 h-8 bg-[#111] border border-[#333] rounded-md hover:border-[#F5C518] flex items-center justify-center text-gray-300" title="90 Derece Döndür"><RotateCw size={13} /></button>
                         )}
                         <span className="w-px h-5 bg-[#333] mx-0.5" />
                         <button

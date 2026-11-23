@@ -650,11 +650,11 @@ export const useStore = create<StoreState>()(
 
         if (obj.symbolId === 'arch-w1') { width = 200; height = 10; }
         else if (obj.symbolId === 'arch-w1v') { width = 10; height = 200; }
-        else if (obj.symbolId === 'arch-w1i') { width = 250; height = 10; }
-        else if (obj.symbolId === 'arch-w1vi') { width = 10; height = 250; }
+        else if (obj.symbolId === 'arch-w1i') { width = 200; height = 10; }
+        else if (obj.symbolId === 'arch-w1vi') { width = 10; height = 200; }
         else if (obj.symbolId === 'arch-win') { width = 60; height = 15; } // Window
         else if (['arch-d1r', 'arch-d1l'].includes(obj.symbolId || '')) { width = 60; height = 60; } // Single Doors
-        else if (obj.symbolId === 'arch-d2') { width = 120; height = 60; } // Double Door
+        else if (obj.symbolId === 'arch-d2') { width = 60; height = 60; } // Çift Kapı — tek kapıyla aynı varsayılan (60×60)
         else if (obj.symbolId === 'arch-6') { width = 70; height = 150; }
         else if (obj.symbolId === 'arch-6l') { width = 100; height = 100; }
         else if (obj.symbolId === 'arch-6u') { width = 80; height = 120; }
@@ -699,10 +699,16 @@ export const useStore = create<StoreState>()(
             newObj.height = h;
           }
 
-          // Grid Snapping (20px)
-          const gridSize = 20;
-          newObj.x = Math.round((newObj.x - drawingArea.x) / gridSize) * gridSize + drawingArea.x;
-          newObj.y = Math.round((newObj.y - drawingArea.y) / gridSize) * gridSize + drawingArea.y;
+          // Grid Snapping (20px) — duvara mıknatıslanan nesnede ATLANIR:
+          // mıknatıs kasa çizgisini duvara 0 px kaymayla oturttuğu için sonradan
+          // ızgaraya yuvarlama tam düz yapışmayı bozar. Kullanıcının bıraktığı
+          // yer aynen korunur.
+          if (!newObj.skipGrid) {
+            const gridSize = 20;
+            newObj.x = Math.round((newObj.x - drawingArea.x) / gridSize) * gridSize + drawingArea.x;
+            newObj.y = Math.round((newObj.y - drawingArea.y) / gridSize) * gridSize + drawingArea.y;
+          }
+          delete newObj.skipGrid;
 
           // Katı sınır: sembol tam olarak çizim alanı içine yerleştir.
           // 90°/270° döndürülmüş nesnelerde (dikey mesafe oku a-4-dikey) sınır

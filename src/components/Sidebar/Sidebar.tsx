@@ -33,6 +33,7 @@ const SectionFallback: React.FC = () => (
   </div>
 );
 import { processUploadedSymbolImage } from '../../utils/canvasUtils';
+import { computeWallSnap } from '../../utils/wallSnap';
 import { getOptimizedCloudinaryUrl } from '../../lib/cloudinary';
 import { withBase } from '../../utils/assetMigration';
 
@@ -620,7 +621,7 @@ export const Sidebar: React.FC = () => {
                                       const isWindow = item.id === 'arch-win';
                                       const isWall = ['arch-w1', 'arch-w1v', 'arch-w1i', 'arch-w1vi'].includes(item.id);
                                       
-                                      let finalWidth = item.id === 'arch-d2' ? 120 : (isDoor ? 60 : (item.width || 100));
+                                      let finalWidth = isDoor ? 60 : (item.width || 100);
                                       let finalHeight = isDoor ? 60 : (item.height || 100);
 
                                       if (isWindow) {
@@ -629,19 +630,27 @@ export const Sidebar: React.FC = () => {
                                       } else if (isWall) {
                                         if (item.id === 'arch-w1') { finalWidth = 200; finalHeight = 10; }
                                         else if (item.id === 'arch-w1v') { finalWidth = 10; finalHeight = 200; }
-                                        else if (item.id === 'arch-w1i') { finalWidth = 250; finalHeight = 10; }
-                                        else if (item.id === 'arch-w1vi') { finalWidth = 10; finalHeight = 250; }
+                                        else if (item.id === 'arch-w1i') { finalWidth = 200; finalHeight = 10; }
+                                        else if (item.id === 'arch-w1vi') { finalWidth = 10; finalHeight = 200; }
                                       }
+
+                                      // DUVAR MIKNATISI (yerleştirme anı): kapı/pencere varsayılan
+                                      // noktada bir duvara yakınsa tam düz oturt; ızgara oturtması
+                                      // atlanır (skipGrid) ki 0 px yapışma bozulmasın.
+                                      // Girdi KUTU MERKEZİ + anchorMode=1 (yamayla birebir).
+                                      const snP = computeWallSnap(item.id || '', 250 + finalWidth / 2, 250 + finalHeight / 2, finalWidth, finalHeight, 0, useStore.getState().objects, undefined, 1);
 
                                       addObject({
                                         ...item,
                                         symbolId: item.id,
                                         categoryId: cat.id,
                                         id: uuidv4(),
-                                        x: 250,
-                                        y: 250,
+                                        x: snP ? snP.x : 250,
+                                        y: snP ? snP.y : 250,
                                         width: finalWidth,
                                         height: finalHeight,
+                                        rotation: snP ? snP.rotation : 0,
+                                        skipGrid: snP ? true : undefined,
                                         distanceColor: '#000000',
                                       });
                                     }}

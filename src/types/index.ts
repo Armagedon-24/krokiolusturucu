@@ -37,6 +37,9 @@ export interface CanvasObject {
   distanceColor?: string;
   isDistanceArrow?: boolean;
   isTemplate?: boolean;
+  /** Yerleştirmede duvara mıknatıslanan nesnede 20px ızgara oturtması atlanır
+   *  (mıknatıs kasayı duvar çizgisine 0 px kaymayla oturtur; ızgara bozardı) */
+  skipGrid?: boolean;
   align?: 'left' | 'center' | 'right';
   categoryId?: string;
   symbolId?: string;
