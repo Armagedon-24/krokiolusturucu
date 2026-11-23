@@ -202,7 +202,7 @@ export const createDiagramTemplate = (canvasWidth: number, canvasHeight: number,
   objects.push({
     id: 'corporate-logo',
     type: 'image',
-    src: info.corporateLogo || '/logo.png', // Varsayılan olarak uygulama logosu
+    src: info.corporateLogo || '/logo.webp', // Varsayılan olarak uygulama logosu
     x: lx,
     y: ly,
     width: lw,

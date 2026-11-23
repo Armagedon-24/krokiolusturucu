@@ -2925,6 +2925,10 @@ export const useStore = create<StoreState>()(
             state.backgroundImage = activeScene.backgroundImage || null;
             if (activeScene.drawingArea) state.drawingArea = activeScene.drawingArea;
             if (activeScene.projectInfo) state.projectInfo = { ...state.projectInfo, ...activeScene.projectInfo };
+          // PNG→WebP varlık migrasyonu: eski kayıtlı projedeki kurum logosu yolu da taşınır
+          if (typeof state.projectInfo.corporateLogo === 'string' && state.projectInfo.corporateLogo) {
+            state.projectInfo.corporateLogo = migrateLegacyAssetUrl(state.projectInfo.corporateLogo);
+          }
             state.history = [userObjects];
           } else {
             state.objects = [];

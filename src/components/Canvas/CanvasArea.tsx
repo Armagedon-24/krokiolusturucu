@@ -6995,7 +6995,7 @@ export const CanvasArea: React.FC = () => {
             type: 'symbol',
             symbolId: 'tr-bullet-glass',
             categoryId: 'traces',
-            src: glassDef?.src || '/assets/symbols/bullet_hole_1.png',
+            src: glassDef?.src || '/assets/symbols/bullet_hole_1.webp',
             id: uuidv4(),
             parentId: trajId,
             x: pHitX - 12.5,

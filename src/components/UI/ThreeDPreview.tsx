@@ -635,7 +635,7 @@ const ShootingTrajectory3D = ({ obj, allWalls, visualObjects, uploadedImages }: 
   })?.src;
 
   // Stable texture sources — never change between renders to preserve hook order
-  const GLASS_TEX_SRC = '/assets/symbols/bullet_hole_1.png';
+  const GLASS_TEX_SRC = '/assets/symbols/bullet_hole_1.webp';
   const WALL_TEX_SRC_DEFAULT = '/assets/symbols/bullet_hole_2.webp';
 
   const glassTex = useTexture(withBase(GLASS_TEX_SRC)) as THREE.Texture;
@@ -2222,7 +2222,7 @@ const Symbol3D = ({ obj, wallThickness, realObj, allWalls, visualObjects, upload
 
     const pngSrc = sIdLower === 'tr-bullet-wall'
       ? ((isabetIziImg?.src && typeof isabetIziImg.src === 'string' && isabetIziImg.src.trim() !== '') ? isabetIziImg.src : (wallDef?.src || withBase('/assets/symbols/bullet_hole_2.webp')))
-      : (glassDef?.src || withBase('/assets/symbols/bullet_hole_1.png'));
+      : (glassDef?.src || withBase('/assets/symbols/bullet_hole_1.webp'));
     return (
       <GlassImpact3D
         textureSrc={pngSrc}

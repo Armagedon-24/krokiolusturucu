@@ -158,7 +158,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
             <div className="absolute inset-0 bg-gradient-to-tr from-[#F5C518] to-amber-500 rounded-2xl blur-xl opacity-40 about-glow" />
             <div className="relative w-20 h-20 mx-auto rounded-2xl bg-neutral-900 border-2 border-[#F5C518]/70 shadow-[0_0_35px_rgba(245,197,24,0.25)] flex items-center justify-center overflow-hidden">
               <img
-                src={withBase('/logo.png')}
+                src={withBase('/logo.webp')}
                 alt="Kroki Oluşturucu logosu"
                 className="w-14 h-14 object-contain"
                 draggable={false}

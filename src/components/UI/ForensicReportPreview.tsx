@@ -27,7 +27,7 @@ const SECTIONS: Array<{ no: number; key: keyof ForensicReport; title: string }> 
 /** Belge görünümlü kurumsal önizleme (PDF ile aynı düzen). */
 const PaperView: React.FC<{ report: ForensicReport }> = ({ report }) => {
   const m = reportMeta();
-  const logoSrc = `${import.meta.env.BASE_URL}assets/kurum_logo.png`;
+  const logoSrc = `${import.meta.env.BASE_URL}assets/kurum_logo.webp`;
   const wmSrc = `${import.meta.env.BASE_URL}assets/kurum_logo_filigran_kontur.webp`;
   return (
     <div className="relative bg-white text-[#26282E] px-5 py-4 overflow-hidden">

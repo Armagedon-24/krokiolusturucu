@@ -32,9 +32,10 @@ const TARGETS = [
   path.join(ROOT, 'public', 'images'),
 ];
 const ROOT_FILES = [
-  path.join(ROOT, 'public', 'logo.png'),
-  path.join(ROOT, 'public', 'favicon.png'),
-  path.join(ROOT, 'public', 'icon-512.png'),
+  path.join(ROOT, 'public', 'logo.webp'),      // PNG→WebP geçişi (2026-11): favicon/logo artık webp
+  path.join(ROOT, 'public', 'favicon.webp'),   // PNG→WebP geçişi
+  path.join(ROOT, 'public', 'icon-512.png'),   // PNG kalır: iOS apple-touch-icon, og:image ve Electron
+                                               // nativeImage yalnızca PNG destekler (pencere/sosyal önizleme ikonu)
 ];
 const MAX_DIM_SYMBOL = 800;      // semboller için en uzun kenar sınırı
 const PALETTE_QUALITY = 95;      // libimagequant kalite (0-100)
@@ -177,7 +178,9 @@ async function main() {
   for (const t of TARGETS) {
     try { files.push(...await walk(t)); } catch { /* klasör yok */ }
   }
-  files.push(...ROOT_FILES);
+  for (const f of ROOT_FILES) {
+    try { if (await fs.stat(f)) files.push(f); } catch { /* dosya yok */ }
+  }
 
   const pngs = files.filter((f) => f.toLowerCase().endsWith('.png'));
   const svgs = files.filter((f) => f.toLowerCase().endsWith('.svg'));

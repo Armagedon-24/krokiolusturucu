@@ -40,7 +40,7 @@ const TOP_PN = 24; // devam sayfaları içerik başlangıcı
 const FONT_NAME = 'Liberation';
 const FONT_REG = 'LiberationSans-Regular.ttf';
 const FONT_BOLD = 'LiberationSans-Bold.ttf';
-const LOGO_URL = `${import.meta.env.BASE_URL}assets/kurum_logo.png`;
+const LOGO_URL = `${import.meta.env.BASE_URL}assets/kurum_logo.webp`;
 /** Sayfa arkasına basılan içi boş (kontur) ve renksiz filigran. */
 const LOGO_WM_URL = `${import.meta.env.BASE_URL}assets/kurum_logo_filigran_kontur.webp`;
 
@@ -51,7 +51,7 @@ let fontCache: Promise<{ reg: string; bold: string }> | null = null;
 let logoCache: Promise<string> | null = null;
 let logoWmCache: Promise<string> | null = null;
 
-/** TTF / PNG indirip base64'e çevirir. */
+/** TTF gibi ham bayt dosyalarını indirip base64'e çevirir. */
 async function fetchB64(url: string, what: string): Promise<string> {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`${what} alınamadı: ${url} (${res.status})`);
@@ -62,6 +62,27 @@ async function fetchB64(url: string, what: string): Promise<string> {
     bin += String.fromCharCode(...buf.subarray(i, i + CHUNK));
   }
   return btoa(bin);
+}
+
+/** Görseli indirip canvas'tan GERÇEK PNG dataURL'i üretir.
+ *  jsPDF addImage'a bildirilen format ('PNG') byte'ların gerçek formatı olmak
+ *  zorunda: WebP byte'ları 'PNG' bildirimiyle eklenince doküman boş/bozuk
+ *  basılıyor. Kaynak webp de olsa PNG'e çevrilerek güvenli hale getirilir
+ *  (alfanın da korunması için canvas alpha kanalıyla dışa aktarılır). */
+async function fetchImagePngB64(url: string, what: string): Promise<string> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`${what} alınamadı: ${url} (${res.status})`);
+  const blob = await res.blob();
+  const bmp = await createImageBitmap(blob);
+  const canvas = document.createElement('canvas');
+  canvas.width = bmp.width;
+  canvas.height = bmp.height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error(`${what} için canvas oluşturulamadı`);
+  ctx.drawImage(bmp, 0, 0);
+  bmp.close();
+  const dataUrl = canvas.toDataURL('image/png');
+  return dataUrl.slice(dataUrl.indexOf(',') + 1);
 }
 
 /** Font bayt'larını bir kez indirir; her yeni dokümana ayrıca kaydeder. */
@@ -75,15 +96,15 @@ function loadFontB64(): Promise<{ reg: string; bold: string }> {
   return fontCache;
 }
 
-/** Kurum logosunu bir kez indirir (antet). */
+/** Kurum logosunu bir kez indirir (antet) — PNG'e çevrilmiş olarak. */
 function loadLogoB64(): Promise<string> {
-  if (!logoCache) logoCache = fetchB64(LOGO_URL, 'Logo');
+  if (!logoCache) logoCache = fetchImagePngB64(LOGO_URL, 'Logo');
   return logoCache;
 }
 
-/** Silüet filigranı bir kez indirir. */
+/** Silüet filigranı bir kez indirir — PNG'e çevrilmiş olarak. */
 function loadWatermarkB64(): Promise<string> {
-  if (!logoWmCache) logoWmCache = fetchB64(LOGO_WM_URL, 'Filigran');
+  if (!logoWmCache) logoWmCache = fetchImagePngB64(LOGO_WM_URL, 'Filigran');
   return logoWmCache;
 }
 

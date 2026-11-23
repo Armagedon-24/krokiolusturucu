@@ -106,7 +106,7 @@ export const Topbar: React.FC = () => {
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2 mr-2">
           <div onClick={() => setIsAdminModalOpen(true)} className="h-12 flex items-center justify-center flex-shrink-0 cursor-pointer hover:scale-105 transition-all py-1">
-            <img src={withBase('/logo.png')} width={48} height={48} className="h-full w-auto object-contain animate-pulse" alt="Logo" />
+            <img src={withBase('/logo.webp')} width={48} height={48} className="h-full w-auto object-contain animate-pulse" alt="Logo" />
           </div>
           <div className="flex flex-col">
             <span className="font-bold text-sm tracking-wide uppercase whitespace-nowrap text-white">
