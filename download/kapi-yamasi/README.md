@@ -1,5 +1,12 @@
 # Kapı Sistemi Yaması — Kurulum Talimatları
 
+> **GÜNCELLEME (2026-11-23):** Bu derlemeli-dosya yaması artık GEREKLİ DEĞİL.
+> Tüm iyileştirmeler (60×60 kapı, 200×10 / 10×200 iç duvar varsayılanları, duvara
+> mıknatıslanma, yerinde dönme, PDF kayma düzeltmesi) kaynak koda işlendi ve
+> GitHub'daki `master` dalına yüklendi (commit a7736c3). Kaynaktan `npm run build`
+> aldığınızda bu iyileştirmeler doğal olarak gelir; aşağıdaki dosyayı kopyalamayın.
+> Bu klasör yalnızca geçmiş/reference olarak duruyor.
+
 "Kroki Oluşturucu"nun 2D krokisi için dört iyileştirme tek dosyada toplandı:
 **kapılar artık varsayılan 60×60 px, duvara mıknatıslanarak tam düz yapışıyor,
 çevirince yerinde ve tam kare açıyla dönüyor, PDF'te hiçbir şey kaymıyor.**
