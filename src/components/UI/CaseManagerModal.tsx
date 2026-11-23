@@ -1,5 +1,5 @@
 import React, { lazy, Suspense, useState } from 'react';
-import { X, FolderPlus, FileText, ChevronRight, Trash2, Edit3, Save, Info, FileDown, Search, MapPin } from 'lucide-react';
+import { X, FolderPlus, FileText, ChevronRight, Trash2, Edit3, Save, Info, FileDown, Search, MapPin, Check } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 // HIZ: leaflet yalnızca harita seçici açıldığında yüklenir (başlangıç bundle'ından çıkar)
 const MapPickerModal = lazy(() => import('./MapPickerModal').then(m => ({ default: m.MapPickerModal })));
@@ -28,6 +28,9 @@ export const CaseManagerModal: React.FC<CaseManagerModalProps> = ({ isOpen, onCl
   const [editValue, setEditValue] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [isMapPickerOpen, setIsMapPickerOpen] = useState(false);
+  // Kaydet sonrası buton üstünde anlık "KAYDEDİLDİ" geri bildirimi (modal açık kalır,
+  // bildirim sistemi z-[9999] olduğu için modal arkasında kalır — bu yüzden buton içi geri bildirim)
+  const [justSaved, setJustSaved] = useState(false);
 
   // Automatic Background Cloud Sync on Modal Open
   // preserveCurrentDrawing: arşiv listesi bulutla tazelenir AMA eski olayın bilgileri
@@ -52,7 +55,11 @@ export const CaseManagerModal: React.FC<CaseManagerModalProps> = ({ isOpen, onCl
     setEditingId(null);
   };
 
-  const handleSaveAndClose = () => {
+  // KAYDET: yalnızca bilgileri/çizimi Olay Yönetimi dosyalarına ekler ve buluta yedekler.
+  // PDF ÜRETMEZ — PDF çıktısı ayrı "PDF Oluştur" tuşundadır.
+  const handleSave = () => {
+    if (justSaved) return; // çift tıklamada yinelenen dosya oluşmasını engelle
+
     // 0. Refresh template with latest form info before saving
     applyTemplate(projectInfo.type);
 
@@ -96,15 +103,27 @@ export const CaseManagerModal: React.FC<CaseManagerModalProps> = ({ isOpen, onCl
         activeSceneId: newSceneId
       });
       
-      // 2. Trigger PDF Export using direct synchronous trigger
-      setTimeout(() => {
-        useStore.getState().triggerExportPDF();
-        // 3. Automatic Cloud Sync
-        useStore.getState().syncToCloud(true);
-      }, 150);
+      // Bulut yedeği kaydetmenin parçasıdır — PDF tetiklenmez, modal açık kalır
+      // (yeni kayıt "Bu Olaya Bağlı Çizimler ve Krokiler" listesinde anında görünür).
+      useStore.getState().syncToCloud(true);
 
-      onClose();
+      setJustSaved(true);
+      setTimeout(() => setJustSaved(false), 2500);
     }, 100);
+  };
+
+  // PDF OLUŞTUR: yalnızca PDF üretir (indirir + yeni sekmede açar).
+  // Arşive dosya eklemez, buluta senkron yapmaz.
+  const handleGeneratePdf = () => {
+    // Şablonu son form bilgileriyle tazele: PDF başlığı formdaki güncel değerleri yansıtsın
+    applyTemplate(projectInfo.type);
+
+    setTimeout(() => {
+      useStore.getState().triggerExportPDF();
+    }, 150);
+
+    // PDF yeni sekmede açılırken modal arkada kalmasın
+    onClose();
   };
 
   const handleNewDrawing = () => {
@@ -431,23 +450,35 @@ export const CaseManagerModal: React.FC<CaseManagerModalProps> = ({ isOpen, onCl
           </div>
         </div>
 
-        <div className="bg-white/5 p-4 flex justify-end gap-3 flex-shrink-0 border-t border-white/5">
-           <p className="text-[9px] text-gray-600 font-bold uppercase mr-auto flex items-center gap-2 italic">
+        <div className="bg-white/5 p-4 flex flex-col gap-3 flex-shrink-0 border-t border-white/5">
+           <p className="text-[9px] text-gray-600 font-bold uppercase flex items-center gap-2 italic">
               <Info size={12} />
-              Bİlgİlerİ kaydet dedİğİnİzde rapor otomatik olarak PDF formatında İndİrİlecektİr.
+              Kaydet yalnızca kaydeder; PDF çıktısı İçİn "PDF Oluştur" tuşunu kullanın
            </p>
-           <button 
+           <div className="flex justify-end gap-3 flex-wrap">
+           <button
              onClick={handleNewDrawing}
              className="px-6 py-3 bg-red-500/10 text-red-500 hover:bg-red-500/20 font-black text-xs uppercase tracking-[0.1em] rounded-xl transition-all border border-red-500/20"
            >
              YENİ ÇİZİM
            </button>
-           <button 
-             onClick={handleSaveAndClose}
-             className="px-12 py-3 bg-[#F5C518] hover:bg-[#E2B616] text-black font-black text-xs uppercase tracking-[0.2em] rounded-xl transition-all shadow-lg shadow-[#F5C518]/20"
+           <button
+             onClick={handleSave}
+             title="Çizimi ve bilgileri Olay Yönetimi dosyalarına kaydeder (PDF üretmez)"
+             className={`px-6 py-3 font-black text-xs uppercase tracking-[0.2em] rounded-xl transition-all border flex items-center gap-2 ${justSaved ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400' : 'bg-white/10 border-white/20 text-white hover:bg-white/20'}`}
            >
-             Bİlgİlerİ Kaydet ve PDF Oluştur
+             {justSaved ? <Check size={14} /> : <Save size={14} />}
+             {justSaved ? 'KAYDEDİLDİ' : 'BİLGİLERİ KAYDET'}
            </button>
+           <button
+             onClick={handleGeneratePdf}
+             title="Raporu PDF olarak indirir ve yeni sekmede açar"
+             className="px-8 py-3 bg-[#F5C518] hover:bg-[#E2B616] text-black font-black text-xs uppercase tracking-[0.2em] rounded-xl transition-all shadow-lg shadow-[#F5C518]/20 flex items-center gap-2"
+           >
+             <FileDown size={14} />
+             PDF OLUŞTUR
+           </button>
+           </div>
         </div>
       </div>
       <Suspense fallback={null}>
