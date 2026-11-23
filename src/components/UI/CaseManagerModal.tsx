@@ -30,9 +30,11 @@ export const CaseManagerModal: React.FC<CaseManagerModalProps> = ({ isOpen, onCl
   const [isMapPickerOpen, setIsMapPickerOpen] = useState(false);
 
   // Automatic Background Cloud Sync on Modal Open
+  // preserveCurrentDrawing: arşiv listesi bulutla tazelenir AMA eski olayın bilgileri
+  // mevcut çizime/forma geri yazılmaz — "Yeni Çizim"den sonra form boş ve temiz kalır.
   React.useEffect(() => {
     if (isOpen) {
-      useStore.getState().restoreFromCloud(true);
+      useStore.getState().restoreFromCloud(true, { preserveCurrentDrawing: true });
     }
   }, [isOpen]);
 

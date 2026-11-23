@@ -105,7 +105,7 @@ interface StoreState extends CanvasState {
   isAdmin: boolean;
   setIsAdmin: (isAdmin: boolean, password?: string) => void;
   syncToCloud: (silent?: boolean) => void;
-  restoreFromCloud: (silent?: boolean) => Promise<boolean>;
+  restoreFromCloud: (silent?: boolean, opts?: { preserveCurrentDrawing?: boolean }) => Promise<boolean>;
   /** Açılışta/İNDİR sonrasında bulut klasör ağacını uygulamadaki düzene göre eşitler (yalnızca admin). */
   healCloudFolders: () => Promise<void>;
   adminSettings: {
@@ -1778,7 +1778,14 @@ export const useStore = create<StoreState>()(
         }
       },
 
-      restoreFromCloud: async (silent = false) => {
+      restoreFromCloud: async (silent = false, opts?: { preserveCurrentDrawing?: boolean }) => {
+        // preserveCurrentDrawing: sessiz senkron (Olay Yönetimi açılışı) sırasında MEVCUT
+        // çizime dokunma — arşiv listesi bulutla tazelenir ama eski olayın projectInfo'su,
+        // nesneleri ve sayfa sekmeleri yeni/boş çalışmanın üzerine YAZILMAZ. "Yeni Çizim"
+        // sonrası modal açılınca eski olay bilgilerinin forma geri gelmesi hatası bununla
+        // biter. Açılış ve manuel İNDİR bu bayrağı geçirmez; tam geri yükleme davranışı
+        // aynen korunur.
+        const preserve = opts?.preserveCurrentDrawing === true;
         // YÜKLE sürerken İNDİR başlatılırsa bulut, İNDİR öncesi eski durumla
         // geri yazılabilir (son yazan kazanır). Çakışmayı engelle.
         if (_syncBusy) {
@@ -1941,45 +1948,49 @@ export const useStore = create<StoreState>()(
             updates.archiveScenes = mergedArchive;
 
             // Load the current active scenes (tabs shown at the bottom) based on the reportNo of the selected active scene!
-            const activeId = data.activeSceneId || get().activeSceneId || (mergedArchive.length > 0 ? mergedArchive[0].id : null);
-            const activeScene = mergedArchive.find((s: any) => s.id === activeId);
-            
-            if (activeScene) {
-              const activeReportNo = activeScene.projectInfo?.reportNo;
-              if (activeReportNo) {
-                // Filter scenes belonging to the same project/case so bottom tabs show only pages of this case
-                updates.scenes = mergedArchive.filter((s: any) => s.projectInfo?.reportNo === activeReportNo);
+            // preserveCurrentDrawing modunda ESKİ olay mevcut çizime bağlanmaz: nesneler,
+            // arka plan, sayfa sekmeleri ve form bilgisi olduğu gibi kalır (yeni çizim temiz kalır).
+            if (!preserve) {
+              const activeId = data.activeSceneId || get().activeSceneId || (mergedArchive.length > 0 ? mergedArchive[0].id : null);
+              const activeScene = mergedArchive.find((s: any) => s.id === activeId);
+
+              if (activeScene) {
+                const activeReportNo = activeScene.projectInfo?.reportNo;
+                if (activeReportNo) {
+                  // Filter scenes belonging to the same project/case so bottom tabs show only pages of this case
+                  updates.scenes = mergedArchive.filter((s: any) => s.projectInfo?.reportNo === activeReportNo);
+                } else {
+                  updates.scenes = [activeScene];
+                }
+                updates.activeSceneId = activeScene.id;
+
+                const currentLocalObjects = get().objects || [];
+                const currentLocalBg = get().backgroundImage;
+                const hasUnsavedLocalWork = silent && (currentLocalObjects.length > 0 || !!currentLocalBg);
+
+                if (!hasUnsavedLocalWork) {
+                  if (Array.isArray(activeScene.objects)) {
+                    updates.objects = [...activeScene.objects];
+                    updates.history = [[...activeScene.objects]];
+                    updates.historyIndex = 0;
+                  }
+                  if (activeScene.backgroundImage !== undefined) {
+                    updates.backgroundImage = activeScene.backgroundImage;
+                    // Sahne arka planı değişiyor — eski transform sıfırlanır
+                    updates.backgroundTransform = { x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0 };
+                  }
+                  if (activeScene.drawingArea) {
+                    updates.drawingArea = activeScene.drawingArea;
+                  }
+                }
+
+                if (activeScene.projectInfo) {
+                  updates.projectInfo = { ...get().projectInfo, ...activeScene.projectInfo };
+                }
               } else {
-                updates.scenes = [activeScene];
+                updates.scenes = [];
+                updates.activeSceneId = null;
               }
-              updates.activeSceneId = activeScene.id;
-
-              const currentLocalObjects = get().objects || [];
-              const currentLocalBg = get().backgroundImage;
-              const hasUnsavedLocalWork = silent && (currentLocalObjects.length > 0 || !!currentLocalBg);
-
-              if (!hasUnsavedLocalWork) {
-                if (Array.isArray(activeScene.objects)) {
-                  updates.objects = [...activeScene.objects];
-                  updates.history = [[...activeScene.objects]];
-                  updates.historyIndex = 0;
-                }
-                if (activeScene.backgroundImage !== undefined) {
-                  updates.backgroundImage = activeScene.backgroundImage;
-                  // Sahne arka planı değişiyor — eski transform sıfırlanır
-                  updates.backgroundTransform = { x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0 };
-                }
-                if (activeScene.drawingArea) {
-                  updates.drawingArea = activeScene.drawingArea;
-                }
-              }
-
-              if (activeScene.projectInfo) {
-                updates.projectInfo = { ...get().projectInfo, ...activeScene.projectInfo };
-              }
-            } else {
-              updates.scenes = [];
-              updates.activeSceneId = null;
             }
           }
 
@@ -1987,7 +1998,7 @@ export const useStore = create<StoreState>()(
             updates.visualSettings = data.visualSettings;
           }
 
-          if (data.projectState) {
+          if (data.projectState && !preserve) {
             updates.projectInfo = data.projectState.projectInfo || get().projectInfo;
           }
           
