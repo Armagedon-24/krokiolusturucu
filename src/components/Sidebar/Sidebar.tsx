@@ -185,7 +185,7 @@ export const Sidebar: React.FC = () => {
     if (file) {
       try {
         // Hangi format gelirse gelsin: yeniden boyutlandır + PNG + şeffaf arka plan
-        const compressedSrc = await processUploadedSymbolImage(file, 600, 600);
+        const compressedSrc = await processUploadedSymbolImage(file, 1400, 1400);
         const capitalizedName = file.name.replace(/\.(png|jpe?g|webp|gif|bmp|svg)$/i, '');
         const displayName = capitalizedName.charAt(0).toUpperCase() + capitalizedName.slice(1);
 
@@ -214,7 +214,7 @@ export const Sidebar: React.FC = () => {
     if (file) {
       try {
         // Hangi format gelirse gelsin: yeniden boyutlandır + PNG + şeffaf arka plan
-        const compressedSrc = await processUploadedSymbolImage(file, 600, 600);
+        const compressedSrc = await processUploadedSymbolImage(file, 1400, 1400);
         const capitalizedName = file.name.replace(/\.(png|jpe?g|webp|gif|bmp|svg)$/i, '');
         const displayName = capitalizedName.charAt(0).toUpperCase() + capitalizedName.slice(1);
 

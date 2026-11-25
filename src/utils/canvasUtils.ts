@@ -30,14 +30,16 @@ export const getEffectiveZIndex = (obj: any) => {
 };
 
 /**
- * Resizes and aggressively compresses an image (File, Blob, or Data URL) to optimize performance on weak computers.
- * Reduces dimensions to max 600px and compresses quality to 0.45 JPEG (ultra lightweight, ~20-50KB per image).
+ * Resizes and compresses an image (File, Blob, or Data URL) for canvas use.
+ * Keeps enough resolution for on-canvas enlargement: max 1600px and JPEG quality
+ * 0.82 by default — images enlarged on the canvas stay sharp instead of turning
+ * blurry/pixelated (the old 600px q0.45 budget degraded enlarged photos badly).
  */
 export const compressAndResizeImage = (
   input: File | Blob | string,
-  maxWidth: number = 600,
-  maxHeight: number = 600,
-  quality: number = 0.45
+  maxWidth: number = 1600,
+  maxHeight: number = 1600,
+  quality: number = 0.82
 ): Promise<string> => {
   return new Promise((resolve) => {
     const processImage = (src: string) => {
@@ -54,10 +56,6 @@ export const compressAndResizeImage = (
           const ratio = Math.min(maxWidth / width, maxHeight / height);
           width = Math.round(width * ratio);
           height = Math.round(height * ratio);
-        } else if (width > 400 || height > 400) {
-          // Downscale medium images by 30% for ultra-fast rendering on weak PCs
-          width = Math.round(width * 0.7);
-          height = Math.round(height * 0.7);
         }
 
         width = Math.max(width, 40);
@@ -75,10 +73,11 @@ export const compressAndResizeImage = (
         ctx.fillRect(0, 0, width, height);
 
         ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = 'medium';
+        ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(img, 0, 0, width, height);
 
-        // Export highly compressed image as JPEG data URL at quality 0.45 (ultra-lightweight ~20-50KB)
+        // Export compressed JPEG data URL — the quality parameter balances
+        // file size against sharpness for enlarged canvas rendering
         const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
         resolve(compressedDataUrl);
       };
@@ -115,10 +114,29 @@ export const compressAndResizeImage = (
  * şeffaflaşır; çizim içindeki beyazlar (iç boşluklar) korunur. JPEG artefaktlarına
  * karşı eşik + kenar yumuşatma + izole gürültü noktası temizliği uygulanır.
  */
+/**
+ * WebP export desteği (bir kez ölçülür, cache'lenir). Chromium/Electron destekler —
+ * PNG'e göre fotoğraflarda çok daha küçük dosya, şeffaflık korunur. Desteklemeyen
+ * tarayıcılarda (ör. Safari toDataURL WebP üretmez) kod PNG'e düşer.
+ */
+let webpExportSupported: boolean | null = null;
+const isWebpExportSupported = (): boolean => {
+  if (webpExportSupported !== null) return webpExportSupported;
+  try {
+    const probe = document.createElement('canvas');
+    probe.width = 2;
+    probe.height = 2;
+    webpExportSupported = probe.toDataURL('image/webp', 0.9).startsWith('data:image/webp');
+  } catch {
+    webpExportSupported = false;
+  }
+  return webpExportSupported;
+};
+
 export const processUploadedSymbolImage = (
   input: File | Blob | string,
-  maxWidth: number = 600,
-  maxHeight: number = 600
+  maxWidth: number = 1400,
+  maxHeight: number = 1400
 ): Promise<string> => {
   return new Promise((resolve) => {
     const processImage = (src: string) => {
@@ -139,9 +157,6 @@ export const processUploadedSymbolImage = (
             const ratio = Math.min(maxWidth / width, maxHeight / height);
             width = Math.round(width * ratio);
             height = Math.round(height * ratio);
-          } else if (width > 400 || height > 400) {
-            width = Math.round(width * 0.7);
-            height = Math.round(height * 0.7);
           }
           width = Math.max(width, 40);
           height = Math.max(height, 40);
@@ -153,7 +168,7 @@ export const processUploadedSymbolImage = (
           if (!ctx) return resolve(typeof input === 'string' ? input : src);
 
           ctx.imageSmoothingEnabled = true;
-          ctx.imageSmoothingQuality = 'medium';
+          ctx.imageSmoothingQuality = 'high';
           // DİKKAT: beyaz zemin doldurulmaz — şeffaf zemin üzerine çizilir
           ctx.drawImage(img, 0, 0, width, height);
 
@@ -161,7 +176,13 @@ export const processUploadedSymbolImage = (
           removeWhiteBackgroundInPlace(imageData);
           ctx.putImageData(imageData, 0, 0);
 
-          resolve(canvas.toDataURL('image/png'));
+          // WebP: PNG'e göre fotoğraflarda çok daha küçük, şeffaflık korunur;
+          // desteklenmeyen tarayıcıda PNG'e düşer.
+          resolve(
+            isWebpExportSupported()
+              ? canvas.toDataURL('image/webp', 0.9)
+              : canvas.toDataURL('image/png')
+          );
         } catch (err) {
           console.error('processUploadedSymbolImage error:', err);
           resolve(typeof input === 'string' ? input : src);

@@ -68,7 +68,9 @@ export const Topbar: React.FC = () => {
     const file = e.target.files?.[0];
     if (file) {
       try {
-        const compressedSrc = await compressAndResizeImage(file, 800, 800, 0.45);
+        // Arka plan tuvali doldurur (1000x1400 / 1400x1000) ve Transformer ile
+        // büyütülebilir — 1600px + q0.75 büyütmede bulanıklaşmaz (eski: 800px q0.45)
+        const compressedSrc = await compressAndResizeImage(file, 1600, 1600, 0.75);
         setBackgroundImage(compressedSrc);
       } catch (err) {
         console.error('Background image error:', err);

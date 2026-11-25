@@ -2004,7 +2004,11 @@ const IndividualObject = ({
       const ratio = image.width / image.height;
       
       let initialWidth, initialHeight;
-      const maxSize = 120;
+      // Kullanıcı görselleri (YÜKLENENLER'den tuvale bırakılan fotoğraflar) için ilk
+      // yerleşim boyutu: 120px çok küçüktü — kullanıcı 7-8x büyütmek zorunda kalıyor
+      // ve görsel bulanıklaşıyordu. 260px, 1400px'lik yeni kaynak bütçesiyle
+      // birleşince büyütme faktörü düşer ve görsel net kalır.
+      const maxSize = 260;
 
       if (isWallH) {
         initialWidth = 200;
@@ -5242,6 +5246,22 @@ export const CanvasArea: React.FC = () => {
     setStagePos({ x: 0, y: 0 });
   }, [canvasOrientation]);
 
+  useEffect(() => {
+    // BÜYÜTME NETLİĞİ: tarayıcı varsayılan imageSmoothingQuality='low' ile büyütülen
+    // görseller bulanık basar; 'high' interpolasyonu netleştirir. Bağlam durumu
+    // kalıcıdır ama canvas.width ataması (yönlendirme değişimi) state'i sıfırladığı
+    // için yönlendirmeye bağlı olarak yeniden uygulanır.
+    const stage = stageRef.current;
+    if (!stage) return;
+    stage.getLayers().forEach((layer: any) => {
+      const rawCtx: CanvasRenderingContext2D | null | undefined = layer.getContext()?._context;
+      if (rawCtx && 'imageSmoothingQuality' in rawCtx) {
+        rawCtx.imageSmoothingEnabled = true;
+        rawCtx.imageSmoothingQuality = 'high';
+      }
+    });
+  }, [canvasOrientation]);
+
   const handleWheel = (e: any) => {
     // Only zoom if Ctrl key is pressed
     if (!e.evt.ctrlKey) return;
@@ -7130,7 +7150,9 @@ export const CanvasArea: React.FC = () => {
     if (!file || !selectedId) return;
 
     try {
-      const compressedSrc = await compressAndResizeImage(file, 600, 600, 0.45);
+      // Bulgu/kamera fotoğrafı tuvalde büyütülerek incelenir — 1200px + q0.8
+      // (eski: 600px q0.45 büyütmede bulanıktı)
+      const compressedSrc = await compressAndResizeImage(file, 1200, 1200, 0.8);
       updateObject(selectedId, { photo: compressedSrc });
       saveHistory();
     } catch (err) {
