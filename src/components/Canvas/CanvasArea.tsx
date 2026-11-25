@@ -2387,6 +2387,21 @@ const IndividualObject = ({
 
   return (
     <React.Fragment>
+      {/* KIRPMA KABUĞU — SAYFA UZAYI, DÖNÜŞSÜZ (kullanıcı raporu: "yatay görseli dikey
+          yapınca kesiliyor"). Kırpma eskiden nesnenin KENDİ grubundaydı; Konva clip'i
+          grubun YEREL uzayında uygular ve grup dönerken KIRPMA ÇERÇEVESİ DE ONUNLA
+          BİRLİKTE DÖNERDİ → 90° döndürülmüş görsel, sayfa içinde bile keyfi yerden
+          kesiliyordu. Artık kırpma dönüşsüz bir dış sarmalayıcıda:
+          [0,0,pageW,pageH] her zaman gerçek sayfa dikdörtgenidir; nesnenin konumu
+          ve açısı kırpma kuralını değiştirmez. Döndürülmüş nesne yalnızca GERÇEKTEN
+          sayfa dışına taşırsa kırpılır (PDF ile birebir tutarlı); seçiliyken kırpma
+          yok (eski davranış aynen korunur). */}
+      <Group
+        clipX={!shapeProps.isTemplate && !isSelected ? 0 : undefined}
+        clipY={!shapeProps.isTemplate && !isSelected ? 0 : undefined}
+        clipWidth={!shapeProps.isTemplate && !isSelected ? (paperArea?.w || 1000) : undefined}
+        clipHeight={!shapeProps.isTemplate && !isSelected ? (paperArea?.h || 1400) : undefined}
+      >
       <Group
         ref={groupRef}
         x={shapeProps.x}
@@ -2520,14 +2535,9 @@ const IndividualObject = ({
             container.style.cursor = 'default';
           }
         }}
-        // KIRPMA = TÜM SAYFA: seçim kaldırıldığında nesne, çizim alanı kenar boşlukları
-        // yerine yalnızca sayfa sınırında kırpılır. PDF dışa aktarımı zaten tam sayfaya
-        // çizdiği için bu tutarlıdır; aksi halde kenara taşan uzatmalar seçim kalkınca
-        // kaybolurdu (kullanıcı raporu: uzatma siliniyor).
-        clipX={!shapeProps.isTemplate && !isSelected ? -(shapeProps.x || 0) : undefined}
-        clipY={!shapeProps.isTemplate && !isSelected ? -(shapeProps.y || 0) : undefined}
-        clipWidth={!shapeProps.isTemplate && !isSelected ? (paperArea?.w || 1000) : undefined}
-        clipHeight={!shapeProps.isTemplate && !isSelected ? (paperArea?.h || 1400) : undefined}
+        // KIRPMA: dış sarmalayıcı gruba taşındı (yukarıda; sayfa uzayında sabit) —
+        // bu grubun rotasyonu artık kırpma çerçevesini döndürmez; görsel yatay/dikey
+        // çevrilse bile kullanıcının ayarladığı gibi kalır, keyfi kırpma olmaz.
         dragBoundFunc={(pos) => {
           // ZOOM-DUYARLI UZAY: pos SAHNE mutlak piksellerindedir; grid/snap/sınır
           // mantığı SAYFA birimleriyledir. Önce sayfa uzayına indir, işle, sonda
@@ -4816,6 +4826,8 @@ const IndividualObject = ({
           </Group>
         )}
 
+      </Group>
+      {/* /KIRPMA KABUĞU */}
       </Group>
 
       {/* ── YOL BİRLEŞİM GEÇİŞLERİ (kanvas uzayı, ana grubun DIŞINDA) ──
