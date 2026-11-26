@@ -135,16 +135,7 @@ const checkDomain = () => {
     // Domain kısıtlaması kaldırıldı.
     // Uygulama tüm domainlerde çalışabilir.
 };
-      const vercelAccountSuffixes = ['-hakanvarlik242424-6523s-projects.vercel.app', '-hakanvarlik242424-6523s.vercel.app'];
-      const hostname = window.location.hostname;
-      const isAllowed =
-        allowedDomains.some(domain => hostname === domain || hostname.endsWith('.' + domain)) ||
-        // Bu projeye ait tüm Vercel deployment/önizleme URL'leri: kroki-olusturucu-<hash>-<takim>.vercel.app
-        (hostname.endsWith('.vercel.app') && hostname.startsWith('kroki-olusturucu-')) ||
-        vercelAccountSuffixes.some(suffix => hostname.endsWith(suffix));
-      if (!isAllowed) {
-        const root = document.getElementById('root');
-        if (root) {
+         if (root) {
           while (root.firstChild) root.removeChild(root.firstChild);
           const div = document.createElement('div');
           div.style.cssText = 'height: 100vh; background: #000; color: #ff0000; display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: sans-serif; text-align: center; padding: 20px;';
