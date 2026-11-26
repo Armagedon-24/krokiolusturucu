@@ -123,7 +123,6 @@ function App() {
         });
       }
     };
-    checkDomain();
     document.addEventListener('contextmenu', handleContextMenu);
     document.addEventListener('copy', handleCopy);
     window.addEventListener('keydown', handleKeyDownSecurity);
