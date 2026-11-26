@@ -124,17 +124,6 @@ function App() {
       }
     };
 
-    const handleKeyDownSecurity = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
-        e.preventDefault();
-      }
-    };
-
-    // Domain Check (Anti-Cloning) - Devre dışı
-const checkDomain = () => {
-    // Domain kısıtlaması kaldırıldı.
-    // Uygulama tüm domainlerde çalışabilir.
-};
          if (root) {
           while (root.firstChild) root.removeChild(root.firstChild);
           const div = document.createElement('div');
