@@ -123,24 +123,6 @@ function App() {
         });
       }
     };
-
-         if (root) {
-          while (root.firstChild) root.removeChild(root.firstChild);
-          const div = document.createElement('div');
-          div.style.cssText = 'height: 100vh; background: #000; color: #ff0000; display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: sans-serif; text-align: center; padding: 20px;';
-          const h1 = document.createElement('h1');
-          h1.style.cssText = 'font-size: 48px; margin-bottom: 20px;';
-          h1.textContent = 'LISANS IHLALI';
-          const p = document.createElement('p');
-          p.style.cssText = 'font-size: 18px;';
-          p.textContent = 'Bu uygulama yetkisiz bir domain üzerinden çalıştırılmaktadır. Lütfen orijinal adresi kullanın.';
-          div.appendChild(h1);
-          div.appendChild(p);
-          root.appendChild(div);
-        }
-      }
-    };
-
     checkDomain();
     document.addEventListener('contextmenu', handleContextMenu);
     document.addEventListener('copy', handleCopy);
