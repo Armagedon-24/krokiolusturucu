@@ -130,11 +130,11 @@ function App() {
       }
     };
 
-    // Domain Check (Anti-Cloning)
-    const checkDomain = () => {
-      const allowedDomains = ['localhost', '127.0.0.1', 'kroki-olusturucu.vercel.app', 'kroki-olusturucu-yedek.vercel.app', 'kroki-olusturucu.com', 'armagedon-24.github.io'];
-      // Kendi Vercel hesabımıza ait tüm deployment URL'leri (üretim + önizlemeler) serbest:
-      // ör. kroki-olusturucu-abc123-hakanvarlik242424-6523s(-projects).vercel.app
+    // Domain Check (Anti-Cloning) - Devre dışı
+const checkDomain = () => {
+    // Domain kısıtlaması kaldırıldı.
+    // Uygulama tüm domainlerde çalışabilir.
+};
       const vercelAccountSuffixes = ['-hakanvarlik242424-6523s-projects.vercel.app', '-hakanvarlik242424-6523s.vercel.app'];
       const hostname = window.location.hostname;
       const isAllowed =
