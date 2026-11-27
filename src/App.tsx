@@ -125,13 +125,11 @@ function App() {
     };
     document.addEventListener('contextmenu', handleContextMenu);
     document.addEventListener('copy', handleCopy);
-    window.addEventListener('keydown', handleKeyDownSecurity);
-
+    
     return () => {
       document.removeEventListener('contextmenu', handleContextMenu);
       document.removeEventListener('copy', handleCopy);
-      window.removeEventListener('keydown', handleKeyDownSecurity);
-    };
+     };
   }, [addNotification]);
 
   return (
